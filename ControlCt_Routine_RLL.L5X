@@ -715,6 +715,14 @@ Line 9) required Point per revolution (After gearbox) for over speed:  "Overspee
 </Rung>
 <Rung Number="10" Type="N">
 <Comment>
+<![CDATA[Duplicate motor control]]>
+</Comment>
+<Text>
+<![CDATA[Motor3Sped(CT_Ctrl,CtCreepSpeedSetpoint,CtSlowSpeedSetpoint,CtFastSpeedSetpoint);]]>
+</Text>
+</Rung>
+<Rung Number="11" Type="N">
+<Comment>
 <![CDATA[Additional empty rung inserted by tool]]>
 </Comment>
 <Text>
