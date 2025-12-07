@@ -2,7 +2,7 @@
 <RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="32.02" TargetName="ControlCt_FBD" TargetType="Routine" TargetSubType="FBD" TargetClass="Standard" ContainsContext="true">
   <Controller Use="Context" Name="TestController">
     <Programs Use="Context">
-      <Program Use="Context" Name="MainProgram">
+      <Program Use="Context" Name="CraneProgram">
         <Tags>
           <Tag Name="R_TRIG_1" TagType="Base" DataType="BOOL"/>
           <Tag Name="R_TRIG_2" TagType="Base" DataType="BOOL"/>
