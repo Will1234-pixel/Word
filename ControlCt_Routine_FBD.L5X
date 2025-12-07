@@ -51,7 +51,9 @@
                 <!-- 3. Blocks (Block) -->
                 <Block Type="OSRI" Name="OSRI_1" ID="25" X="150" Y="220" Operand="R_TRIG_1" VisiblePins="EnableIn EnableOut"/>
                 <Block Type="OSRI" Name="OSRI_2" ID="26" X="150" Y="260" Operand="R_TRIG_2" VisiblePins="EnableIn EnableOut"/>
+                codex/locate-current-repository-files-bwms7m
                 <Block Type="TOF" Name="TOF_1" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="EnableIn EnableOut PRE DN ACC"/>
+main
 
                 <!-- 4. Functions (Function) -->
                 <Function Type="SEL" ID="40" X="350" Y="340" VisiblePins="G IN0 IN1 Dest"/>
