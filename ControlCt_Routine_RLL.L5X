@@ -695,7 +695,7 @@
 </Rung>
 <Rung Number="9" Type="N">
 <Comment>
-<![CDATA[Line 1) Nameplate (NP) speed 1440 RPM => 24 RPS;                                                                                                                                                                        
+<![CDATA[Line 1) Nameplate (NP) speed 1440 RPM => 24 RPS;
 Line 2) Nameplate (NP) frequency: 50 Hz;                                                                                                                                                                                                                      
 Line 3) Encoder Points per revolution:8192;                                                                                                                                                                                  
 Line 4) Overspeed entry value is based on % to the fast speed;                                                                                                                                                 
@@ -711,6 +711,11 @@ Line 9) required Point per revolution (After gearbox) for over speed:  "Overspee
 </Comment>
 <Text>
 <![CDATA[CPT(CT_MaxSpeed_Encoder_Points_s,(CT_OverspeedSP*CtFastSpeedSetpoint*0.28));]]>
+</Text>
+</Rung>
+<Rung Number="10" Type="N">
+<Text>
+<![CDATA[]]>
 </Text>
 </Rung>
 </RLLContent>
