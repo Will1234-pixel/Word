@@ -49,9 +49,9 @@
                 <ORef ID="59" X="950" Y="520" Operand="TIME_END"/>
 
                 <!-- 3. Blocks (Block) -->
-                <Block Type="OSRI" ID="25" X="150" Y="220" Operand="R_TRIG_1" VisiblePins="EnableIn EnableOut"/>
-                <Block Type="OSRI" ID="26" X="150" Y="260" Operand="R_TRIG_2" VisiblePins="EnableIn EnableOut"/>
-                <Block Type="TOF" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="EnableIn EnableOut PRE DN ACC"/>
+                <Block Type="OSRI" Name="OSRI_1" ID="25" X="150" Y="220" Operand="R_TRIG_1" VisiblePins="EnableIn EnableOut"/>
+                <Block Type="OSRI" Name="OSRI_2" ID="26" X="150" Y="260" Operand="R_TRIG_2" VisiblePins="EnableIn EnableOut"/>
+                <Block Type="TOF" Name="TOF_1" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="EnableIn EnableOut PRE DN ACC"/>
 
                 <!-- 4. Functions (Function) -->
                 <Function Type="SEL" ID="40" X="350" Y="340" VisiblePins="G IN0 IN1 Dest"/>
