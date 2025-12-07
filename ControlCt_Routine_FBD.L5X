@@ -51,7 +51,7 @@
                 <!-- 3. Blocks (Block) -->
                 <Block Type="OSRI" ID="25" X="150" Y="220" Operand="R_TRIG_1" VisiblePins="EnableIn EnableOut"/>
                 <Block Type="OSRI" ID="26" X="150" Y="260" Operand="R_TRIG_2" VisiblePins="EnableIn EnableOut"/>
-                <Block Type="TOF" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="EnableIn EnableOut PRE DN ACC"/>
+                <Block Type="TOF" Name="TOF" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="EnableIn EnableOut PRE DN ACC"/>
 
                 <!-- 4. Functions (Function) -->
                 <Function Type="SEL" ID="40" X="350" Y="340" VisiblePins="G IN0 IN1 Dest"/>
