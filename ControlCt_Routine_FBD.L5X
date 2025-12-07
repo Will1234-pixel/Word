@@ -51,7 +51,7 @@
                 <!-- 3. Blocks (Block) -->
                 <Block Type="OSRI" ID="25" X="150" Y="220" Operand="R_TRIG_1" VisiblePins="EnableIn EnableOut"/>
                 <Block Type="OSRI" ID="26" X="150" Y="260" Operand="R_TRIG_2" VisiblePins="EnableIn EnableOut"/>
-                <Block Type="TOF" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="TimerEnable PRE DN ACC"/>
+                <Block Type="TOF" ID="41" X="550" Y="300" Operand="TOF_TIMEOUT" VisiblePins="EnableIn EnableOut PRE DN ACC"/>
 
                 <!-- 4. Functions (Function) -->
                 <Function Type="SEL" ID="40" X="350" Y="340" VisiblePins="G IN0 IN1 Dest"/>
@@ -91,7 +91,7 @@
                 <Wire FromID="27" FromParam="Out" ToID="28" ToParam="In2"/>
                 <Wire FromID="28" FromParam="Out" ToID="29" ToParam="In2"/>
                 <Wire FromID="29" FromParam="Out" ToID="30"/>
-                <Wire FromID="29" FromParam="Out" ToID="41" ToParam="TimerEnable"/>
+                <Wire FromID="29" FromParam="Out" ToID="41" ToParam="EnableIn"/>
                 <Wire FromID="7" ToID="40" ToParam="G"/>
                 <Wire FromID="9" ToID="40" ToParam="IN0"/>
                 <Wire FromID="10" ToID="40" ToParam="IN1"/>
@@ -116,6 +116,7 @@
                 <Wire FromID="57" FromParam="Out" ToID="58" ToParam="In1"/>
                 <Wire FromID="41" FromParam="DN" ToID="58" ToParam="In2"/>
                 <Wire FromID="58" FromParam="Out" ToID="59"/>
+
               </Sheet>
             </FBDContent>
           </Routine>
