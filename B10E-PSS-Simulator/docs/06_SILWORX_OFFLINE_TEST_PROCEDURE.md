@@ -1,4 +1,4 @@
-# 6 · SILworX offline-simulation test procedure — v2 (complete, with concepts)
+# 6 · SILworX offline-simulation test procedure — v2.1 (complete, with concepts)
 
 *Run this in HIMA SILworX **offline simulation** against the actual B10E program.
 For every set of logic it gives you: the **Concept** (what it protects and why),
@@ -12,6 +12,9 @@ Changes from v1: added SIF-05 negative tests, a standalone SIF-07 test, the
 **lock-feedback forcing step** (without it the search stalls at STANDBY in
 offline sim), voltage (VT) tests, verified contactor groupings from p.267,
 dual-channel discrepancy tests, the KEY-01 release test, and a coverage matrix.
+v2.1: corrected analogue handling — the `_SP` setpoints are fail-safe **constants**
+(OXMON 25.0 / IT,VT 0.0) that cannot be forced; baseline and SIF-03/-11 tests now
+force the `_TRIP` flags (Option A) or require a setpoint edit + code regen (Option B).
 
 ---
 
@@ -53,14 +56,43 @@ the field**. Forcing an input variable is "operating the plant". Two traps:
 | `BL10E-PS-ASB-01..04`, `ASBF-01` (search buttons) | 0 = idle | pulse 0→1 = press |
 | `BL10E-PS-LCRx-01` (light curtain) | 1 = clear | 0 = interrupted |
 | `BL10E-PS-OR-01` (Open/Reset PB) | 0 = idle | pulse 0→1 |
-| `BL10E-PS-IT/VT-0x` (REAL, mA) | ~3.9 (below `_SP`) | high (e.g. 12) → `_TRIP=1` |
-| `BL10E-PS-OXMON-0x` (REAL) | ~20.9 (above `_SP`) | low (e.g. 18) → `_TRIP=1` |
+| `BL10E-PS-IT/VT-0x_TRIP` (BOOL — see §0.4!) | **force 0** = source dead | force 1 = current/voltage present |
+| `BL10E-PS-OXMON-0x_TRIP` (BOOL — see §0.4!) | **force 0** = O₂ healthy | force 1 = O₂ low |
 | `BL10E-PS-RDMND/RDMNR-01/02` (radiation) | healthy | trip value → SIF-09 |
 | `BL10E-PS-IOC-01-BOB/RDMN/GAS/SYS:RESET` | 0 | pulse 0→1 = reset |
 | OUTPUT `BL10E-PS-CON-0x:EN` | — | **1 = energised (hazard live)**, 0 = safe |
 | OUTPUT `BL10E-PS-SOL-01..06` (locks) | — | **1 = locked**, 0 = unlocked |
 
-### 0.4 Concept: the timers run on the simulation clock
+### 0.4 Critical: the analogue setpoints are fail-safe CONSTANTS
+The as-built values (Global Variables, verified in the export) are:
+
+| Variable | Initial value | Block | Effect as exported |
+|---|---|---|---|
+| `OXMON-01..04_SP` | **25.0** | `X_LimL` (trips below) | top-of-range ⇒ oxygen trip **always active** |
+| `IT-01..03_SP`, `VT-01..03_SP` | **0.0** | `X_LimH` (trips above) | zero ⇒ "source present" **always active** |
+| all `…_HYST` | 0.2 | — | — |
+
+Two consequences:
+1. **They are deliberately fail-safe placeholders** — until commissioning sets
+   real values, the analogue functions sit in their tripped (safe) state.
+2. **They are declared `Constant`** in the variable table — so in offline
+   simulation **you cannot force `_SP`/`_HYST` at runtime.** Forcing the field
+   value (e.g. `IT-01 = 3.9`) can therefore NEVER clear these trips (3.9 > 0.0).
+
+**Practical choices for offline simulation:**
+* **Option A (recommended, no code change):** leave the values alone and
+  **force the `_TRIP` BOOLs directly** — `OXMON-01..04_TRIP = 0`,
+  `IT-01..03_TRIP = 0`, `VT-01..03_TRIP = 0` for healthy; set individual ones
+  to 1 to simulate a trip. Forcing overrides the POU's write, so the SIF logic
+  downstream behaves exactly as designed. (You lose only the limit-block
+  internals, which Option B covers.)
+* **Option B (to exercise the X_LimH/X_LimL blocks themselves):** edit the
+  `_SP` **initial values** in the global-variable editor (e.g. `OXMON_SP =
+  19.5`, `IT/VT_SP = 6.0`), regenerate code, restart the simulation — then
+  field-value forcing works as in §2.1. Revert afterwards; on a real system
+  this is a controlled modification.
+
+### 0.5 Concept: the timers run on the simulation clock
 `MAX_SEARCH_TIME = 180 s`, six per-step windows `5 s…60 s`, `BEAM_DELAY = 180 s`,
 `DOOR_UNLOCK_DELAY = 20 s`, `LIGHT_CURTAIN_DELAY = 2 s`, `RESET_DELAY = 60 s`,
 alarm dwell `E_SOURCE_TIME = 120 s`. In offline sim these elapse in (simulated)
@@ -79,7 +111,11 @@ all sixteen `BOB-0x:A`/`:B`, `LCRx-01`.
 **Force FALSE (0):** `ASB-01..04`, `ASBF-01`, `SCR-01`, `OR-01`,
 `GADL-01/02/04/05`, `SADL-01/02` (locks not yet engaged), radiation
 `RDMND/RDMNR-01/02` healthy.
-**Force values:** `IT-01..03 = 3.9`, `VT-01..03 = 3.9`, `OXMON-01..04 = 20.9`.
+**Force the analogue trip flags FALSE (0)** — per §0.4 Option A (the `_SP`
+constants make value-forcing ineffective): `OXMON-01..04_TRIP = 0`,
+`IT-01..03_TRIP = 0`, `VT-01..03_TRIP = 0`.
+*(Option B users: with edited setpoints, force `IT/VT-0x = 3.9` and
+`OXMON-0x = 20.9` instead.)*
 **Pulse once:** `…-BOB:RESET`, `…-RDMN:RESET`, `…-GAS:RESET` (clear power-up latches).
 
 **Expect:** `STATUS-OPEN_READY = 1`; `ANNOPN-01:A/:B = 1`; every `CON-0x:EN = 0`;
@@ -95,12 +131,15 @@ fed to a limit block — `X_LimH` (p.507) trips **above** its setpoint (current,
 voltage), `X_LimL` (p.514) trips **below** it (oxygen). Each block has a
 setpoint `…_SP`, hysteresis `…_HYST`, a trip delay `DT`, and produces the BOOL
 `…_TRIP`. The channel also publishes `_OC`/`_SC`/`_CH_OK` (open/short-circuit,
-channel-OK) diagnostics. *Note: in this export the setpoints are placeholders
-(`IT/VT _SP = 0.0`, `OXMON _SP = 25.0`) — force the `_SP` globals to realistic
-values first (e.g. `IT/VT _SP = 6.0`, `OXMON _SP = 19.5`), or expect hair-trigger
-behaviour.*
+channel-OK) diagnostics.
 
-**Test 2.1** — open `Analogue Inputs` logic (pp.184–187):
+> **This test requires §0.4 Option B** (the `_SP` values are `Constant` — they
+> cannot be forced). Edit the initial values in the global-variable editor
+> (`OXMON-01_SP = 19.5`, `IT-01_SP = 6.0` for this test), regenerate code and
+> restart the simulation first. If you stay on Option A, skip Test 2.1 — the
+> SIF-level behaviour is fully covered by forcing `_TRIP` in §3.
+
+**Test 2.1** — open `Analogue Inputs` logic (pp.184–187), with edited setpoints:
 | Step | Force | Watch / expect |
 |---|---|---|
 | 1 | `OXMON-01 = 20.9` | `OXMON-01_TRIP = 0` |
@@ -173,13 +212,16 @@ prevents unlocking on a momentary dip or a single faulty transmitter.
 RS latch, `TON(PT = T#20s)`, `R_TRIG(OR-01)`, `OR-01:LED` = "press me now" lamp
 → `BL10E-SIF-03_OUTPUT`.
 **Test.**
-| Step | Force | Expect |
+| Step | Force (Option A: the `_TRIP` flags) | Expect |
 |---|---|---|
-| 1 | `IT-01 = 12`, `IT-02 = 12` | current voted present → locks `SOL-0x` held 1, `OR-01:LED = 0` |
-| 2 | `IT-01/02 = 3.9`, wait <20 s | `OR-01:LED` still 0 (confirm time running) |
+| 1 | `IT-01_TRIP = 1`, `IT-02_TRIP = 1` | current voted present (2oo3) → locks `SOL-0x` held 1, `OR-01:LED = 0` |
+| 2 | `IT-01_TRIP = 0`, `IT-02_TRIP = 0`, wait <20 s | `OR-01:LED` still 0 (20 s confirm running) |
 | 3 | wait ≥20 s | `OR-01:LED → 1` |
 | 4 | pulse `OR-01` | `SIF-03_OUTPUT` permits unlock; SFC heads to OPEN (60 s `RESET_DELAY`) |
-| 5 | **repeat 1–4 with `VT-01/02`** | identical behaviour via the voltage voter |
+| 5 | **repeat 1–4 with `VT-01_TRIP/VT-02_TRIP`** | identical behaviour via the voltage voter |
+
+*(Option B users: drive the same steps with field values instead —
+`IT-0x = 12.0` for present, `3.9` for dead — after editing the setpoints.)*
 
 ### SIF-05 — Search Start permissive (p.344)
 **Concept.** A search may only begin when one authorised person (card + both
@@ -263,9 +305,10 @@ reading low (1oo4 — maximum sensitivity, people pass out without warning) clos
 the LN₂ supply valve and drives the O₂ alarm state. Latched + own reset.
 **Logic.** `OXMON-01..04_TRIP` → ≥1 → RS latch, reset `…-GAS:RESET` →
 `SIF-11_TRIP` → `SDVLN2`, O₂ beacons (`SP01/02-04..07`), indicators.
-**Test.** `OXMON-02 = 18.0` → `SDVLN2 → 0` (valve shut), O₂ beacons to alarm.
-`OXMON-02 = 20.9` → still latched. Pulse `…-GAS:RESET` → clears. Repeat each
-monitor (1oo4).
+**Test (Option A).** `OXMON-02_TRIP = 1` → `SDVLN2 → 0` (valve shut), O₂
+beacons to alarm. `OXMON-02_TRIP = 0` → still latched. Pulse `…-GAS:RESET` →
+clears. Repeat each monitor (1oo4). *(Option B: use `OXMON-02 = 18.0` / `20.9`
+after editing the setpoint.)*
 
 ---
 
@@ -389,7 +432,10 @@ alarm clears after the TOF. Force `GADC-01 = 0` alone for > voter `DT` →
 | 6 | Alarm layer | pp.162–174 | diagnosis vs protection |
 
 ## 8 · Known limits / honest notes
-* Setpoints in this export are placeholders — force `_SP` values first (§2.1).
+* The analogue setpoints are **fail-safe constants** (`OXMON_SP = 25.0`,
+  `IT/VT_SP = 0.0`) — they cannot be forced; see §0.4 for the two ways to test
+  around them. The illustrative commissioning values used in the companion docs
+  (19.5 %O₂, >4 mA) come from the C&E, not from the program.
 * A few exact pin polarities are hard to read from the flattened export (e.g.
   inverter bubbles): **trust the live values in simulation**, that's what it's for.
 * The SRS (`TDI-PSS-SRS-0002`) and SIF drawing (`Dwg 1224211`) are not in the
