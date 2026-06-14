@@ -45,22 +45,39 @@ oxygen sensors) are the other way round — `1` means a limit was crossed.
 
 ### 0.3 Which way to force each signal (polarity)
 
-| Signal (tag) | What it is | Healthy / normal | Unsafe value / action |
+| Signal (tag) | What it is (the exact device) | Healthy / normal | Unsafe value / action |
 |---|---|---|---|
-| `BL10E-PS-GADC-01..06`, `SADC-01..05` | Door/gate "closed" switches (the personnel door, the gate, the service door) | **1 = shut** | 0 = open |
-| `BL10E-PS-GADL-01/02/04/05`, `SADL-01/02` | Door/gate "locked" switches (sense the lock bolt) | 1 = locked | 0 = not locked |
-| `BL10E-PS-KEY-01/02/03` | Enable key‑switches (turned by the responsible person) | **1 = on** | 0 = off |
+| `BL10E-PS-GADC-01`, `-02`, `-03` | The three "closed" switches on the **main personnel door** | **1 = door shut** | 0 = door open |
+| `BL10E-PS-GADC-04`, `-05`, `-06` | The three "closed" switches on the **entrance gate** | **1 = gate shut** | 0 = gate open |
+| `BL10E-PS-SADC-01`, `-02`, `-03` | The three "closed" switches on the **service door** (first set, voted 2oo3) | **1 = shut** | 0 = open |
+| `BL10E-PS-SADC-04`, `-05` | A second pair of "closed" switches on the **service door** (voted 1oo2) | **1 = shut** | 0 = open |
+| `BL10E-PS-GADL-01`, `-02` | The two "locked" switches that sense the **main‑door** bolt | 1 = locked | 0 = not locked |
+| `BL10E-PS-GADL-04`, `-05` | The two "locked" switches that sense the **gate** bolt | 1 = locked | 0 = not locked |
+| `BL10E-PS-SADL-01`, `-02` | The two "locked" switches that sense the **service‑door** bolt | 1 = locked | 0 = not locked |
+| `BL10E-PS-KEY-01` | **Electron‑source enable key** at the control panel (ZCP) | **1 = on** | 0 = off |
+| `BL10E-PS-KEY-02` | **Hutch enable key** (the one needed to start a search) | **1 = on** | 0 = off |
+| `BL10E-PS-KEY-03` | **Electron‑source enable key** at the equipment rack | **1 = on** | 0 = off |
 | `BL10E-PS-SCR-01` | Search‑card reader at the door | 1 = card in | 0 = no card |
-| `BL10E-PS-BOB-01..08 :A and :B` | The 8 emergency Beam‑Off Buttons; each has two channels `:A` and `:B` | **1 = not pressed** | 0 = pressed |
-| `BL10E-PS-ASB-01..04`, `ASBF-01` | Area‑search buttons pressed during the walk‑through (ASBF is the last one) | 0 = idle | a press = 0→1 |
+| `BL10E-PS-BOB-01:A`/`:B` … `BOB-08:A`/`:B` | The 8 emergency Beam‑Off Buttons; each has two channels `:A` and `:B` | **1 = not pressed** | 0 = pressed |
+| `BL10E-PS-ASB-01`, `-02`, `-03`, `-04` | The four area‑search buttons, pressed in order during the walk | 0 = idle | a press = 0→1 |
+| `BL10E-PS-ASBF-01` | The **final** area‑search button, by the exit door | 0 = idle | a press = 0→1 |
 | `BL10E-PS-LCRx-01` | Light curtain across the doorway | 1 = clear | 0 = beam broken |
 | `BL10E-PS-OR-01` | The Open/Reset button | 0 = idle | a press = 0→1 |
-| `BL10E-PS-IT/VT-0x_TRIP` (see §0.4) | Trip flag from the source current/voltage sensors | **force 0** = source dead | force 1 = source live |
-| `BL10E-PS-OXMON-0x_TRIP` (see §0.4) | Trip flag from the oxygen sensors | **force 0** = air OK | force 1 = oxygen low |
-| `BL10E-PS-RDMND/RDMNR-01/02` | Radiation sensors (dose and dose‑rate) | healthy | trip value |
-| `BL10E-PS-IOC-01-BOB/RDMN/GAS/SYS:RESET` | Control‑room reset buttons | 0 = idle | a press = 0→1 |
-| OUTPUT `BL10E-PS-CON-0x:EN` | The command to a power‑contactor coil (feeds the hazard) | — | **1 = on (hazard live)**, 0 = safe |
-| OUTPUT `BL10E-PS-SOL-01..06` | The command to a door‑lock bolt solenoid | — | **1 = locked**, 0 = unlocked |
+| `BL10E-PS-IT-01`, `-02`, `-03_TRIP` (see §0.4) | Trip flags from the source **current** sensors | **force 0** = no current | force 1 = current present |
+| `BL10E-PS-VT-01`, `-02`, `-03_TRIP` (see §0.4) | Trip flags from the source **voltage** sensors | **force 0** = no voltage | force 1 = voltage present |
+| `BL10E-PS-OXMON-01`…`-04_TRIP` (see §0.4) | Trip flags from the four **oxygen** sensors | **force 0** = air OK | force 1 = oxygen low |
+| `BL10E-PS-RDMND-01`, `-02` | Radiation **dose** sensors | healthy | trip value |
+| `BL10E-PS-RDMNR-01`, `-02` | Radiation **dose‑rate** sensors | healthy | trip value |
+| `BL10E-PS-IOC-01-BOB:RESET` | Control‑room reset for the **beam‑off‑button** latch | 0 = idle | a press = 0→1 |
+| `BL10E-PS-IOC-01-RDMN:RESET` | Control‑room reset for the **radiation** latch | 0 = idle | a press = 0→1 |
+| `BL10E-PS-IOC-01-GAS:RESET` | Control‑room reset for the **oxygen** latch | 0 = idle | a press = 0→1 |
+| `BL10E-PS-IOC-01-SYS:RESET` | Control‑room reset for general **system** latches | 0 = idle | a press = 0→1 |
+| OUTPUT `BL10E-PS-CON-01:EN` … `CON-05:EN` | Commands to the contactors feeding the **electron source** | — | **1 = on (hazard live)**, 0 = safe |
+| OUTPUT `BL10E-PS-CON-06:EN` … `CON-08:EN` | Commands to the **3‑phase RF** contactors | — | **1 = on**, 0 = safe |
+| OUTPUT `BL10E-PS-CON-09:EN`, `CON-10:EN` | Commands to the **1‑phase RF drive** contactors | — | **1 = on**, 0 = safe |
+| OUTPUT `BL10E-PS-SOL-01`, `-02` | The bolt solenoids that lock the **main door** | — | **1 = locked**, 0 = unlocked |
+| OUTPUT `BL10E-PS-SOL-03`, `-04` | The bolt solenoids that lock the **gate** | — | **1 = locked**, 0 = unlocked |
+| OUTPUT `BL10E-PS-SOL-05`, `-06` | The bolt solenoids that lock the **service door** | — | **1 = locked**, 0 = unlocked |
 
 ### 0.4 Important: the analogue set‑points are fixed "fail‑safe" numbers
 The PLC turns each 4–20 mA sensor into a trip flag using a limit block. The level
@@ -116,26 +133,54 @@ form is at the end (§9).
 nothing pressed, sensors healthy. The program shows this as
 `STATUS-OPEN_READY = 1` (the "ready to start a search" state).
 
-1. **Force these to `1` (TRUE):** `BL10E-PS-GADC-01..06` (door and gate closed
-   switches), `SADC-01..05` (service‑door closed switches), `KEY-01`, `KEY-02`,
-   `KEY-03` (the three enable keys, on), all sixteen `BOB-01:A..08:A` and
-   `BOB-01:B..08:B` (the beam‑off buttons, not pressed), and `LCRx-01` (light
-   curtain clear).
-2. **Force these to `0` (FALSE):** `ASB-01..04`, `ASBF-01` (search buttons, idle),
-   `SCR-01` (no card), `OR-01` (Open/Reset idle), `GADL-01/02/04/05`, `SADL-01/02`
-   (door‑locked switches — locks are not on yet), and `RDMND-01/02`, `RDMNR-01/02`
-   (radiation sensors, healthy).
-3. **Force the analogue trip flags to `0`** (Way A from §0.4):
-   `OXMON-01..04_TRIP` (oxygen OK), `IT-01..03_TRIP` (no source current),
-   `VT-01..03_TRIP` (no source voltage).
-   *(Way B users instead force `IT/VT-0x = 3.9` and `OXMON-0x = 20.9`.)*
-4. **Press each reset once** (force `0`→`1`→`0`): `IOC-01-BOB:RESET`,
-   `IOC-01-RDMN:RESET`, `IOC-01-GAS:RESET` (clears any latches left from power‑up).
+**Step 1 — force every input to the value in the last column.** Each tag is listed
+on its own so you can see exactly what it is.
 
-**Expect:** `STATUS-OPEN_READY = 1`; the "OPEN" sign `ANNOPN-01:A/:B = 1`; every
-power contactor `CON-0x:EN = 0` (all hazards off); every lock `SOL-0x = 0`
-(unlocked); and every safety‑function signal `BL10E-SIF-0x_TRIP` at its healthy
-value (mostly `1`).
+| Tag | What it is (the exact device) | Force to |
+|---|---|---|
+| `BL10E-PS-GADC-01`, `-02`, `-03` | The three closed‑switches on the **main personnel door** | **1** (door shut) |
+| `BL10E-PS-GADC-04`, `-05`, `-06` | The three closed‑switches on the **entrance gate** | **1** (gate shut) |
+| `BL10E-PS-SADC-01`, `-02`, `-03` | The **service door** closed‑switches (first set) | **1** (shut) |
+| `BL10E-PS-SADC-04`, `-05` | The **service door** closed‑switches (second set) | **1** (shut) |
+| `BL10E-PS-KEY-01` | **Electron‑source enable key** at the control panel (ZCP) | **1** (on) |
+| `BL10E-PS-KEY-02` | **Hutch enable key** (needed to start a search) | **1** (on) |
+| `BL10E-PS-KEY-03` | **Electron‑source enable key** at the equipment rack | **1** (on) |
+| `BL10E-PS-BOB-01:A`/`:B` … `BOB-08:A`/`:B` | All 16 channels of the 8 **beam‑off buttons** | **1** (not pressed) |
+| `BL10E-PS-LCRx-01` | The **light curtain** across the doorway | **1** (clear) |
+| `BL10E-PS-ASB-01`, `-02`, `-03`, `-04` | The four **area‑search buttons** | **0** (idle) |
+| `BL10E-PS-ASBF-01` | The **final** area‑search button | **0** (idle) |
+| `BL10E-PS-SCR-01` | The **search‑card reader** | **0** (no card) |
+| `BL10E-PS-OR-01` | The **Open/Reset** button | **0** (idle) |
+| `BL10E-PS-GADL-01`, `-02` | The **main‑door** "locked" switches (locks not on yet) | **0** (not locked) |
+| `BL10E-PS-GADL-04`, `-05` | The **gate** "locked" switches (locks not on yet) | **0** (not locked) |
+| `BL10E-PS-SADL-01`, `-02` | The **service‑door** "locked" switches (locks not on yet) | **0** (not locked) |
+| `BL10E-PS-RDMND-01`, `-02` | The radiation **dose** sensors | **0** (healthy) |
+| `BL10E-PS-RDMNR-01`, `-02` | The radiation **dose‑rate** sensors | **0** (healthy) |
+| `BL10E-PS-OXMON-01`…`-04_TRIP` | The four **oxygen** trip flags (Way A, §0.4) | **0** (air OK) |
+| `BL10E-PS-IT-01`, `-02`, `-03_TRIP` | The source **current** trip flags (Way A, §0.4) | **0** (no current) |
+| `BL10E-PS-VT-01`, `-02`, `-03_TRIP` | The source **voltage** trip flags (Way A, §0.4) | **0** (no voltage) |
+
+*(If you use Way B from §0.4 instead, force the raw readings: `IT-0x = 3.9`,
+`VT-0x = 3.9`, `OXMON-0x = 20.9`.)*
+
+**Step 2 — press each control‑room reset once** (force `0`→`1`→`0`) to clear any
+latch left from power‑up:
+
+| Tag | What it resets |
+|---|---|
+| `BL10E-PS-IOC-01-BOB:RESET` | the beam‑off‑button latch |
+| `BL10E-PS-IOC-01-RDMN:RESET` | the radiation latch |
+| `BL10E-PS-IOC-01-GAS:RESET` | the oxygen latch |
+
+**Step 3 — check you are at the healthy start.** You should see:
+
+| Watch this | Expect | Meaning |
+|---|---|---|
+| `STATUS-OPEN_READY` | `1` | the hutch is ready to start a search |
+| `BL10E-PS-ANNOPN-01:A`/`:B` | `1` | the "OPEN" sign is on |
+| `BL10E-PS-CON-01:EN` … `CON-10:EN` | all `0` | every hazard is off |
+| `BL10E-PS-SOL-01` … `SOL-06` | all `0` | every door is unlocked |
+| `BL10E-SIF-01_TRIP` … `SIF-13_TRIP` | at healthy value (mostly `1`) | every safety function is healthy |
 
 ---
 

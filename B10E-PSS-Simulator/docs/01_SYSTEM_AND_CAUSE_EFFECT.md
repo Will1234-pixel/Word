@@ -75,7 +75,9 @@ Grouped the way the C&E groups them (the letter is the C&E "Group" column). Each
 | H | `OXMON-01..04` — **oxygen monitors** in the hutch | **oxygen** has dropped (air unsafe) | 1oo4 | SIF-11 |
 | J | `BOB-01..08` — the eight **beam-off buttons** (emergency stop, two wires each) | a beam-off button is **pressed** | 1oo7 | SIF-08 |
 | K | `RDMN-01..02` — **radiation monitors** (dose and rate) | **radiation** is high | 1oo2 | SIF-09 |
-| — | `KEY-01/02/03` — **enable key switches** (turned by hand) | an enable key is **turned on** | 1oo1 | SIF-05/10 |
+| — | `KEY-01` — **electron-source enable key** at the control panel (ZCP) | the key is **turned on** | 1oo1 | SIF-05/10 |
+| — | `KEY-02` — **hutch enable key** (needed to start a search) | the key is **turned on** | 1oo1 | SIF-05/06 |
+| — | `KEY-03` — **electron-source enable key** at the equipment rack | the key is **turned on** | 1oo1 | SIF-10 |
 | — | `SCR` (**search card reader**), `LCRx` (**light curtain** across the doorway), `ASB-01..04` (**area-search buttons** pressed in order), `ASBF-01` (the **final** area-search button by the exit) | the steps of walking through and searching the hutch | sequence | SIF-04/05/06 |
 
 ## 1.5 The effects in this system (the outputs)

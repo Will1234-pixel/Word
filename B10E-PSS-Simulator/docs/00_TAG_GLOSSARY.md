@@ -20,9 +20,11 @@ repeat a short description each time — this page is the full list.*
 |---|---|---|---|
 | `BL10E-PS-GADC-01`, `-02`, `-03` | Three "closed" switches on the **main personnel door** ("General Access Door Closed") | door is shut | door is open |
 | `BL10E-PS-GADC-04`, `-05`, `-06` | Three "closed" switches on the **entrance gate** ("General Access Gate Closed") | gate is shut | gate is open |
-| `BL10E-PS-SADC-01`…`-05` | "Closed" switches on the **service / maintenance door** ("Service Access Door Closed") | door is shut | door is open |
-| `BL10E-PS-GADL-01`, `-02`, `-04`, `-05` | "Locked" switches that feel the **bolt** of the main door / gate ("General Access Door Locked") | door/gate is locked | not locked |
-| `BL10E-PS-SADL-01`, `-02` | "Locked" switches that feel the bolt of the **service door** ("Service Access Door Locked") | door is locked | not locked |
+| `BL10E-PS-SADC-01`, `-02`, `-03` | Three "closed" switches on the **service / maintenance door** (first set, voted 2oo3) | door is shut | door is open |
+| `BL10E-PS-SADC-04`, `-05` | A second pair of "closed" switches on the **service door** (voted 1oo2) | door is shut | door is open |
+| `BL10E-PS-GADL-01`, `-02` | "Locked" switches that feel the bolt of the **main personnel door** | door is locked | not locked |
+| `BL10E-PS-GADL-04`, `-05` | "Locked" switches that feel the bolt of the **entrance gate** | gate is locked | not locked |
+| `BL10E-PS-SADL-01`, `-02` | "Locked" switches that feel the bolt of the **service door** | door is locked | not locked |
 
 ## B. Inputs — keys, card and buttons
 
@@ -103,7 +105,9 @@ Each safety function makes one main signal. **Important:** most of these are
 | `BL10E-PS-CON-06:EN`, `-07`, `-08` | **Power contactors** for the **3-phase RF** supply | RF powered | RF isolated |
 | `BL10E-PS-CON-09:EN`, `-10` | **Power contactors** for the **1-phase RF drive** | RF drive powered | isolated |
 | `BL10E-PS-CON-0x:FB` | **Feedback** wire from each contactor (an aux contact telling the PLC its real state) | (mirrors the contactor) | — |
-| `BL10E-PS-SOL-01` … `SOL-06` | **Lock solenoids** — the bolts that lock the doors/gate | door locked | door unlocked |
+| `BL10E-PS-SOL-01`, `-02` | **Lock solenoids** (bolts) for the **main personnel door** | door locked | unlocked |
+| `BL10E-PS-SOL-03`, `-04` | **Lock solenoids** (bolts) for the **entrance gate** | gate locked | unlocked |
+| `BL10E-PS-SOL-05`, `-06` | **Lock solenoids** (bolts) for the **service door** | door locked | unlocked |
 | `BL10E-PS-ANNOPN-01:A`/`:B` | Hutch sign: **"OPEN"** (dual channel A/B) | sign lit | off |
 | `BL10E-PS-ANNRES-01:A`/`:B` | Hutch sign: **"RESTRICTED"** | sign lit | off |
 | `BL10E-PS-ANNSTB-01:A`/`:B` | Hutch sign: **"STANDBY"** | sign lit | off |
