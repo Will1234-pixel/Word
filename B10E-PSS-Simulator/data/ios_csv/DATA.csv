@@ -1,0 +1,10 @@
+Module Ref	Description	Type	Channels
+X-SB_01	System Bus	BUS	0
+X-CPU_01	Processor 01	CPU	0
+X-CPU_31	Processor 31	CPU	0
+X-COM_01	Communications	COM	0
+X-SPARE	Spare Slot	SPR	0
+X-AI_32_02	Analogue Input 32 Channels	AI	32
+X-AO_16_01	Analogue Output 16 Channels	AO	16
+X-DI_32_05	Digital Input 32 Channels	DI	32
+X-DO_24_01A	Digital Output 24 Channels	DO	24
