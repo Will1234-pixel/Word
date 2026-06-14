@@ -1,4 +1,4 @@
-# 6 · SILworX offline-simulation test procedure — v2.1 (complete, with concepts)
+# 6 · SILworX offline-simulation test procedure — v2.2 (complete, with concepts)
 
 *Run this in HIMA SILworX **offline simulation** against the actual B10E program.
 For every set of logic it gives you: the **Concept** (what it protects and why),
@@ -15,6 +15,8 @@ dual-channel discrepancy tests, the KEY-01 release test, and a coverage matrix.
 v2.1: corrected analogue handling — the `_SP` setpoints are fail-safe **constants**
 (OXMON 25.0 / IT,VT 0.0) that cannot be forced; baseline and SIF-03/-11 tests now
 force the `_TRIP` flags (Option A) or require a setpoint edit + code regen (Option B).
+v2.2: added a plain-language "what the tag is" column to the §0.3 polarity table,
+and a high-school-level explanation of every timer in §0.5.
 
 ---
 
@@ -46,22 +48,22 @@ the field**. Forcing an input variable is "operating the plant". Two traps:
 
 ### 0.3 Polarity table (force the right way)
 
-| Signal | Healthy / normal | Demand (unsafe / action) |
-|---|---|---|
-| `BL10E-PS-GADC-01..06`, `SADC-01..05` (door closed sw.) | **1 = closed** | 0 = open |
-| `BL10E-PS-GADL-01/02/04/05`, `SADL-01/02` (lock feedback) | 1 = locked-confirmed | 0 = not locked |
-| `BL10E-PS-KEY-01/02/03` (enable keys) | **1 = on** | 0 = off |
-| `BL10E-PS-SCR-01` (search card) | 1 = card in | 0 = out |
-| `BL10E-PS-BOB-01..08 :A and :B` (beam-off, dual ch.) | **1 = not pressed** | 0 = pressed |
-| `BL10E-PS-ASB-01..04`, `ASBF-01` (search buttons) | 0 = idle | pulse 0→1 = press |
-| `BL10E-PS-LCRx-01` (light curtain) | 1 = clear | 0 = interrupted |
-| `BL10E-PS-OR-01` (Open/Reset PB) | 0 = idle | pulse 0→1 |
-| `BL10E-PS-IT/VT-0x_TRIP` (BOOL — see §0.4!) | **force 0** = source dead | force 1 = current/voltage present |
-| `BL10E-PS-OXMON-0x_TRIP` (BOOL — see §0.4!) | **force 0** = O₂ healthy | force 1 = O₂ low |
-| `BL10E-PS-RDMND/RDMNR-01/02` (radiation) | healthy | trip value → SIF-09 |
-| `BL10E-PS-IOC-01-BOB/RDMN/GAS/SYS:RESET` | 0 | pulse 0→1 = reset |
-| OUTPUT `BL10E-PS-CON-0x:EN` | — | **1 = energised (hazard live)**, 0 = safe |
-| OUTPUT `BL10E-PS-SOL-01..06` (locks) | — | **1 = locked**, 0 = unlocked |
+| Signal | What the tag is (the device and its job) | Healthy / normal | Demand (unsafe / action) |
+|---|---|---|---|
+| `BL10E-PS-GADC-01..06`, `SADC-01..05` (door closed sw.) | Position switches on each personnel door and gate — they tell the PLC whether the door is physically shut | **1 = closed** | 0 = open |
+| `BL10E-PS-GADL-01/02/04/05`, `SADL-01/02` (lock feedback) | Switches on the lock bolts — they confirm a door is *actually* locked, not just that the PLC asked for it | 1 = locked-confirmed | 0 = not locked |
+| `BL10E-PS-KEY-01/02/03` (enable keys) | Physical key-switches the responsible person turns to allow a search / let the source be energised | **1 = on** | 0 = off |
+| `BL10E-PS-SCR-01` (search card) | Card reader at the door — presenting a valid search card is what starts the search | 1 = card in | 0 = out |
+| `BL10E-PS-BOB-01..08 :A and :B` (beam-off, dual ch.) | Emergency "beam-off" buttons in and around the hutch; each has two separate wired channels (`:A`, `:B`) for safety | **1 = not pressed** | 0 = pressed |
+| `BL10E-PS-ASB-01..04`, `ASBF-01` (search buttons) | Area-search pushbuttons pressed in a set order during the walk-through; `ASBF` is the final one by the exit door | 0 = idle | pulse 0→1 = press |
+| `BL10E-PS-LCRx-01` (light curtain) | An invisible infra-red "curtain" across the entrance that detects a person stepping through | 1 = clear | 0 = interrupted |
+| `BL10E-PS-OR-01` (Open/Reset PB) | The "Open / Reset" button the operator presses to unlock the doors and reset the system once the source is proven off | 0 = idle | pulse 0→1 |
+| `BL10E-PS-IT/VT-0x_TRIP` (BOOL — see §0.4!) | Trip flags from the electron-source **current** (IT) and **voltage** (VT) transmitters; 1 means the source is electrically live | **force 0** = source dead | force 1 = current/voltage present |
+| `BL10E-PS-OXMON-0x_TRIP` (BOOL — see §0.4!) | Trip flags from the four hutch **oxygen** monitors; 1 means oxygen has dropped too low (suffocation risk) | **force 0** = O₂ healthy | force 1 = O₂ low |
+| `BL10E-PS-RDMND/RDMNR-01/02` (radiation) | The two radiation monitors: accumulated **dose** (RDMND) and **dose rate** (RDMNR) | healthy | trip value → SIF-09 |
+| `BL10E-PS-IOC-01-BOB/RDMN/GAS/SYS:RESET` | Control-room reset buttons — one each for the beam-off, radiation, gas and system latches | 0 | pulse 0→1 = reset |
+| OUTPUT `BL10E-PS-CON-0x:EN` | The PLC's command to a power-contactor coil that feeds the electron source / RF — i.e. switches the hazard ON | — | **1 = energised (hazard live)**, 0 = safe |
+| OUTPUT `BL10E-PS-SOL-01..06` (locks) | The PLC's command to a door/gate lock solenoid (the bolt that locks the door) | — | **1 = locked**, 0 = unlocked |
 
 ### 0.4 Critical: the analogue setpoints are fail-safe CONSTANTS
 The as-built values (Global Variables, verified in the export) are:
@@ -97,6 +99,19 @@ Two consequences:
 `DOOR_UNLOCK_DELAY = 20 s`, `LIGHT_CURTAIN_DELAY = 2 s`, `RESET_DELAY = 60 s`,
 alarm dwell `E_SOURCE_TIME = 120 s`. In offline sim these elapse in (simulated)
 real time — between search steps **wait ≥5 s and <60 s**.
+
+**In plain words — what each timer is for.** Think of each one as a stopwatch the
+safety PLC uses so things can't happen too fast or too slow:
+
+| Timer | Value | What it does, in everyday terms |
+|---|---|---|
+| `MAX_SEARCH_TIME` | 180 s (3 min) | The whole hutch search must be finished within 3 minutes, or it cancels and you start again. |
+| per-step window | 5–60 s | Between each search button you must wait **at least 5 seconds** (so nobody can rush or "tailgate" the search) but **no more than 60 seconds** (so you can't wander off half-way). |
+| `BEAM_DELAY` | 180 s (3 min) | Once the search is done, the system waits 3 minutes — with warning sirens and lights ("radiation imminent") — before it will switch the beam on, giving anyone still inside time to hit a beam-off button. |
+| `DOOR_UNLOCK_DELAY` | 20 s | After the source reads zero, the PLC waits 20 seconds to be sure it is *really* off before it lets you unlock the doors. |
+| `LIGHT_CURTAIN_DELAY` | 2 s | A short 2-second pause after someone steps through the doorway before the light curtain starts watching for extra people. |
+| `RESET_DELAY` | 60 s (1 min) | A one-minute wait before the system settles back to the fully "Open" state. |
+| `E_SOURCE_TIME` | 120 s (2 min) | How long the source must stay switched off before the alarm screen accepts it as truly dead. |
 
 ---
 
