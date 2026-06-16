@@ -45,6 +45,9 @@ oxygen sensors) are the other way round — `1` means a limit was crossed.
 
 ### 0.3 Which way to force each signal (polarity)
 
+*Tip: for a picture of which switch belongs to which door or gate, see the sketch
+at the top of document 00 (the glossary).*
+
 | Signal (tag) | What it is (the exact device) | Healthy / normal | Unsafe value / action |
 |---|---|---|---|
 | `BL10E-PS-GADC-01`, `-02`, `-03` | The three "closed" switches on the **main personnel door** | **1 = door shut** | 0 = door open |
@@ -54,9 +57,9 @@ oxygen sensors) are the other way round — `1` means a limit was crossed.
 | `BL10E-PS-GADL-01`, `-02` | The two "locked" switches that sense the **main‑door** bolt | 1 = locked | 0 = not locked |
 | `BL10E-PS-GADL-04`, `-05` | The two "locked" switches that sense the **gate** bolt | 1 = locked | 0 = not locked |
 | `BL10E-PS-SADL-01`, `-02` | The two "locked" switches that sense the **service‑door** bolt | 1 = locked | 0 = not locked |
-| `BL10E-PS-KEY-01` | **Electron‑source enable key** at the control panel (ZCP) | **1 = on** | 0 = off |
+| `BL10E-PS-KEY-01` | **Electron‑source enable key** at the **ZCP** (Zone Control Panel, by the hutch) | **1 = on** | 0 = off |
 | `BL10E-PS-KEY-02` | **Hutch enable key** (the one needed to start a search) | **1 = on** | 0 = off |
-| `BL10E-PS-KEY-03` | **Electron‑source enable key** at the equipment rack | **1 = on** | 0 = off |
+| `BL10E-PS-KEY-03` | **Electron‑source enable key** at the **equipment rack** (cabinet / rack room, away from the hutch) | **1 = on** | 0 = off |
 | `BL10E-PS-SCR-01` | Search‑card reader at the door | 1 = card in | 0 = no card |
 | `BL10E-PS-BOB-01:A`/`:B` … `BOB-08:A`/`:B` | The 8 emergency Beam‑Off Buttons; each has two channels `:A` and `:B` | **1 = not pressed** | 0 = pressed |
 | `BL10E-PS-ASB-01`, `-02`, `-03`, `-04` | The four area‑search buttons, pressed in order during the walk | 0 = idle | a press = 0→1 |
@@ -142,9 +145,9 @@ on its own so you can see exactly what it is.
 | `BL10E-PS-GADC-04`, `-05`, `-06` | The three closed‑switches on the **entrance gate** | **1** (gate shut) |
 | `BL10E-PS-SADC-01`, `-02`, `-03` | The **service door** closed‑switches (first set) | **1** (shut) |
 | `BL10E-PS-SADC-04`, `-05` | The **service door** closed‑switches (second set) | **1** (shut) |
-| `BL10E-PS-KEY-01` | **Electron‑source enable key** at the control panel (ZCP) | **1** (on) |
+| `BL10E-PS-KEY-01` | **Electron‑source enable key** at the **ZCP** (Zone Control Panel, by the hutch) | **1** (on) |
 | `BL10E-PS-KEY-02` | **Hutch enable key** (needed to start a search) | **1** (on) |
-| `BL10E-PS-KEY-03` | **Electron‑source enable key** at the equipment rack | **1** (on) |
+| `BL10E-PS-KEY-03` | **Electron‑source enable key** at the **equipment rack** (cabinet / rack room, away from the hutch) | **1** (on) |
 | `BL10E-PS-BOB-01:A`/`:B` … `BOB-08:A`/`:B` | All 16 channels of the 8 **beam‑off buttons** | **1** (not pressed) |
 | `BL10E-PS-LCRx-01` | The **light curtain** across the doorway | **1** (clear) |
 | `BL10E-PS-ASB-01`, `-02`, `-03`, `-04` | The four **area‑search buttons** | **0** (idle) |

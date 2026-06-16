@@ -14,6 +14,21 @@ repeat a short description each time — this page is the full list.*
 
 ---
 
+## A sketch of the doors, gate and switches
+
+There are **three ways into the hutch** — the **main personnel door**, the
+**entrance gate**, and the **service door** — plus the search buttons inside. Each
+opening has its own switches. This picture shows them all with their tags; the
+tables below give the detail.
+
+![Sketch of the B10E hutch showing the main personnel door (GADC-01/02/03, GADL-01/02, SOL-01/02), the entrance gate (GADC-04/05/06, GADL-04/05, SOL-03/04) and the service door (SADC-01..05, SADL-01/02, SOL-05/06), with the light curtain LCRx-01, the search buttons ASB-01..04 and ASBF-01, the ZCP panel (SCR-01, KEY-01, KEY-02) and the equipment rack (KEY-03).](images/hutch_layout.png)
+
+* **Closed switch** = senses the door/gate is shut (e.g. `GADC-01`).
+* **Locked switch** = senses the bolt has gone in (e.g. `GADL-01`).
+* **Lock bolt** = the output solenoid that actually locks it (e.g. `SOL-01`).
+
+---
+
 ## A. Inputs — the doors and gates (position switches)
 
 | Tag | What it is | `1` means | `0` means |
@@ -30,9 +45,9 @@ repeat a short description each time — this page is the full list.*
 
 | Tag | What it is | `1` / action |
 |---|---|---|
-| `BL10E-PS-KEY-01` | **Electron-source enable key** at the control panel (ZCP) | `1` = key turned ON |
+| `BL10E-PS-KEY-01` | **Electron-source enable key** at the **ZCP** (Zone Control Panel — the local safety panel on/by the hutch wall) | `1` = key turned ON |
 | `BL10E-PS-KEY-02` | **Hutch enable key** (needed to start a search) | `1` = key turned ON |
-| `BL10E-PS-KEY-03` | **Electron-source enable key** at the equipment rack | `1` = key turned ON |
+| `BL10E-PS-KEY-03` | **Electron-source enable key** at the **equipment rack** (the equipment cabinet / rack room, away from the hutch). The same enable key is held at the ZCP during the search, released once the beam is on, then carried to this rack | `1` = key turned ON |
 | `BL10E-PS-SCR-01` | **Search card reader** at the door | `1` = valid search card presented |
 | `BL10E-PS-BOB-01:A`/`:B` … `BOB-08:A`/`:B` | The eight **Beam-Off Buttons** (emergency stop). Each button has **two** wires, channel `:A` and channel `:B`, for safety | `1` = button NOT pressed; `0` = pressed |
 | `BL10E-PS-ASB-01`, `-02`, `-03`, `-04` | **Area-search buttons** pressed in order while walking through the hutch | a press = value goes `0`→`1` |
