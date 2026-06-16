@@ -47,6 +47,25 @@ never be on while a door is open or a person is inside. For every door the PLC:
    in milliseconds — and its **locked** switches (`GADL` / `SADL`), which must prove
    the bolt really went in before the beam is allowed on.
 
+### Why the service door shows two switch sets
+
+The service access is proved shut by **five** "closed" switches
+(`SADC‑01` … `SADC‑05`). The PLC does **not** vote all five together — it uses
+**two independent sets**, and it counts the service access as "open" if **either**
+set says open:
+
+* **Set 1 — `SADC‑01`, `‑02`, `‑03`, voted 2oo3.** "2oo3" means *two out of three*:
+  the set only says "open" when at least **2 of its 3** switches agree. One switch
+  failing or going out of line cannot cause a false trip — this set is
+  **fault‑tolerant**.
+* **Set 2 — `SADC‑04`, `‑05`, voted 1oo2.** "1oo2" means *one out of two*: **either**
+  switch on its own is enough to say "open" — this set is **more sensitive**.
+
+This is typically because the service entry has **two leaves** (for example an outer
+and an inner door), each with its own switches. Whichever set opens, safety function
+**SIF‑02** removes the electron source. (The two sets are the C&E "Group C" and
+"Group D".)
+
 ---
 
 ## A. Inputs — the doors and gates (position switches)
