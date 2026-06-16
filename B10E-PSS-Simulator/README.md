@@ -50,7 +50,8 @@ B10E-PSS-Simulator/
 │   ├── 01_SYSTEM_AND_CAUSE_EFFECT.md  <- the big picture + how to read the C&E
 │   ├── 02_SEARCH_SEQUENCE.md          <- the hutch search, step by step
 │   ├── 03_PROGRAM_LOGIC_REFERENCE.md  <- the exact PLC logic (pages, blocks, timers)
-│   └── 04_SILWORX_OFFLINE_TEST_PROCEDURE.md  <- step-by-step test in SILworX
+│   ├── 04_SILWORX_OFFLINE_TEST_PROCEDURE.md  <- step-by-step test in SILworX
+│   └── 05_CODE_WALKTHROUGH.md         <- the real PLC pages (screenshots) explained one by one
 ├── docs-word/                <- the same documents as Microsoft Word (.docx) files
 └── data/                     <- reference data pulled out of the three source files
     ├── io_map.json           <- the I/O list as data
@@ -73,6 +74,7 @@ B10E-PSS-Simulator/
 | **02 · The hutch search** | How the walk‑through search works, step by step (the stages the system moves through), the time limits, and what cancels a search. |
 | **03 · Program logic reference** | The exact PLC program: which page does what, how each safety function is built (which sensors, which voting, which timers), and the real set‑point and timer values. Use it as a look‑up. |
 | **04 · SILworX offline test procedure** | The main "do this" document: a step‑by‑step test you run in HIMA SILworX offline simulation. For each safety function it gives the tag to force, the signal to watch, and the result to expect. |
+| **05 · Code walkthrough** | A **screenshot of each important PLC page** taken straight from `program.pdf`, with a plain "how it works" explanation under each picture. Read it when you want to see the *actual* logic (the voters, AND gates, latches and timers) rather than a description of it. |
 
 ---
 
