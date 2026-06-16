@@ -4,6 +4,11 @@ A set of clear, plain‑English documents to help you **understand** the safety
 logic in this repository and **test it step by step in HIMA SILworX offline
 simulation**. Written for a junior technical‑support engineer.
 
+> ### 👉 New here? Read **`docs/00_START_HERE.md`** first.
+> It is a single guided document — system, code, and how to simulate it — and it
+> is all you need to understand the whole thing. The other documents are deep
+> reference you can dip into later.
+
 > **What is this system?**
 > The three source files in this repo describe the **Personnel Safety System
 > (PSS)** for the Diamond Light Source **B10E "HeXI"** beamline. A beamline has a
