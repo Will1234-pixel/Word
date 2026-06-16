@@ -27,6 +27,26 @@ tables below give the detail.
 * **Locked switch** = senses the bolt has gone in (e.g. `GADL-01`).
 * **Lock bolt** = the output solenoid that actually locks it (e.g. `SOL-01`).
 
+### What each opening is for
+
+* **Main personnel door** — the normal way people walk into the hutch to set up,
+  align or maintain the experiment. Most entries use this door.
+* **Entrance gate** — a second general‑access opening (for example a wider gate to
+  bring equipment or trolleys in). It has its **own** safety function (SIF‑13) so
+  the gate and the door can be handled separately.
+* **Service door** — a separate way in for service / maintenance staff to reach
+  equipment, kept apart from the normal personnel route (its own function, SIF‑02).
+
+All three do the **same safety job**: control and prove entry so the hazard can
+never be on while a door is open or a person is inside. For every door the PLC:
+
+1. lets authorised people in or out **only when the hutch is OPEN** (safe);
+2. **locks** it shut (the `SOL‑…` bolts) while the hazard is armed, so nobody can
+   enter;
+3. watches its **closed** switches (`GADC` / `SADC`) — opening a door cuts the beam
+   in milliseconds — and its **locked** switches (`GADL` / `SADL`), which must prove
+   the bolt really went in before the beam is allowed on.
+
 ---
 
 ## A. Inputs — the doors and gates (position switches)
