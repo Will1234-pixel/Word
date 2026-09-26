@@ -230,7 +230,8 @@ language, with notes such as "CODESYS/TIA also allow…".
 | A POU/type/task name that matches a variable or parameter name used anywhere, **including inside the standard library** (`M`, `P`, `Q`, `IN`, `PT`, `ET`, `CLK`, `CU`, `CV`, `PV` …) | Descriptive POU names (`FB_Pump`, `PumpStation`), never one or two letters |
 | An array as a FUNCTION `VAR_INPUT` (compiles, but the C build fails) | Pass arrays to a FUNCTION_BLOCK input (named array type), or as `VAR_IN_OUT` |
 | `MUL_TIME`, `DIV_TIME` function names | Write `T * n` and `T / n` (TIME times/divided by a number works) |
-| Several FB instances declared in one list (`Pump1, Pump2 : FB_Motor;`); this crashed OpenPLC's compiler in one lab | One FB instance per line |
+| Several FB instances declared in one list (`Pump1, Pump2 : FB_Motor;`); this crashed OpenPLC's compiler in two labs | One FB instance per line |
+| (OpenPLC fork) Structure initialisers with STRING/array members, array-of-structure initialisers, some REAL members in constant structs | A first-scan initialisation block in code |
 | Edge-qualified inputs `X : BOOL R_EDGE;` / `F_EDGE` | `R_TRIG`/`F_TRIG` instances inside the FB |
 | A named constant (`VAR CONSTANT`) as a `CASE` label | Literals or enumeration values as labels (enums are the better design anyway) |
 | Enumeration values or variables named like keywords (`Program`, `Step`, `Transition`, `Action`, `Word`, `By`) | Other names; identifiers are case-insensitive |

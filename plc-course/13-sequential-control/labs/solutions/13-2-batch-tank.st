@@ -59,7 +59,13 @@ PROGRAM BatchTank
     StepTimer : TON;                (* time in the current state *)
     MixDone   : TIME;               (* mixing completed before a hold *)
     Running   : BOOL;               (* in one of the four process steps *)
-    StartEdge, HoldEdge, ResumeEdge, AbortEdge, ResetEdge : R_TRIG;
+    (* One instance per line: OpenPLC's compiler can crash on a list of
+       FB instances in one declaration (see Appendix E). *)
+    StartEdge : R_TRIG;
+    HoldEdge : R_TRIG;
+    ResumeEdge : R_TRIG;
+    AbortEdge : R_TRIG;
+    ResetEdge : R_TRIG;
     StartCmd, HoldCmd, ResumeCmd, AbortCmd, ResetCmd : BOOL;
   END_VAR
 
