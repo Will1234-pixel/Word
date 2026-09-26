@@ -9,8 +9,9 @@ by compiling and running test programs, not copied from documentation.
 
 **MATIEC** is an open-source IEC 61131-3 compiler from the Beremiz project. Its `iec2c`
 program translates Structured Text, Instruction List and textual SFC into C. The OpenPLC
-Runtime ships its own copy (a fork) of MATIEC. When you upload a `.st` file to the Runtime,
-that compiler runs with these options:
+Runtime ships its own copy (a fork) of MATIEC. When the Runtime builds a program (the v3
+Runtime from an uploaded `.st` file; v4 is driven from the Editor), the v3 build script runs
+that compiler with these options:
 
 ```text
 iec2c -f -l -p -r -R -a program.st
@@ -78,6 +79,8 @@ The lab files avoid all of them.
 | `VAR_GLOBAL` inside a `PROGRAM` | `VAR_GLOBAL` in the `CONFIGURATION`, `VAR_EXTERNAL` in the POU | Global variable lists (CODESYS), global DBs (TIA), controller tags (Logix) |
 | An empty program body, or a bare `;` statement | At least one real statement. That is why starters contain placeholder assignments | Empty bodies are allowed elsewhere |
 | An array as a FUNCTION `VAR_INPUT` (it compiles, then the C build fails) | Pass the array to a FUNCTION_BLOCK input (use a named array type), or as `VAR_IN_OUT` | Allowed |
+| A `DT` (DATE_AND_TIME) member inside a structure or array (it compiles, then the C build fails: "initializer element is not constant") | Keep a `DT` as a plain variable, or store `TOD`/`DATE` or a DINT timestamp in the structure | Allowed |
+| A local `VAR CONSTANT` used as an array bound, `ARRAY[1..N_MAX]` ("Subrange upper limit is not a constant value"), even with `-a` | Literal bounds; or a `VAR_GLOBAL CONSTANT` in the CONFIGURATION, read through `VAR_EXTERNAL CONSTANT` | Allowed |
 | An array **element** passed to a FUNCTION's `VAR_IN_OUT`, `F(Arr[2])` (it compiles, then the C build fails) | Copy the element to a variable, call, copy back; or pass the whole array | Allowed |
 | Located arrays, `Inputs AT %IX0.0 : ARRAY[0..7] OF BOOL` | Separate located BOOLs, copied into an array in the I/O-mapping code | Allowed in CODESYS; TIA and Logix map I/O differently |
 | Ordering or converting enumeration values: `State > Idle`, `E_State_TO_INT(State)` | Compare with `=` / `<>`, or use `CASE`; keep a separate INT if you need a number | CODESYS allows conversion and, with care, ordering |
@@ -161,9 +164,10 @@ C function name for `T1 + T2` and `T1 - T2`, so the C build fails. OpenPLC's for
 the right name, and `plctest` maps the wrong one for you, so you can write TIME arithmetic
 normally.
 
-**Subranges are not checked at runtime.** A variable declared `INT(0..10)` happily holds
-50 if you assign it from an `INT` variable. The compiler only rejects out-of-range
-*constants*. Clamp with `LIMIT` yourself.
+**Subranges are not checked at all.** A variable of type `INT(0..100)` happily holds 150:
+MATIEC accepts `Pct := 150;`, an out-of-range initial value, and assignments from other
+variables, and nothing stops it at runtime. A subrange documents intent but gives no
+protection here. Clamp with `LIMIT` yourself.
 
 **`VAR_TEMP` does not remember anything.** Temporary variables are re-initialised every time
 the POU runs (in a `PROGRAM`, that is every scan). A "previous value" bit kept in `VAR_TEMP`
@@ -194,8 +198,10 @@ variables so overflow cannot happen (Modules 03 and 09).
 
 ### SFC in MATIEC
 
-MATIEC compiles textual SFC, and OpenPLC Editor uses the same code for graphical SFC. It
-differs from the standard in some details, so write charts that don't depend on them:
+MATIEC compiles textual SFC. Earlier OpenPLC Editor versions drew graphical SFC and compiled
+it the same way; the current v4 Editor lists LD, FBD, ST and IL, and CODESYS is the easiest
+free tool for graphical SFC. MATIEC differs from the standard in some SFC details, so write
+charts that don't depend on them:
 
 - **Alternative (selection) branches:** if two alternative transitions from the same step are
   TRUE in the same scan, MATIEC activates **both** following steps. That was verified here.

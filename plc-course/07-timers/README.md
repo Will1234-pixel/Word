@@ -1058,6 +1058,9 @@ Walk through it:
   15 s: `FailOpen` latches too. One timer covers both "did not get there" and "did not stay
   there".
 - The reset: `FailOpen AND OpenTimer.Q` keeps the alarm while the cause is still present.
+  `AlarmReset` is used as a level to keep the example short. On a real panel, reset on the
+  rising edge of the button (Module 06, section 8.5): with a level reset, a stuck button lets
+  a new alarm clear itself as soon as its cause goes.
 
 A natural extension is a switch-fault alarm when `ZSO` and `ZSC` are both TRUE. In a
 process-safety context, the same timers give the data for valve diagnostics such as stroke

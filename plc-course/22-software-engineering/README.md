@@ -101,7 +101,7 @@ convention has to make:
 | POU and type prefixes | `FB_`, `F_` or `FC_`, `ST_` or `UDT_`, `E_` | Almost universal, and used throughout this course |
 | Plant tags | `P101`, `XV101`, `LT200`, or a hierarchy such as `Area1_Unit2_P101` | Use the P&ID and instrument tags so code, drawings and HMI agree |
 | Units | `LevelPct`, `TempDegC`, `Flow_m3h`, `DelayMs` | Every analog value carries its unit in its name or its declaration comment |
-| Signal sense | `StopPB_NC`, `OverloadOK`, `ValveClosedLS` | Name the TRUE state: `DoorClosed`, not `DoorSwitch` |
+| Signal sense | `StopPB_NC`, `OverloadOK_NC`, `ValveClosedLS` | Name the TRUE state: `DoorClosed`, not `DoorSwitch`. Mark NC-wired inputs; this course uses the `_NC` suffix ([Module 00](../00-start-here/)) |
 
 **The prefix debate.** Type prefixes ("Hungarian notation") are common in CODESYS and TwinCAT
 code and in many vendor libraries. Their supporters say that a prefix shows the type wherever
@@ -627,7 +627,7 @@ each suits different jobs:
 |---|---|---|---|
 | Forcing and watch tables | Setting inputs by hand in the online PLC | Every IDE | Quick checks. Dangerous on a live plant ([Module 23](../23-commissioning-and-troubleshooting/)) |
 | Simulation logic in the PLC | Small models in the program: a valve's limit switches follow its command after a delay | `FB_SimValve` below | FAT without a plant, operator training |
-| Emulated controller | The control program runs on a PC in a process that behaves like the CPU | S7-PLCSIM and PLCSIM Advanced, FactoryTalk Logix Echo, CODESYS simulation mode and CODESYS Control Win, TwinCAT on a PC, the OpenPLC runtime, `plctest` | Unit and integration tests, HMI development |
+| Emulated controller | The control program runs on a PC in a process that behaves like the CPU | S7-PLCSIM and PLCSIM Advanced, FactoryTalk Logix Echo, CODESYS simulation mode and CODESYS Control Win, TwinCAT on a PC, the OpenPLC Editor's built-in simulator and the OpenPLC Runtime, `plctest` | Unit and integration tests, HMI development |
 | Plant simulation | A separate model of the process or machine, connected to the (emulated) controller | Factory I/O 3D scenes, Siemens SIMIT, Emulate3D, process simulators, a Python or MATLAB model | Virtual commissioning, sequence and control-loop tests |
 | Hardware in the loop | The real controller wired or networked to a real-time plant model | I/O simulators, HIL rigs | Final FAT, timing-critical tests |
 
@@ -1181,7 +1181,8 @@ Every service a controller offers is a door. Close the ones you don't use:
 - legacy access paths, such as the PUT/GET access of S7 CPUs, which newer S7-1200/1500 CPUs
   only allow when it is explicitly enabled;
 - unused Ethernet ports, USB ports and memory-card slots, where the hardware allows;
-- default passwords on controllers, HMIs, switches and the OpenPLC runtime's web interface.
+- default passwords on controllers, HMIs, switches and soft PLCs (the older OpenPLC Runtime v3,
+  for example, has a web interface with a default login).
 
 Then keep firmware up to date through a tested, MOC-controlled process; route remote access
 through a managed, logged gateway rather than a modem in the panel; and trend the
@@ -1638,8 +1639,8 @@ support online change: read the warnings about moved instance data before accept
 
 **OpenPLC and this course.** Everything is plain `.st` text, so Git, diffs and reviews work
 without any special tools, and `plctest` is both a unit-test runner and, with `--all`, a
-regression suite. If you run the OpenPLC Runtime on a network, change its default web-interface
-password and keep it off networks it doesn't need to be on.
+regression suite. If you run the OpenPLC Runtime on a network, change any default password
+and keep it off networks it doesn't need to be on.
 
 ## Labs
 

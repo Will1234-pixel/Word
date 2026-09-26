@@ -1111,9 +1111,11 @@ single-stepping halt the task at that point, so the outputs it drives are no lon
 never use them on a running machine. Trace, cross-reference and the device log are the main
 diagnostic tools.
 
-**OpenPLC and this course.** The OpenPLC Runtime lets you watch variable values while the
-program runs; the monitoring and forcing features depend on the Runtime and Editor versions,
-so check the documentation for yours. In this course, `plctest` gives you the commissioning
+**OpenPLC and this course.** The OpenPLC Editor's built-in simulator shows live variable
+values in its debugger panel, where you can also change them to simulate field inputs, so you
+can practise monitoring without any hardware. With the Runtime on real hardware, the
+monitoring and forcing features depend on the Runtime and Editor versions, so check the
+documentation for yours. In this course, `plctest` gives you the commissioning
 engineer's best friend: a repeatable acceptance test. Every scenario starts from a cold start
 ([Appendix E](../appendices/E-matiec-openplc-notes.md)), so a power cut with retained memory is simulated by writing the retained values
 before the first scan, as Lab 23-2 does.

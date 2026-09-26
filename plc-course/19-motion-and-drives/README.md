@@ -1,6 +1,6 @@
 # 19 — Motion Control, Drives and Positioning
 
-> **Level:** 4 — Advanced · **Time:** ~10–12 hours · **Prerequisites:** [08 — Counters](../08-counters/), [13 — Sequential Control](../13-sequential-control/), [17 — Industrial Communications](../17-industrial-communications/)
+> **Level:** 4 — Advanced · **Time:** ~10–12 hours · **Prerequisites:** [08 — Counters](../08-counters/), [13 — Sequential Control: State Machines and SFC](../13-sequential-control/), [17 — Industrial Communications and Networks](../17-industrial-communications/)
 
 Almost everything that moves in a plant is driven by an electric motor: pumps, fans, conveyors,
 mixers, cranes, packaging machines, robots. A PLC can simply switch a motor on and off, but more
@@ -1363,4 +1363,4 @@ before any speed is commanded.
 
 ---
 
-Previous: [18 — HMI and SCADA Integration](../18-hmi-and-scada/) · Next: [20 — Functional Safety](../20-functional-safety/)
+Previous: [18 — HMI and SCADA Integration](../18-hmi-and-scada/) · Next: [20 — Functional Safety, Safety PLCs and Cause-and-Effect](../20-functional-safety/)

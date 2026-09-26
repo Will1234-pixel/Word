@@ -483,7 +483,7 @@ LIFO and a shift register.
 
 | Need | IEC / CODESYS / OpenPLC | Siemens S7-1200/1500 | Rockwell Logix | Notes |
 |---|---|---|---|---|
-| First scan | Not in the standard. Roll your own (a `BOOL` initialised TRUE and cleared at the end of the scan). TwinCAT: `_TaskInfo[GETCURTASKINDEXEX()].FirstCycle` | `FirstScan` bit of the system memory byte (`%M1.0` when the byte is at MB1), TRUE in the first cycle after the startup OBs; startup OB100 | `S:FS`; optional power-up handler | Micro800: `_SYSVA_FIRST_SCAN` (check the spelling: A.1.4) |
+| First scan | Not in the standard. Roll your own, for example `FirstScan := NOT Started; Started := TRUE;` at the top of the program ([Module 06](../06-edges-and-one-shots/)). TwinCAT: `_TaskInfo[GETCURTASKINDEXEX()].FirstCycle` | `FirstScan` bit of the system memory byte (`%M1.0` when the byte is at MB1), TRUE in the first cycle after the startup OBs; startup OB100 | `S:FS`; optional power-up handler | Micro800: `_SYSVA_FIRST_SCAN` (check the spelling: A.1.4) |
 | Always TRUE / FALSE bits | Literals | `AlwaysTRUE`, `AlwaysFALSE` system memory bits | — | |
 | Clock pulses | Build with timers | Clock memory byte: bits from 10 Hz down to 0.5 Hz | Build with timers | Clock bits are not synchronised to your logic |
 | Date and time | CODESYS system libraries (check your runtime) | `RD_SYS_T` (UTC), `RD_LOC_T` (local) into `DTL` | `GSV` from `WallClockTime` | |

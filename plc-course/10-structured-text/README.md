@@ -581,9 +581,10 @@ Rockwell Logix arrays always start at 0, while Siemens and CODESYS let you choos
 registers.
 
 Keep the size in one place. CODESYS, TwinCAT and TIA Portal let a named constant be used as an
-array bound (`ARRAY[1..NUM_PROBES]`). MATIEC does not (`Subrange upper limit is not a constant
-value`), and Rockwell Logix array dimensions are plain numbers too, so the labs write the bound
-as a literal and use a constant with the same value for the loop limit.
+array bound (`ARRAY[1..NUM_PROBES]`). MATIEC rejects a constant declared in the POU's own
+`VAR CONSTANT` block (`Subrange upper limit is not a constant value`), and Rockwell Logix array
+dimensions are plain numbers too, so the labs write the bound as a literal and use a constant
+with the same value for the loop limit.
 
 ### Out-of-range indexes
 
@@ -1310,7 +1311,7 @@ limits of its own. This module met these:
 
 - no `//` comments, no nested comments, no OOP, no generic `TO_INT`, no `STRING(n)`;
 - no implicit conversions at all, not even an integer literal into a `REAL`;
-- no named constants as array bounds;
+- no named constants from the POU's own `VAR CONSTANT` block as array bounds;
 - arrays cannot be passed to a function as `VAR_INPUT` (use `VAR_IN_OUT` or an FB);
 - no run-time array bounds checking;
 - variables must not share a name with a standard function or FB (`Max`, `Sel`, ...).

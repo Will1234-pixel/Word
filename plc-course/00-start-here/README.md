@@ -58,9 +58,20 @@ collapsible sections, so try the question before you open the answer.
 
 ### How long will it take?
 
-At about 6–8 hours per week, most people finish Levels 1–2 in 6–8 weeks, Level 3 in another
-4–6 weeks, and Levels 4–5 plus the capstones in 10–14 weeks. See
-[Appendix C](../appendices/C-study-plan-and-self-assessment.md) for week-by-week plans.
+The whole course is about 290 hours of study, including one capstone project. At about 7
+hours a week that is roughly 40 weeks:
+
+| Part | Study time | At ~7 h a week |
+|---|---|---|
+| Orientation and Levels 1–2 (Modules 00–09) | about 75–85 h | 11–12 weeks |
+| Level 3 (Modules 10–14) | about 55 h | about 8 weeks |
+| Levels 4–5 (Modules 15–23) | about 105–115 h | 15–16 weeks |
+| One capstone project | about 25–40 h | 4–6 weeks |
+
+At 15 hours a week it takes about 20 weeks. See
+[Appendix C](../appendices/C-study-plan-and-self-assessment.md) for week-by-week plans at
+different paces. You can stop after any level and still have useful, complete skills: Levels
+1–2 already cover much of the day-to-day ladder work on a plant.
 Doing the labs matters more than reading: you learn PLC programming by writing and testing
 logic.
 

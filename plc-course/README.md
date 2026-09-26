@@ -54,8 +54,9 @@ works and helps you install free practice software. No PLC hardware is needed.
 [D — Resources, standards and certifications](appendices/D-resources-and-certifications.md) ·
 [E — MATIEC, OpenPLC and the test runner](appendices/E-matiec-openplc-notes.md)
 
-At 6–8 hours a week the whole course takes roughly six months. See
-[Appendix C](appendices/C-study-plan-and-self-assessment.md) for faster and slower plans.
+The whole course is about 290 hours including one capstone: roughly 40 weeks at 7 hours a
+week, or 20 weeks at 15 hours a week. See
+[Appendix C](appendices/C-study-plan-and-self-assessment.md) for week-by-week plans.
 
 ## How each module works
 

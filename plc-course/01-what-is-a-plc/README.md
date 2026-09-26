@@ -616,7 +616,7 @@ The same languages go by different names in vendor tools:
 | Ladder Diagram (LD) | LAD | Ladder Diagram (RLL) | LD |
 | Function Block Diagram (FBD) | FBD | Function Block Diagram | FBD (CODESYS also has CFC, a free-form variant) |
 | Structured Text (ST) | SCL | Structured Text | ST |
-| Sequential Function Chart (SFC) | GRAPH | Sequential Function Chart | SFC |
+| Sequential Function Chart (SFC) | GRAPH | Sequential Function Chart | SFC (CODESYS; the current OpenPLC Editor does not offer it, see Module 00) |
 | Instruction List (IL) | STL (similar, not identical) | not available | IL |
 
 Which languages you can use depends on the controller family, and sometimes on the software
@@ -1101,4 +1101,4 @@ in HAND.
   [Appendix A](../appendices/A-vendor-cross-reference.md) for a side-by-side cross-reference.
 
 ---
-Previous: [00 — Start Here](../00-start-here/) · Next: [02 — Electrical Fundamentals and Field Devices](../02-electrical-and-field-devices/)
+Previous: [00 — Start Here: How This Course Works and Setting Up Your Lab](../00-start-here/) · Next: [02 — Electrical Fundamentals and Field Devices](../02-electrical-and-field-devices/)

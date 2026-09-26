@@ -126,10 +126,10 @@ The number of elements is `upper - lower + 1`: `[1..4]` has 4, `[0..23]` has 24,
 has 11. Getting that wrong is the classic off-by-one bug.
 
 Keep the size in one place. In CODESYS, TIA Portal and edition 3 of the standard, a named
-constant can be an array bound (`ARRAY[1..NUM_PUMPS]`). MATIEC rejects it
-(`Subrange upper limit is not a constant value.`), so the labs write the bound as a literal and
-declare a constant with the same value next to it for loops, with a comment saying the two
-belong together.
+constant can be an array bound (`ARRAY[1..NUM_PUMPS]`). MATIEC rejects a constant declared in
+the POU's own `VAR CONSTANT` block (`Subrange upper limit is not a constant value.`), so the
+labs write the bound as a literal and declare a constant with the same value next to it for
+loops, with a comment saying the two belong together.
 
 ### 2.2 Named array types, and copying arrays
 
@@ -1553,8 +1553,8 @@ Everything this module's labs use was checked with MATIEC. In summary:
   whole-structure assignment, arrays of structures, arrays inside structures, structures as
   function inputs and results, plain enumerations with `E_X#Value`, subranges (not checked),
   `STRING` with the standard functions.
-- **Not supported**: constants as array bounds; arrays of FB instances; FB instances inside a
-  structure; located arrays; enumerations with explicit values; `STRING(n)`; comparing arrays or
+- **Not supported**: local (`VAR CONSTANT`) constants as array bounds; arrays of FB
+  instances; FB instances inside a structure; located arrays; enumerations with explicit values; `STRING(n)`; comparing arrays or
   structures with `=`; converting enumerations to integers; `<` and `>` on enumerations;
   `LOWER_BOUND`/`UPPER_BOUND`.
 - **Traps**: no run-time bounds checking; an array element passed to a *function's*
@@ -1775,7 +1775,10 @@ stop is an ordinary control stop. Emergency stops belong in a safety system
    makes it `Stopped`. It never starts the pump. If the cause is still there, the alarm returns
    after another full timeout. A `Reset` of a pump that is not faulted does not restart the
    timing of a disagreement (pressing Reset must not postpone an alarm). A `Reset` of one pump
-   does not affect the others.
+   does not affect the others. (This reset is softer than the set-dominant fault latch of
+   Module 11's `FB_Motor`, which cannot be reset while its cause is present: here Reset re-arms
+   the supervision, and the test checks that the alarm comes back. For trips, prefer the
+   set-dominant form from Modules 04 and 06.)
 6. All command bits are cleared by your logic every scan, whether they were used or not.
 7. The four pumps are independent: each has its own timing.
 8. `RunningCount` and `FaultLamp` summarise the four pumps.
@@ -1908,4 +1911,4 @@ reference solution puts the loop in one `FUNCTION_BLOCK` whose `VAR_IN_OUT` is t
 
 ---
 
-Previous: [11 — Program Organisation](../11-program-organization/) · Next: [13 — Sequential Control](../13-sequential-control/)
+Previous: [11 — Program Organisation and Reusable Function Blocks](../11-program-organization/) · Next: [13 — Sequential Control: State Machines and SFC](../13-sequential-control/)

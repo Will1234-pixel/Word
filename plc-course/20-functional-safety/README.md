@@ -1,6 +1,6 @@
 # 20 — Functional Safety, Safety PLCs and Cause-and-Effect
 
-> **Level:** 5 — Professional practice · **Time:** ~12–14 hours · **Prerequisites:** [05 — Boolean Logic and FBD](../05-boolean-logic-and-fbd/), [07 — Timers](../07-timers/), [14 — Analog Signals and Process I/O](../14-analog-and-process-io/), [16 — Alarms and Diagnostics](../16-alarms-and-diagnostics/)
+> **Level:** 5 — Professional practice · **Time:** ~12–14 hours · **Prerequisites:** [05 — Boolean Logic, Truth Tables and Function Block Diagram](../05-boolean-logic-and-fbd/), [07 — Timers](../07-timers/), [14 — Analog Signals and Process I/O](../14-analog-and-process-io/), [16 — Alarms, Diagnostics and Fault Handling](../16-alarms-and-diagnostics/)
 
 > **Read this first: what this module is, and what it is not.**
 > This module teaches the *concepts* of functional safety. It will help you read safety
@@ -805,7 +805,8 @@ stateDiagram-v2
 The rules, all of which appear in the labs:
 
 1. **The trip wins.** If the trip condition and the reset are present on the same scan, the
-   trip stays. A reset must not even blip the output for one scan.
+   trip stays: the latch is set-dominant ([Module 04](../04-ladder-logic/)). A reset must not
+   even blip the output for one scan.
 2. **Reset only when healthy.** A reset while the cause is still present is refused. The
    operator has to fix or confirm the cause first.
 3. **Reset is a deliberate act.** It acts on the *press* (a rising edge), not on the button
@@ -1554,8 +1555,10 @@ alarm if a valve's closed limit switch has not confirmed within 10 s of its effe
 
 - Write one function block, `FB_TripCause`, with inputs `Healthy`, `TripDelay`, `Bypassable`,
   `BypassKey`, `BypassReq`, `BypassTime` and `ResetCmd` (a one-scan pulse made once in the
-  program from `ResetPB`), and outputs `Latched` and `Bypassed`. Declare six instances.
-  MATIEC cannot make an array of FB instances.
+  program from `ResetPB`), and outputs `Latched` and `Bypassed`. Declare six instances, one
+  per line: MATIEC cannot make an array of FB instances, and a list such as
+  `Cause1, Cause2 : FB_TripCause;` crashed OpenPLC's compiler
+  ([Appendix E](../appendices/E-matiec-openplc-notes.md)).
 - Inside it: an `R_TRIG` on `BypassReq` starts the bypass. A `TON` running while `Bypassed` is
   TRUE ends it, as do `NOT BypassReq` and `NOT BypassKey`. Because the start needs a new edge,
   an expired bypass cannot restart.
@@ -1658,4 +1661,4 @@ alarm if a valve's closed limit switch has not confirmed within 10 s of its effe
 
 ---
 
-Previous: [19 — Motion Control, Drives and Positioning](../19-motion-and-drives/) · Next: [21 — Architecture and Standards](../21-architecture-and-standards/)
+Previous: [19 — Motion Control, Drives and Positioning](../19-motion-and-drives/) · Next: [21 — Architecture, Industry Standards and Design Patterns](../21-architecture-and-standards/)

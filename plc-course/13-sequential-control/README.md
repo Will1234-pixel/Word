@@ -1,6 +1,6 @@
 # 13 — Sequential Control: State Machines and SFC
 
-> **Level:** 3 — Structured programming · **Time:** ~12 hours · **Prerequisites:** [07 — Timers](../07-timers/), [10 — Structured Text in Depth](../10-structured-text/), [12 — Data Structures](../12-data-structures/)
+> **Level:** 3 — Structured programming · **Time:** ~12 hours · **Prerequisites:** [07 — Timers](../07-timers/), [10 — Structured Text in Depth](../10-structured-text/), [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/)
 
 Much of what a plant does happens in **steps**. A duty pump opens its suction valve, starts
 against a closed discharge valve, waits for pressure, then opens the discharge. A batch
@@ -865,8 +865,9 @@ section only through its convergence.
 
 ### 3.10 Textual SFC, as MATIEC compiles it
 
-IEC 61131-3 defines a textual form of SFC alongside the graphical one. MATIEC compiles it,
-the OpenPLC Editor generates it from a graphical chart, and it is what Lab 13-3 uses:
+IEC 61131-3 defines a textual form of SFC alongside the graphical one. MATIEC compiles it
+(earlier OpenPLC Editor versions generated it from a graphical chart, see section 3.11), and
+it is what Lab 13-3 uses:
 
 ```iecst
   INITIAL_STEP Idle:                       (* exactly one initial step *)
@@ -925,12 +926,12 @@ Behaviour of MATIEC's textual SFC, all checked with `plctest`:
 
 ### 3.11 Graphical SFC: OpenPLC Editor and CODESYS
 
-In the **OpenPLC Editor** you draw the chart graphically: steps, transitions, action blocks,
-divergences and jumps from the SFC toolbox, with conditions and action bodies in ST, LD or
-FBD. When the program is built, the editor generates the textual form of section 3.10 for
-MATIEC. You can therefore draw Lab 13-3 in the editor, save the generated `.st` file, and run
-it against the lab's test as described in
-[Module 00](../00-start-here/README.md#testing-ladder-you-drew-in-openplc-editor).
+The current **OpenPLC Editor** (v4) offers LD, FBD, ST and IL, but SFC is not listed among
+its languages ([Module 00](../00-start-here/README.md#option-2--openplc-editor-graphical-ladder-and-fbd-free-with-a-simulator)).
+Earlier versions, built on the Beremiz editor, had a graphical SFC editor that generated the
+textual form of section 3.10 for MATIEC, which is why you will still see OpenPLC SFC charts
+in older tutorials. With the current Editor, write Lab 13-3 as textual SFC and run it with
+`plctest`, or draw the chart in CODESYS.
 
 **CODESYS** has a full SFC editor, with some extensions and behaviour worth knowing:
 
@@ -1299,7 +1300,8 @@ How it behaves:
 - **Motor trip.** In *Running*, the trip check comes before the stop check: a trip must be
   reported even if the operator happened to press Stop in the same scan.
 - **Reset** is accepted only with the run request removed, so a reset cannot restart the
-  pump by surprise.
+  pump by surprise. `ResetPB` is used as a level to keep the example short; on a real panel,
+  act on its rising edge (section 4.4), as Lab 13-2 does.
 - **Missing on purpose:** interlocks (low suction level, for example) belong in the device
   layer on `PumpRun` (section 4.2), and in a real plant the valves and the motor would be
   device FBs with their own feedback supervision ([Module 11](../11-program-organization/)).
@@ -1568,7 +1570,7 @@ PROGRAM TankControl
   VAR (* I/O *)
     StartPB         AT %IX0.0 : BOOL;
     LevelHighLS     AT %IX0.1 : BOOL;
-    LevelHighHighOK AT %IX0.2 : BOOL;  (* independent high-high switch, TRUE while NOT high-high *)
+    LevelHH_NC      AT %IX0.2 : BOOL;  (* independent high-high switch, NC: TRUE while NOT high-high *)
     InletValve      AT %QX0.0 : BOOL;
     Agitator        AT %QX0.1 : BOOL;
   END_VAR
@@ -1579,7 +1581,7 @@ PROGRAM TankControl
   Chart(StartCmd := StartPB, LevelHigh := LevelHighLS);
 
   (* Interlocks live outside the chart and apply whatever step it is in. *)
-  InletValve := Chart.FillReq AND LevelHighHighOK;
+  InletValve := Chart.FillReq AND LevelHH_NC;
   Agitator   := Chart.MixReq;
 END_PROGRAM
 
@@ -1591,7 +1593,7 @@ CONFIGURATION Config0
 END_CONFIGURATION
 ```
 
-The high-high switch is wired normally-closed style (`_OK`, TRUE when healthy), so a broken
+The high-high switch is wired normally-closed (`_NC`, TRUE when healthy), so a broken
 wire also closes the inlet. As a *basic process control* interlock this is good practice.
 If the hazard analysis makes high-high level a safety function, it goes to an independent
 safety system instead ([Module 20](../20-functional-safety/)).
@@ -1669,8 +1671,9 @@ safety system instead ([Module 20](../20-functional-safety/)).
 
 ### OpenPLC and MATIEC (`plctest`)
 
-- The OpenPLC Editor draws SFC graphically and generates textual SFC; `plctest` compiles the
-  same textual form (section 3.10).
+- The current OpenPLC Editor (v4) does not list SFC among its languages; earlier versions
+  drew SFC graphically and generated textual SFC (section 3.11). `plctest` compiles the
+  textual form of section 3.10, and so does the OpenPLC Runtime's compiler.
 - MATIEC's behaviour for alternative branches, **N** associations, the initial step and final
   executions differs from other tools as listed in section 3.10. The labs are written so that
   none of these differences matters, but remember them when you port a chart.
@@ -2008,10 +2011,11 @@ The test checks outputs only, so a `CASE` state machine would also pass. Write t
 anyway: the point of the lab is choosing qualifiers. If you draw it in CODESYS, count the
 hole in the *Dwell* step's entry action instead of a P action (section 3.11).
 
-To keep the chart simple, Start is level-sensitive here: the transition out of *Idle* reads
-`StartPB` directly. Requiring the drilled part to be removed first means a held button
-cannot drill the same part twice, but a Start button held while a new part is loaded would
-still start the cycle. A real station uses an edge (section 4.4) and, where hands are near
+To keep the chart simple, Start and Reset are level-sensitive here: the transitions read
+`StartPB` and `ResetPB` directly. Requiring the drilled part to be removed first means a held
+button cannot drill the same part twice, but a Start button held while a new part is loaded
+would still start the cycle, and a jammed Reset button would clear the next feed fault as
+soon as it appeared. A real station uses edges (section 4.4) and, where hands are near
 the clamp, a two-hand control or a guard, which are safety functions
 ([Module 20](../20-functional-safety/)).
 
@@ -2124,4 +2128,4 @@ The *Unload* step has no actions at all.
 - CODESYS online help: "SFC" (qualifiers, step actions, SFC flags, processing order).
 
 ---
-Previous: [12 — Data Structures](../12-data-structures/) · Next: [14 — Analog Signals and Process I/O](../14-analog-and-process-io/)
+Previous: [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/) · Next: [14 — Analog Signals and Process I/O](../14-analog-and-process-io/)

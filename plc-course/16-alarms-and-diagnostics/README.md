@@ -1215,8 +1215,9 @@ rules for a heartbeat you can rely on:
   network you rarely control that.)
 - **Any change counts.** Compare with `<>`, never `>`: a counter wraps from 32767 to −32768,
   and a partner that restarts starts counting from 0 again. Both are signs of life.
-- **Choose the timeout from the update period.** Two to three update periods plus the worst
-  communication delay is a common choice: long enough to ride through one or two lost
+- **Choose the timeout from the update period.** About three update periods plus the worst
+  communication delay is a common choice (the same rule as in
+  [Module 17](../17-industrial-communications/)): long enough to ride through one or two lost
   messages, short enough to act in time.
 - **Don't trust the first value.** After power-up the first value read proves nothing; the
   partner may have stopped hours ago. The partner is "OK" only after its heartbeat has been
@@ -1972,9 +1973,9 @@ Counter;`, a `TON` with `IN := NOT Changed` for the fault, and a `SeenChange` fl
    from 32767 to −32768, or restarts from 0 after the partner restarts, looks like no change.
    At best that update is lost, which already gives a false fault if the timeout is short; a
    monitor that waits for a value above the highest one seen so far never sees a change again
-   and stays faulted. For a 2 s update, a timeout of two to three update periods plus the
-   network delay, for example 5–6 s, rides through one lost update without delaying the fault
-   too long.
+   and stays faulted. For a 2 s update, a timeout of about three update periods plus the
+   network delay, for example 6–7 s, rides through one or two lost updates without delaying
+   the fault too long.
 9. The pressure rises by less than 0.05 bar per scan, so every scan-to-scan comparison says
    "not moved", and the timer is never restarted. Compare with a **reference** value taken at
    the last significant move; the slow rise then adds up to more than 0.05 bar and counts as

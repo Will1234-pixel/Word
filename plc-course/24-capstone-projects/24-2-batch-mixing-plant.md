@@ -1131,6 +1131,6 @@ the code review.
 
 ---
 
-Previous: [24-1 — Conveyor Sorting Cell](24-1-conveyor-sorting-cell.md) ·
-Next: [24-3 — Wastewater Pump Station](24-3-pump-station.md) ·
-Up: [Module 24 — Capstone projects](README.md)
+Previous: [24-1 — Capstone: Conveyor Sorting Cell](24-1-conveyor-sorting-cell.md) ·
+Next: [24-3 — Capstone: Wastewater Pump Station](24-3-pump-station.md) ·
+Up: [Module 24 — Capstone Projects](README.md)

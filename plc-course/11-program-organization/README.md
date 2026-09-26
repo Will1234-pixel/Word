@@ -898,6 +898,12 @@ handshakes.
   reset. That is a plant-philosophy decision, so document it (see worked example 7.1).
 - **Reset works only when the cause has gone.** A latch that re-trips at once is honest. It
   tells the operator the problem is still there.
+- **Reset on the edge, not the level** ([Module 06](../06-edges-and-one-shots/), section 8.5).
+  The lab FBs clear `Fault` while `Reset` is TRUE, which keeps them short. But if a reset
+  button sticks, a new failure to start latches and is cleared again on the next scan, because
+  switching the command off removes the disagreement. In a real library, put an `R_TRIG` on
+  `Reset` inside the FB, or feed it a one-scan pulse, such as an HMI reset bit that the program
+  clears once used (worked example 7.1).
 - **Reset scope.** A common reset button per area is normal. Per-device resets from the HMI
   are also common. Keep safety-function resets separate and hardwired according to the safety
   design ([Module 20](../20-functional-safety/)).
@@ -1687,4 +1693,4 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
   Retain and Persistent variables*.
 
 ---
-Previous: [10 — Structured Text](../10-structured-text/) · Next: [12 — Data Structures](../12-data-structures/)
+Previous: [10 — Structured Text in Depth](../10-structured-text/) · Next: [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/)

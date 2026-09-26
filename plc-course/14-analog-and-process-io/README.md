@@ -1185,9 +1185,10 @@ at 4 mA (1 V) and about 32768 at 20 mA (5 V), so the 4–20 mA span uses only 40
 counts, and a 10-bit ADC gives only about 400 real steps across it. There are no
 card diagnostics, so software range checks are your only line-fault detection. The MATIEC
 library adds `HYSTERESIS`, `RAMP`, `INTEGRAL`, `DERIVATIVE` and `PID` blocks; all but
-`HYSTERESIS` take a `CYCLE` input for the sample time. In the MATIEC build used by
-`plctest`, `TIME_TO_REAL` returns seconds, and `+`/`-` between two TIME values pass the
-compiler but then fail in the C build; `ADD_TIME` and `SUB_TIME` work.
+`HYSTERESIS` take a `CYCLE` input for the sample time. In MATIEC and OpenPLC,
+`TIME_TO_REAL` returns seconds. TIME arithmetic (`+`, `-`, `ADD_TIME`, `SUB_TIME`) works in
+both `plctest` and OpenPLC; `plctest` works around an upstream MATIEC code-generation bug for
+`+`/`-` ([Appendix E](../appendices/E-matiec-openplc-notes.md)).
 
 ## Labs
 
@@ -1518,4 +1519,4 @@ Demand := TRUE; ELSIF Level <= 1.0 THEN Demand := FALSE; END_IF;` and finally
   transmitter manual for its square-root and low-flow cut-off settings.
 
 ---
-Previous: [13 — Sequential Control](../13-sequential-control/) · Next: [15 — PID Control](../15-pid-control/)
+Previous: [13 — Sequential Control: State Machines and SFC](../13-sequential-control/) · Next: [15 — PID and Closed-Loop Control](../15-pid-control/)

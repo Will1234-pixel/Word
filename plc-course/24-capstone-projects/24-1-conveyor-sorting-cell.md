@@ -1028,7 +1028,9 @@ to) against this table.
 11. **Unit tests per FB.** Write separate `.test` files that exercise `FB_Pusher` and
     `FB_Tracker` on their own through a small test program (Module 22).
 12. **Other languages.** Redraw `FB_Pusher` as an SFC (Module 13), or the cell's start/stop
-    logic as Ladder in OpenPLC Editor, and run the same FAT against the generated code.
+    logic as Ladder in OpenPLC Editor. Prove the Ladder version in the Editor's simulator and,
+    if your Editor version can save the generated ST, run the same FAT against it
+    ([Module 00](../00-start-here/), *Testing Ladder you drew in OpenPLC Editor*).
 
 ## 13. Common mistakes and how to avoid them
 
@@ -1200,5 +1202,5 @@ the program. Without one, a 500 Hz encoder cannot be counted by a scanned input.
 
 ---
 
-Previous: [24 — Capstone projects overview](README.md) ·
+Previous: [24 — Capstone Projects](README.md) ·
 Next: [24-2 — Capstone: Batch Mixing Plant](24-2-batch-mixing-plant.md)

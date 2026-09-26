@@ -1550,11 +1550,15 @@ Editor, and its ladder editor works like this (newer releases may look different
 elements are the same IEC ones). You place the left and right power rails, then contacts
 (normal, negated, rising edge, falling edge), coils (normal, negated, set, reset, rising
 edge, falling edge) and blocks from the library, including `SR`, `RS` and the timers.
-Variables, including located I/O such as `%IX0.0`, are declared in the POU's variable table. When you build the project,
-the Editor translates the diagram into Structured Text, the same language the course's
-`plctest` runs, so you can test a ladder solution with the lab's `.test` file
-([Module 00](../00-start-here/)). Treat the test result, not the look of the diagram, as the
-proof that the rung order and logic are right.
+Variables, including located I/O such as `%IX0.0`, are declared in the POU's variable table.
+The current Editor (v4) has a built-in simulator: run the program on your PC, change inputs
+in the debugger and watch power flow through the rungs. When you build the project, the
+Editor translates the diagram into Structured Text, the same language the course's `plctest`
+runs. If your version lets you save that generated file, you can also test a ladder solution
+with the lab's `.test` file
+([Module 00](../00-start-here/#testing-ladder-you-drew-in-openplc-editor)). Treat the test
+result, or a requirement-by-requirement check in the simulator, not the look of the diagram,
+as the proof that the rung order and logic are right.
 
 **Master control relay (MCR) zones.** Rockwell's `MCR` instruction, used in pairs, fences off
 a zone of rungs. When the zone's condition is false, every rung inside it is executed as if it
@@ -1570,10 +1574,11 @@ put the condition on the rungs themselves.
 Run each lab from the `plc-course` folder. Copy the starter to your own folder first, as
 described in [Module 00](../00-start-here/). Each starter compiles and fails its test until
 you write the logic. For every lab, **sketch the ladder rungs on paper first**, then write the
-ST. If you have OpenPLC Editor, draw the ladder there as well and run the generated ST against
-the same test (Module 00, *Testing Ladder you drew in OpenPLC Editor*). The reference ladder for
-each lab is in a collapsed section at the end of the lab. Open it only after your own
-solution passes.
+ST. If you have OpenPLC Editor, draw the ladder there as well and prove each numbered
+requirement in its simulator. If your Editor version can save the generated ST, run that
+against the same test too (Module 00, *Testing Ladder you drew in OpenPLC Editor*). The
+reference ladder for each lab is in a collapsed section at the end of the lab. Open it only
+after your own solution passes.
 
 ### Lab 04-1: Start/stop from two stations
 
