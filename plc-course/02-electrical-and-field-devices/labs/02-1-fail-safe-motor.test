@@ -1,0 +1,165 @@
+# Lab 02-1 acceptance tests: fail-safe motor circuit.
+# Start/stop with seal-in, a thermal overload wired NC (95-96) that stops the
+# motor and lights TripLamp, no automatic restart when the overload is reset,
+# and fail-safe behaviour for broken wires on both NC inputs.
+# Healthy NC inputs read TRUE, so every scenario sets them first.
+
+scenario power-up with everything healthy: motor off, no trip lamp
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+scan
+expect Motor FALSE
+expect TripLamp FALSE
+wait 1s
+expect Motor FALSE
+expect TripLamp FALSE
+
+scenario start runs the motor and it seals in
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+expect Motor TRUE
+set StartPB FALSE
+wait 2s
+expect Motor TRUE
+expect TripLamp FALSE
+
+scenario stop stops the motor and it stays stopped
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+scan
+set StopPB_NC FALSE                 # Stop pressed
+scan
+expect Motor FALSE
+set StopPB_NC TRUE                  # Stop released
+wait 1s
+expect Motor FALSE
+expect TripLamp FALSE               # a normal stop is not a trip
+
+scenario stop wins when start and stop are pressed together
+set StopPB_NC FALSE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+
+scenario overload trip stops a running motor and lights the trip lamp
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Motor TRUE
+set OverloadOK_NC FALSE             # overload relay trips: 95-96 opens
+scan
+expect Motor FALSE
+expect TripLamp TRUE
+wait 2s
+expect Motor FALSE
+expect TripLamp TRUE                # lamp stays on while the overload is tripped
+
+scenario no automatic restart when the overload is reset
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set OverloadOK_NC FALSE             # trip
+wait 1s
+expect Motor FALSE
+set OverloadOK_NC TRUE              # the electrician resets the overload relay
+scan
+expect TripLamp FALSE
+expect Motor FALSE                  # must NOT restart by itself
+wait 3s
+expect Motor FALSE
+set StartPB TRUE                    # a deliberate new start is needed
+scan
+expect Motor TRUE
+set StartPB FALSE
+wait 1s
+expect Motor TRUE
+
+scenario start is ignored while the overload is tripped
+set StopPB_NC TRUE
+set OverloadOK_NC FALSE
+scan
+expect TripLamp TRUE
+set StartPB TRUE
+scan
+expect Motor FALSE
+expect TripLamp TRUE                # pressing Start must not hide the trip
+set StartPB FALSE
+wait 500ms
+expect Motor FALSE
+set OverloadOK_NC TRUE              # reset after the start attempt
+wait 1s
+expect Motor FALSE                  # the earlier press must not have been "remembered"
+
+scenario broken wire on the stop button stops the motor, without a trip indication
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+expect Motor TRUE
+set StopPB_NC FALSE                 # wire break: reads the same as pressing Stop
+scan
+expect Motor FALSE
+expect TripLamp FALSE
+set StartPB TRUE                    # cannot start with the stop circuit open
+scan
+expect Motor FALSE
+
+scenario broken wire on the overload contact stops the motor and shows a trip
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+set OverloadOK_NC FALSE             # wire break: reads the same as a trip
+scan
+expect Motor FALSE
+expect TripLamp TRUE
+
+scenario power-up with the overload already tripped: lamp on, start does nothing
+set StopPB_NC TRUE
+set OverloadOK_NC FALSE
+scan
+expect TripLamp TRUE
+expect Motor FALSE
+set StartPB TRUE
+wait 500ms
+expect Motor FALSE
+expect TripLamp TRUE
+
+scenario the trip lamp shows the overload whatever the buttons do
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+set OverloadOK_NC FALSE             # trip while running
+scan
+expect TripLamp TRUE
+set StopPB_NC FALSE                 # the operator presses Stop as well
+scan
+expect TripLamp TRUE                # the lamp depends only on the overload input
+expect Motor FALSE
+wait 500ms
+expect TripLamp TRUE
+set StopPB_NC TRUE                  # Stop released: still tripped
+scan
+expect TripLamp TRUE
+expect Motor FALSE

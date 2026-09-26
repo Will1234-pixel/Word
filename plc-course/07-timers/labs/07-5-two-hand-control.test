@@ -1,0 +1,218 @@
+# Lab 07-5 acceptance tests: two-hand control timing (training exercise).
+# Checks: the stroke needs both buttons, pressed within 500 ms of each other
+# (in either order); it stops the moment either is released; both must be
+# released before the next stroke; and buttons held at power-up (tied down)
+# cannot start a stroke. Timing checks use 440 ms (accept) and 560 ms (refuse).
+# Interface: LeftPB, RightPB, PressDown.
+
+scenario no stroke while no button is pressed
+scan
+expect PressDown FALSE
+wait 2s
+expect PressDown FALSE
+
+scenario one button alone never starts a stroke
+set LeftPB TRUE
+scan
+expect PressDown FALSE
+wait 3s
+expect PressDown FALSE
+
+scenario both pressed in the same scan start the stroke, and it holds while both are held
+scan
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+wait 3s
+expect PressDown TRUE
+
+scenario left then right within the window starts the stroke
+scan
+set LeftPB TRUE
+scan
+wait 440ms
+expect PressDown FALSE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+wait 2s
+expect PressDown TRUE
+
+scenario right then left within the window also starts the stroke
+scan
+set RightPB TRUE
+scan
+wait 440ms
+set LeftPB TRUE
+scan
+expect PressDown TRUE
+wait 2s
+expect PressDown TRUE
+
+scenario left then right too late: no stroke
+scan
+set LeftPB TRUE
+scan
+wait 560ms
+set RightPB TRUE
+scan
+expect PressDown FALSE
+wait 2s
+expect PressDown FALSE
+
+scenario right then left too late: no stroke
+scan
+set RightPB TRUE
+scan
+wait 560ms
+set LeftPB TRUE
+scan
+expect PressDown FALSE
+wait 2s
+expect PressDown FALSE
+
+scenario a fresh attempt after releasing both buttons gets its own 500 ms window
+scan
+set LeftPB TRUE                # a first attempt, abandoned...
+wait 100ms
+set LeftPB FALSE               # ...both buttons are up again
+wait 200ms
+set LeftPB TRUE                # a new attempt starts here, 300 ms after the first press
+wait 350ms                     # 350 ms after this press (650 ms after the first one)
+set RightPB TRUE
+scan
+expect PressDown TRUE
+wait 1s
+expect PressDown TRUE
+
+scenario after a late press, releasing only one button does not re-arm
+scan
+set LeftPB TRUE
+scan
+wait 600ms
+set RightPB TRUE               # too late
+scan
+expect PressDown FALSE
+set RightPB FALSE              # try again with the right hand only
+wait 200ms
+set RightPB TRUE
+scan
+expect PressDown FALSE
+wait 1s
+expect PressDown FALSE
+set LeftPB FALSE               # release both...
+set RightPB FALSE
+wait 200ms
+set LeftPB TRUE                # ...then a proper two-hand press works
+set RightPB TRUE
+scan
+expect PressDown TRUE
+
+scenario releasing either button stops the stroke at once
+scan
+set LeftPB TRUE
+set RightPB TRUE
+scan
+wait 1s
+expect PressDown TRUE
+set LeftPB FALSE
+scan
+expect PressDown FALSE
+set LeftPB TRUE                # re-pressing the released button does not restart
+scan
+expect PressDown FALSE
+wait 1s
+expect PressDown FALSE
+set LeftPB FALSE
+set RightPB FALSE
+scan
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+set RightPB FALSE
+scan
+expect PressDown FALSE
+
+scenario a quick release and re-press of one button (inside 500 ms) does not restart
+scan
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+wait 100ms
+set RightPB FALSE
+scan
+expect PressDown FALSE
+wait 100ms
+set RightPB TRUE
+scan
+expect PressDown FALSE
+wait 500ms
+expect PressDown FALSE
+
+scenario a button held at power-up (tied down) blocks the stroke
+set LeftPB TRUE                # held from before the PLC started
+scan
+wait 2s
+set RightPB TRUE
+scan
+expect PressDown FALSE
+wait 1s
+expect PressDown FALSE
+set RightPB FALSE
+wait 100ms
+set RightPB TRUE
+scan
+expect PressDown FALSE
+set LeftPB FALSE               # untie it: release both
+set RightPB FALSE
+wait 100ms
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+
+scenario both buttons held at power-up do not start a stroke
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown FALSE
+wait 1s
+expect PressDown FALSE
+set LeftPB FALSE
+set RightPB FALSE
+wait 100ms
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+
+scenario repeated normal cycles all work
+scan
+set LeftPB TRUE
+set RightPB TRUE
+scan
+expect PressDown TRUE
+wait 1s
+set LeftPB FALSE
+set RightPB FALSE
+wait 300ms
+expect PressDown FALSE
+set RightPB TRUE
+wait 200ms
+set LeftPB TRUE
+scan
+expect PressDown TRUE
+wait 1s
+set LeftPB FALSE
+set RightPB FALSE
+wait 300ms
+set LeftPB TRUE
+wait 300ms
+set RightPB TRUE
+scan
+expect PressDown TRUE
+wait 1s
+expect PressDown TRUE

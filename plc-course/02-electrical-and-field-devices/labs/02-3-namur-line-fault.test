@@ -1,0 +1,192 @@
+# Lab 02-3 acceptance tests: NAMUR level switch LSH-301 with line-fault
+# detection controlling the inlet valve XV-301.
+# Checked: normal filling with the permissive (auto-resume after a real high
+# level), open circuit and short circuit (including the dangerous case where a
+# short makes SensorOn read "dry"), substitution of the safe value, the latched
+# fault lamp with reset only after the fault has gone, a reset held during a new
+# fault, a brief fault, and that filling stays stopped until reset.
+# In normal operation the fork is dry, so SensorOn is TRUE; scenarios set it first.
+
+scenario power-up, healthy and dry, fill not selected
+set SensorOn TRUE
+scan
+expect LineFault FALSE
+expect HighLevel FALSE
+expect InletValve FALSE
+expect FaultLamp FALSE
+wait 1s
+expect InletValve FALSE
+expect FaultLamp FALSE
+
+scenario filling stops at high level and resumes when the level falls
+set SensorOn TRUE
+set FillSel TRUE
+scan
+expect HighLevel FALSE
+expect InletValve TRUE
+wait 2s
+expect InletValve TRUE
+set SensorOn FALSE                  # liquid covers the fork: current drops to the OFF band
+scan
+expect HighLevel TRUE
+expect LineFault FALSE
+expect InletValve FALSE
+expect FaultLamp FALSE              # a high level is a process condition, not a fault
+wait 1s
+expect InletValve FALSE
+set SensorOn TRUE                   # level falls below the fork again
+scan
+expect HighLevel FALSE
+expect InletValve TRUE              # permissive: filling resumes by itself
+
+scenario turning the fill selector off closes the valve
+set SensorOn TRUE
+set FillSel TRUE
+scan
+expect InletValve TRUE
+set FillSel FALSE
+scan
+expect InletValve FALSE
+
+scenario open circuit: fault, safe substitute value, valve closed
+set SensorOn TRUE
+set FillSel TRUE
+scan
+expect InletValve TRUE
+set SensorOn FALSE                  # broken wire: no current flows...
+set WireBreak TRUE                  # ...and the isolator reports an open circuit
+scan
+expect LineFault TRUE
+expect HighLevel TRUE
+expect InletValve FALSE
+expect FaultLamp TRUE
+
+scenario short circuit that reads as dry must still close the valve
+set SensorOn TRUE
+set FillSel TRUE
+scan
+expect InletValve TRUE
+set ShortCircuit TRUE               # shorted cable: high current reads as "dry" (SensorOn stays TRUE)
+scan
+expect LineFault TRUE
+expect HighLevel TRUE               # the safe value, NOT what SensorOn claims
+expect InletValve FALSE
+expect FaultLamp TRUE
+wait 1s
+expect InletValve FALSE
+
+scenario a fault while the valve is closed is still latched and shown
+set SensorOn TRUE
+scan
+expect FaultLamp FALSE
+set ShortCircuit TRUE
+scan
+expect LineFault TRUE
+expect FaultLamp TRUE
+set ShortCircuit FALSE
+wait 500ms
+expect FaultLamp TRUE
+
+scenario fault lamp stays on after the fault clears, and filling waits for reset
+set SensorOn TRUE
+set FillSel TRUE
+scan
+set WireBreak TRUE
+set SensorOn FALSE
+scan
+expect FaultLamp TRUE
+wait 500ms
+set WireBreak FALSE                 # wire repaired
+set SensorOn TRUE                   # healthy and dry again
+scan
+expect LineFault FALSE
+expect FaultLamp TRUE               # latched until reset
+expect InletValve FALSE             # no filling until someone has reset the fault
+wait 2s
+expect FaultLamp TRUE
+expect InletValve FALSE
+set ResetPB TRUE                    # operator resets
+wait 100ms
+expect FaultLamp FALSE
+expect InletValve TRUE
+set ResetPB FALSE
+wait 1s
+expect FaultLamp FALSE
+expect InletValve TRUE
+
+scenario reset does nothing while the fault is still present
+set SensorOn TRUE
+set FillSel TRUE
+scan
+set ShortCircuit TRUE
+scan
+expect FaultLamp TRUE
+set ResetPB TRUE
+wait 300ms
+expect FaultLamp TRUE               # fault still present: reset refused
+expect LineFault TRUE
+expect HighLevel TRUE               # reset must not un-substitute the safe value
+expect InletValve FALSE
+set ResetPB FALSE
+wait 300ms
+expect FaultLamp TRUE
+expect InletValve FALSE
+set ShortCircuit FALSE              # now the fault clears
+wait 300ms
+expect FaultLamp TRUE               # still latched: reset was pressed too early
+expect InletValve FALSE
+set ResetPB TRUE
+wait 100ms
+expect FaultLamp FALSE
+expect InletValve TRUE
+
+scenario a reset button held down cannot hide a new fault
+set SensorOn TRUE
+set FillSel TRUE
+set ResetPB TRUE                    # button held (or stuck)
+scan
+expect InletValve TRUE
+set WireBreak TRUE
+set SensorOn FALSE
+scan
+expect FaultLamp TRUE
+expect HighLevel TRUE
+expect InletValve FALSE
+wait 500ms
+expect FaultLamp TRUE
+expect HighLevel TRUE
+expect InletValve FALSE
+
+scenario a brief fault is latched
+set SensorOn TRUE
+set FillSel TRUE
+scan
+set ShortCircuit TRUE               # a loose terminal: 30 ms glitch
+wait 30ms
+set ShortCircuit FALSE
+wait 1s
+expect LineFault FALSE
+expect FaultLamp TRUE
+expect InletValve FALSE
+
+scenario both status bits at once are one fault, cleared by one reset
+set SensorOn TRUE
+set FillSel TRUE
+scan
+set WireBreak TRUE
+set ShortCircuit TRUE
+scan
+expect LineFault TRUE
+expect HighLevel TRUE
+expect InletValve FALSE
+set WireBreak FALSE
+scan
+expect LineFault TRUE               # the short circuit is still there
+expect HighLevel TRUE
+set ShortCircuit FALSE
+scan
+expect LineFault FALSE
+set ResetPB TRUE
+wait 100ms
+expect FaultLamp FALSE
+expect InletValve TRUE

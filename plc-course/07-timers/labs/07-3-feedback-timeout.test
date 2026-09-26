@@ -1,0 +1,290 @@
+# Lab 07-3 acceptance tests: motor with run-feedback monitoring.
+# Checks normal running, fail-to-start after StartTimeout, loss of feedback
+# after LossDelay (short dropouts ignored), latching, the reset rule (only
+# while RunCmd is off), that every start is supervised afresh, and that no
+# fault is raised while the motor is not commanded.
+# Interface: RunCmd, RunFbk, ResetPB, MotorRun, FaultLamp, FailToStart,
+# FbkLost, StartTimeout (default 3 s), LossDelay (default 500 ms).
+
+scenario everything is quiet at power-up
+scan
+expect MotorRun FALSE
+expect FaultLamp FALSE
+expect FailToStart FALSE
+expect FbkLost FALSE
+wait 5s
+expect MotorRun FALSE
+expect FaultLamp FALSE
+expect FailToStart FALSE
+expect FbkLost FALSE
+
+scenario normal start: feedback arrives after 1 s and the motor keeps running
+set RunCmd TRUE
+scan
+expect MotorRun TRUE
+wait 1s
+set RunFbk TRUE                # contactor aux contact closes
+wait 10s
+expect MotorRun TRUE
+expect FaultLamp FALSE
+expect FailToStart FALSE
+expect FbkLost FALSE
+
+scenario stopping normally raises no fault
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunCmd FALSE               # normal stop
+scan
+expect MotorRun FALSE
+wait 100ms
+set RunFbk FALSE               # feedback drops a little later
+wait 5s
+expect MotorRun FALSE
+expect FaultLamp FALSE
+expect FailToStart FALSE
+expect FbkLost FALSE
+
+scenario feedback that is slow to drop after a stop is not a fault
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunCmd FALSE
+wait 2s                        # a coasting drive still reports "running"
+set RunFbk FALSE
+wait 3s
+expect FaultLamp FALSE
+expect FailToStart FALSE
+expect FbkLost FALSE
+
+scenario no feedback within the default 3 s: fail to start
+set RunCmd TRUE
+scan
+expect MotorRun TRUE
+wait 2700ms                    # 90 % of StartTimeout
+expect MotorRun TRUE
+expect FailToStart FALSE
+expect FaultLamp FALSE
+until FailToStart = TRUE within 600ms
+expect FbkLost FALSE
+scan
+expect MotorRun FALSE
+expect FaultLamp TRUE
+wait 5s                        # stays tripped: no automatic retry
+expect MotorRun FALSE
+expect FailToStart TRUE
+expect FaultLamp TRUE
+
+scenario the start timeout is adjustable
+set StartTimeout T#1s
+set RunCmd TRUE
+scan
+wait 900ms
+expect FailToStart FALSE
+expect MotorRun TRUE
+until FailToStart = TRUE within 300ms
+scan
+expect MotorRun FALSE
+
+scenario feedback that arrives just in time is accepted
+set RunCmd TRUE
+scan
+wait 2500ms
+set RunFbk TRUE
+wait 10s
+expect MotorRun TRUE
+expect FailToStart FALSE
+expect FbkLost FALSE
+expect FaultLamp FALSE
+
+scenario losing feedback while running trips after the loss delay
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 5s
+set RunFbk FALSE               # motor tripped on its own overload, or a wire broke
+wait 420ms                     # shorter than LossDelay (500 ms)
+expect MotorRun TRUE
+expect FbkLost FALSE
+until FbkLost = TRUE within 150ms
+expect FailToStart FALSE
+scan
+expect MotorRun FALSE
+expect FaultLamp TRUE
+
+scenario the loss delay is adjustable
+set LossDelay T#1500ms
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunFbk FALSE
+wait 1400ms
+expect FbkLost FALSE
+expect MotorRun TRUE
+until FbkLost = TRUE within 200ms
+
+scenario a loss delay longer than the start timeout: a loss is still FbkLost, not FailToStart
+set LossDelay T#4s
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunFbk FALSE               # feedback lost while running
+wait 3600ms                    # longer than StartTimeout, 90 % of LossDelay
+expect FailToStart FALSE       # the motor DID start: this is not a failure to start
+expect FbkLost FALSE
+expect MotorRun TRUE
+until FbkLost = TRUE within 800ms
+expect FailToStart FALSE
+
+scenario short feedback dropouts are ignored
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunFbk FALSE               # 200 ms contact bounce / dip
+wait 200ms
+set RunFbk TRUE
+wait 1s
+set RunFbk FALSE
+wait 300ms
+set RunFbk TRUE
+wait 1s
+set RunFbk FALSE
+wait 400ms
+set RunFbk TRUE
+wait 3s
+expect MotorRun TRUE
+expect FbkLost FALSE
+expect FaultLamp FALSE
+
+scenario a fault stays latched when the feedback comes back
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunFbk FALSE
+until FbkLost = TRUE within 700ms
+set RunFbk TRUE                # feedback returns
+wait 2s
+expect FbkLost TRUE
+expect FaultLamp TRUE
+expect MotorRun FALSE
+
+scenario feedback seen after a fail-to-start trip raises no second alarm
+set RunCmd TRUE
+scan
+until FailToStart = TRUE within 3500ms
+scan
+expect MotorRun FALSE
+set RunFbk TRUE                # the drive reports "running" late...
+wait 1s
+set RunFbk FALSE               # ...then drops out as it stops
+wait 2s
+expect FailToStart TRUE
+expect FbkLost FALSE           # the motor is not commanded, so this is not a feedback loss
+expect MotorRun FALSE
+
+scenario reset is ignored while the run command is still on
+set RunCmd TRUE
+scan
+until FailToStart = TRUE within 3500ms
+set ResetPB TRUE
+wait 300ms
+expect FailToStart TRUE        # must NOT reset: the motor would restart at once
+expect FaultLamp TRUE
+expect MotorRun FALSE
+set ResetPB FALSE
+wait 1s
+expect FailToStart TRUE
+expect MotorRun FALSE
+
+scenario reset with the run command off clears the fault without starting the motor
+set RunCmd TRUE
+scan
+until FailToStart = TRUE within 3500ms
+set RunCmd FALSE
+wait 200ms
+expect FailToStart TRUE        # removing the command alone does not clear it
+expect FaultLamp TRUE
+set ResetPB TRUE
+wait 100ms
+expect FailToStart FALSE
+expect FbkLost FALSE
+expect FaultLamp FALSE
+expect MotorRun FALSE
+set ResetPB FALSE
+wait 1s
+expect MotorRun FALSE
+set RunCmd TRUE                # a new, deliberate run command starts it again
+scan
+expect MotorRun TRUE
+wait 500ms
+set RunFbk TRUE
+wait 5s
+expect MotorRun TRUE
+expect FaultLamp FALSE
+
+scenario a feedback-lost fault is also reset only with the command off
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 1s
+set RunFbk FALSE
+until FbkLost = TRUE within 700ms
+set ResetPB TRUE
+wait 100ms
+expect FbkLost TRUE
+set ResetPB FALSE
+set RunCmd FALSE
+wait 100ms
+set ResetPB TRUE
+wait 100ms
+expect FbkLost FALSE
+expect FaultLamp FALSE
+expect MotorRun FALSE
+
+scenario each start is timed afresh (the start timer resets between starts)
+set RunCmd TRUE
+scan
+wait 2s                        # no feedback yet...
+set RunCmd FALSE               # ...operator stops before the timeout
+wait 500ms
+set RunCmd TRUE                # and starts again
+scan
+wait 2s                        # 2 s + 2 s would exceed 3 s if the time carried over
+expect FailToStart FALSE
+expect MotorRun TRUE
+set RunFbk TRUE
+wait 2s
+expect FaultLamp FALSE
+
+scenario after a normal stop, the next start is supervised as a start again
+set RunCmd TRUE
+scan
+wait 500ms
+set RunFbk TRUE
+wait 2s
+set RunCmd FALSE               # normal stop
+scan
+set RunFbk FALSE
+wait 1s
+set RunCmd TRUE                # restart, but this time no feedback arrives
+scan
+wait 1500ms                    # well past LossDelay: it must not be treated as a loss
+expect FbkLost FALSE
+expect FailToStart FALSE
+expect MotorRun TRUE
+until FailToStart = TRUE within 1800ms
+expect FbkLost FALSE

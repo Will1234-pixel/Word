@@ -1,0 +1,438 @@
+# Lab 05-1 acceptance tests: transfer pump P-101 start permissive.
+# Tested:
+#  - PermissiveOK for all 8 combinations of the three permissive inputs, with the
+#    selector in AUTO, in MAN and in OFF: it depends on the permissives only;
+#  - Pump for the same 8 combinations in AUTO with demand and in MAN with a run
+#    command: it runs only when all three permissives are healthy, in both modes;
+#  - SelectorFault and PermissiveOK for all 8 permissive combinations with both
+#    selector contacts made: each output ignores the other's inputs, and Pump is off;
+#  - Pump and SelectorFault for all 16 combinations of ManualSel, AutoSel, Demand
+#    and ManualRunCmd with every permissive healthy (OFF, AUTO, MAN, and both
+#    selector contacts made at once);
+#  - no memory anywhere: a running pump stops as soon as its demand, run command,
+#    mode or any permissive goes away, and follows the inputs straight back.
+# The logic is combinational, so several input combinations are checked one after
+# another inside a scenario. Every row sets all the inputs it depends on.
+# Only interface variables are used. LSL101_NC is a fail-safe NC input: TRUE = healthy.
+
+scenario in AUTO with demand, PermissiveOK and Pump for all 8 permissive combinations
+set AutoSel TRUE
+set Demand TRUE
+set SuctionOpenLS FALSE        # valve closed, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK TRUE
+expect Pump TRUE
+
+scenario in MAN with a run command, PermissiveOK and Pump for all 8 permissive combinations
+set ManualSel TRUE
+set ManualRunCmd TRUE
+set SuctionOpenLS FALSE        # valve closed, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK TRUE
+expect Pump TRUE
+
+scenario in OFF, PermissiveOK still shows the permissives but the pump never runs
+set Demand TRUE
+set ManualRunCmd TRUE
+set SuctionOpenLS FALSE        # valve closed, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK TRUE
+expect Pump FALSE
+
+scenario selector fault: SelectorFault ignores the permissives, PermissiveOK ignores the selector
+set ManualSel TRUE             # both selector contacts made
+set AutoSel TRUE
+set Demand TRUE
+set ManualRunCmd TRUE
+set SuctionOpenLS FALSE        # valve closed, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS FALSE        # valve closed, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, motor fault
+set LSL101_NC FALSE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level low, no fault
+set LSL101_NC FALSE
+set MotorFault FALSE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, motor fault
+set LSL101_NC TRUE
+set MotorFault TRUE
+scan
+expect PermissiveOK FALSE
+expect SelectorFault TRUE
+expect Pump FALSE
+set SuctionOpenLS TRUE         # valve open, level OK, no fault
+set LSL101_NC TRUE
+set MotorFault FALSE
+scan
+expect PermissiveOK TRUE
+expect SelectorFault TRUE
+expect Pump FALSE
+
+scenario mode logic: all 16 combinations of selector, demand and run command, permissives healthy
+set SuctionOpenLS TRUE
+set LSL101_NC TRUE
+set MotorFault FALSE
+set ManualSel FALSE            # OFF, demand off, run cmd off
+set AutoSel FALSE
+set Demand FALSE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel FALSE            # OFF, demand off, run cmd on
+set AutoSel FALSE
+set Demand FALSE
+set ManualRunCmd TRUE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel FALSE            # OFF, demand on, run cmd off
+set AutoSel FALSE
+set Demand TRUE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel FALSE            # OFF, demand on, run cmd on
+set AutoSel FALSE
+set Demand TRUE
+set ManualRunCmd TRUE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel FALSE            # AUTO, demand off, run cmd off
+set AutoSel TRUE
+set Demand FALSE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel FALSE            # AUTO, demand off, run cmd on
+set AutoSel TRUE
+set Demand FALSE
+set ManualRunCmd TRUE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel FALSE            # AUTO, demand on, run cmd off
+set AutoSel TRUE
+set Demand TRUE
+set ManualRunCmd FALSE
+scan
+expect Pump TRUE
+expect SelectorFault FALSE
+set ManualSel FALSE            # AUTO, demand on, run cmd on
+set AutoSel TRUE
+set Demand TRUE
+set ManualRunCmd TRUE
+scan
+expect Pump TRUE
+expect SelectorFault FALSE
+set ManualSel TRUE             # MAN, demand off, run cmd off
+set AutoSel FALSE
+set Demand FALSE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel TRUE             # MAN, demand off, run cmd on
+set AutoSel FALSE
+set Demand FALSE
+set ManualRunCmd TRUE
+scan
+expect Pump TRUE
+expect SelectorFault FALSE
+set ManualSel TRUE             # MAN, demand on, run cmd off
+set AutoSel FALSE
+set Demand TRUE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault FALSE
+set ManualSel TRUE             # MAN, demand on, run cmd on
+set AutoSel FALSE
+set Demand TRUE
+set ManualRunCmd TRUE
+scan
+expect Pump TRUE
+expect SelectorFault FALSE
+set ManualSel TRUE             # both contacts (fault), demand off, run cmd off
+set AutoSel TRUE
+set Demand FALSE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault TRUE
+set ManualSel TRUE             # both contacts (fault), demand off, run cmd on
+set AutoSel TRUE
+set Demand FALSE
+set ManualRunCmd TRUE
+scan
+expect Pump FALSE
+expect SelectorFault TRUE
+set ManualSel TRUE             # both contacts (fault), demand on, run cmd off
+set AutoSel TRUE
+set Demand TRUE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+expect SelectorFault TRUE
+set ManualSel TRUE             # both contacts (fault), demand on, run cmd on
+set AutoSel TRUE
+set Demand TRUE
+set ManualRunCmd TRUE
+scan
+expect Pump FALSE
+expect SelectorFault TRUE
+
+scenario AUTO: the pump follows the demand, with no seal-in
+set SuctionOpenLS TRUE
+set LSL101_NC TRUE
+set MotorFault FALSE
+set AutoSel TRUE
+set Demand TRUE
+scan
+expect Pump TRUE
+wait 1s
+expect Pump TRUE
+set Demand FALSE
+scan
+expect Pump FALSE
+wait 1s
+expect Pump FALSE              # nothing holds it on
+set Demand TRUE
+scan
+expect Pump TRUE
+
+scenario MAN: the pump follows the run command, and the auto demand is ignored
+set SuctionOpenLS TRUE
+set LSL101_NC TRUE
+set MotorFault FALSE
+set ManualSel TRUE
+set Demand TRUE
+scan
+expect Pump FALSE              # demand alone does nothing in MAN
+set ManualRunCmd TRUE
+scan
+expect Pump TRUE
+set ManualRunCmd FALSE
+scan
+expect Pump FALSE
+
+scenario losing each permissive stops a running pump at once
+set SuctionOpenLS TRUE
+set LSL101_NC TRUE
+set MotorFault FALSE
+set AutoSel TRUE
+set Demand TRUE
+scan
+expect Pump TRUE
+set SuctionOpenLS FALSE        # valve drifts off its open limit
+scan
+expect Pump FALSE
+expect PermissiveOK FALSE
+set SuctionOpenLS TRUE
+scan
+expect Pump TRUE               # combinational: back as soon as the input is back
+set LSL101_NC FALSE            # low level, or a broken wire on LSL-101
+scan
+expect Pump FALSE
+expect PermissiveOK FALSE
+set LSL101_NC TRUE
+scan
+expect Pump TRUE
+set MotorFault TRUE            # motor protection trips
+scan
+expect Pump FALSE
+expect PermissiveOK FALSE
+
+scenario changing the selector while running
+set SuctionOpenLS TRUE
+set LSL101_NC TRUE
+set MotorFault FALSE
+set AutoSel TRUE
+set Demand TRUE
+scan
+expect Pump TRUE
+set AutoSel FALSE              # turned to OFF
+scan
+expect Pump FALSE
+set ManualSel TRUE             # turned on to MAN, no run command
+scan
+expect Pump FALSE
+set ManualRunCmd TRUE
+scan
+expect Pump TRUE
+set AutoSel TRUE               # selector fault: both contacts made
+scan
+expect Pump FALSE
+expect SelectorFault TRUE
+set ManualSel FALSE            # fault clears, selector reads AUTO with demand
+scan
+expect SelectorFault FALSE
+expect Pump TRUE

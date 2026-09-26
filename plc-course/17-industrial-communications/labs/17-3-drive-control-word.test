@@ -1,0 +1,267 @@
+# Lab 17-3 acceptance tests: drive control word / status word, simplified generic profile.
+# What is checked:
+#   - Ready / Running / Faulted / AtSpeed decoded from status bits 0..3, other bits ignored;
+#   - DriveCtrl = RUN (bit 0), REV (bit 1), RESET (bit 2), with bits 3..15 always 0;
+#   - REV changes only while the drive does not report RUNNING;
+#   - a fault drops RUN at once, and a run request that saw a fault is spent: a fault reset
+#     never restarts the drive until RunReq is released and given again;
+#   - the RESET bit is a single 500 ms pulse per press, however long the button is held;
+#   - StartFail latches when RUN has been sent for 3 s without RUNNING, drops RUN,
+#     and is cleared by the reset button;
+#   - DriveSpeedRef = SpeedSP clamped to 0..100 % x 163.84, rounded.
+# The test plays the part of the drive by writing DriveSts. Timing checks allow >= 100 ms.
+
+scenario power-up: nothing is commanded
+scan 2
+expect DriveCtrl 16#0000
+expect DriveSpeedRef 0
+expect Ready FALSE
+expect Running FALSE
+expect Faulted FALSE
+expect AtSpeed FALSE
+expect StartFail FALSE
+
+scenario status word: each bit decodes on its own, vendor bits are ignored
+set DriveSts 16#0001
+scan 2
+expect Ready TRUE
+expect Running FALSE
+expect Faulted FALSE
+expect AtSpeed FALSE
+set DriveSts 16#0002
+scan 2
+expect Ready FALSE
+expect Running TRUE
+expect Faulted FALSE
+expect AtSpeed FALSE
+set DriveSts 16#0004
+scan 2
+expect Ready FALSE
+expect Running FALSE
+expect Faulted TRUE
+expect AtSpeed FALSE
+set DriveSts 16#0008
+scan 2
+expect Ready FALSE
+expect Running FALSE
+expect Faulted FALSE
+expect AtSpeed TRUE
+set DriveSts 16#FFF0                # only vendor-specific bits set
+scan 2
+expect Ready FALSE
+expect Running FALSE
+expect Faulted FALSE
+expect AtSpeed FALSE
+set DriveSts 16#800B                # ready, running, at speed, plus a vendor bit
+scan 2
+expect Ready TRUE
+expect Running TRUE
+expect Faulted FALSE
+expect AtSpeed TRUE
+expect DriveCtrl 16#0000            # decoding status never commands anything
+
+scenario run forward: RUN follows the request, the drive answers, stop
+set DriveSts 16#0001                # ready
+scan 2
+expect DriveCtrl 16#0000
+set RunReq TRUE
+scan 2
+expect DriveCtrl 16#0001
+set DriveSts 16#0003                # running
+wait 1s
+set DriveSts 16#000B                # at speed
+scan 2
+expect Running TRUE
+expect AtSpeed TRUE
+wait 5s
+expect DriveCtrl 16#0001
+expect StartFail FALSE
+set RunReq FALSE
+scan 2
+expect DriveCtrl 16#0000
+
+scenario reverse is selected at standstill
+set DriveSts 16#0001
+set RevReq TRUE
+scan 2
+expect DriveCtrl 16#0002            # REV follows the request while stopped
+set RunReq TRUE
+scan 2
+expect DriveCtrl 16#0003
+set DriveSts 16#0003
+wait 1s
+expect DriveCtrl 16#0003
+
+scenario direction cannot change while the drive reports RUNNING
+set DriveSts 16#0001
+set RunReq TRUE
+scan 2
+set DriveSts 16#000B                # running forward at speed
+scan 2
+expect DriveCtrl 16#0001
+set RevReq TRUE                     # reverse requested while running
+scan 2
+expect DriveCtrl 16#0001            # not taken
+wait 2s
+expect DriveCtrl 16#0001
+set RunReq FALSE                    # stop: the drive ramps down, still RUNNING
+scan 2
+expect DriveCtrl 16#0000            # REV still 0 during the ramp-down
+wait 1s
+expect DriveCtrl 16#0000
+set DriveSts 16#0001                # stopped
+scan 2
+expect DriveCtrl 16#0002            # now the new direction is taken
+set RevReq FALSE
+scan 2
+expect DriveCtrl 16#0000
+
+scenario a drive fault drops RUN at once, and the fault reset does not restart the drive
+set DriveSts 16#0001
+set RunReq TRUE
+scan 2
+set DriveSts 16#000B
+scan 2
+expect DriveCtrl 16#0001
+set DriveSts 16#0004                # tripped: fault, not ready, not running
+scan 2
+expect Faulted TRUE
+expect DriveCtrl 16#0000
+wait 1s
+expect DriveCtrl 16#0000
+set ResetPB TRUE                    # operator resets; RunReq is still TRUE
+scan 2
+expect DriveCtrl 16#0004            # the reset bit only
+set ResetPB FALSE
+scan 2
+set DriveSts 16#0001                # the drive clears its fault and is ready again
+wait 1s
+expect Faulted FALSE
+expect Ready TRUE
+expect DriveCtrl 16#0000            # no restart: this run request is spent
+wait 3s
+expect DriveCtrl 16#0000
+expect StartFail FALSE
+set RunReq FALSE                    # the sequence releases the request...
+scan 2
+set RunReq TRUE                     # ...and gives a new one
+scan 2
+expect DriveCtrl 16#0001
+
+scenario a run request given while the drive is faulted is spent too
+set DriveSts 16#0004
+set RunReq TRUE
+scan 2
+expect DriveCtrl 16#0000
+wait 1s
+set ResetPB TRUE
+scan 2
+set ResetPB FALSE
+set DriveSts 16#0001
+wait 1s
+expect DriveCtrl 16#0000
+set RunReq FALSE
+scan 2
+set RunReq TRUE
+scan 2
+expect DriveCtrl 16#0001
+
+scenario the reset pulse lasts 500 ms, however long the button is held
+set DriveSts 16#0004
+scan 2
+set ResetPB TRUE
+scan
+expect DriveCtrl 16#0004
+wait 400ms
+expect DriveCtrl 16#0004
+wait 200ms
+expect DriveCtrl 16#0000            # ended although the button is still held
+wait 2s
+expect DriveCtrl 16#0000            # no second pulse while held
+set ResetPB FALSE
+scan 2
+expect DriveCtrl 16#0000
+set ResetPB TRUE                    # a new press gives a new pulse
+scan
+expect DriveCtrl 16#0004
+set ResetPB FALSE                   # a short tap still gives the full pulse
+wait 300ms
+expect DriveCtrl 16#0004
+wait 300ms
+expect DriveCtrl 16#0000
+
+scenario StartFail: RUN without RUNNING for 3 s latches, drops RUN, and needs a reset
+set DriveSts 16#0001                # ready, but it will never report RUNNING
+set RunReq TRUE
+scan 2
+expect DriveCtrl 16#0001
+wait 2600ms
+expect StartFail FALSE
+expect DriveCtrl 16#0001
+wait 700ms
+expect StartFail TRUE
+expect DriveCtrl 16#0000
+set RunReq FALSE                    # releasing the request does not clear StartFail
+wait 1s
+expect StartFail TRUE
+set RunReq TRUE                     # and a new request is refused while it is latched
+scan 2
+expect DriveCtrl 16#0000
+set ResetPB TRUE
+scan 2
+expect StartFail FALSE
+expect DriveCtrl 16#0004            # reset pulse only: the request is spent
+set ResetPB FALSE
+wait 1s
+expect DriveCtrl 16#0000
+set RunReq FALSE
+scan 2
+set RunReq TRUE
+scan 2
+expect DriveCtrl 16#0001
+set DriveSts 16#0003                # this time the drive starts
+wait 5s
+expect StartFail FALSE
+expect DriveCtrl 16#0001
+
+scenario losing the RUNNING feedback while running also latches StartFail
+set DriveSts 16#0001
+set RunReq TRUE
+scan 2
+set DriveSts 16#000B
+wait 2s
+expect DriveCtrl 16#0001
+set DriveSts 16#0001                # the drive stopped by itself, no fault reported
+wait 2700ms
+expect StartFail FALSE
+expect DriveCtrl 16#0001
+wait 600ms
+expect StartFail TRUE
+expect DriveCtrl 16#0000
+
+scenario speed reference: 100 % = 16384, clamped and rounded
+set SpeedSP 50.0
+scan 2
+expect DriveSpeedRef 8192
+set SpeedSP 100.0
+scan 2
+expect DriveSpeedRef 16384
+set SpeedSP 75.0
+scan 2
+expect DriveSpeedRef 12288
+set SpeedSP 33.3                    # 5455.87 -> 5456
+scan 2
+expect DriveSpeedRef 5456
+set SpeedSP 12.345                  # 2022.60 -> 2023
+scan 2
+expect DriveSpeedRef 2023
+set SpeedSP 0.01                    # 1.64 -> 2
+scan 2
+expect DriveSpeedRef 2
+set SpeedSP 150.0                   # above 100 %: clamped
+scan 2
+expect DriveSpeedRef 16384
+set SpeedSP -10.0                   # negative: clamped (direction is the REV bit)
+scan 2
+expect DriveSpeedRef 0
+expect DriveCtrl 16#0000            # the speed reference never sets RUN

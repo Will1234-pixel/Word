@@ -1,0 +1,279 @@
+# Lab 06-3 acceptance tests: duty-standby pump alternation.
+# Tested: Pump 1 first after power-up (also when the demand is already there);
+# each NEW demand starts the pump that did not run last time, and the pump that
+# ran last gets no start command, not even for one scan; a long demand never
+# swaps pumps; a faulted pump is never run and the other one starts instead,
+# with no swap when the selected pump is repaired mid-demand; a mid-run fault
+# hands over to the other pump without bumping back when the fault clears;
+# "ran last" means the pump that actually ran (a fallback, or a demand in which
+# nothing could run, counts accordingly); both pumps never run together; no pump
+# when both are faulted, and a pump starts as soon as one becomes healthy.
+# Only interface variables are used. Each scenario starts from a fresh PLC,
+# with both pumps healthy (the _NC inputs TRUE) unless the scenario says otherwise.
+
+scenario no demand, no pumps
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+expect Pump1 FALSE
+expect Pump2 FALSE
+wait 1s
+expect Pump1 FALSE
+expect Pump2 FALSE
+
+scenario the first demand after power-up starts pump 1, and it runs steadily
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+scan
+expect Pump1 TRUE              # no swapping on the next scans...
+expect Pump2 FALSE
+scan
+expect Pump1 TRUE
+expect Pump2 FALSE
+wait 5s
+expect Pump1 TRUE              # ...or after a long demand
+expect Pump2 FALSE
+set Demand FALSE
+until Pump1 FALSE within 100ms
+expect Pump2 FALSE
+wait 500ms
+expect Pump1 FALSE
+expect Pump2 FALSE
+
+scenario each new demand starts the other pump
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE                # demand 1
+until Pump1 TRUE within 100ms
+wait 1s
+set Demand FALSE
+wait 1s
+set Demand TRUE                # demand 2
+scan
+expect Pump1 FALSE             # the pump that ran last gets no start command, not even for one scan
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+wait 2s
+expect Pump2 TRUE
+expect Pump1 FALSE
+set Demand FALSE
+until Pump2 FALSE within 100ms
+wait 1s
+set Demand TRUE                # demand 3
+scan
+expect Pump2 FALSE
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+wait 300ms
+set Demand FALSE
+wait 300ms
+set Demand TRUE                # demand 4
+scan
+expect Pump1 FALSE
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+
+scenario a demand already present at power-up starts pump 1
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+set Demand TRUE
+scan
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+wait 1s
+expect Pump1 TRUE
+expect Pump2 FALSE
+
+scenario selected pump faulted at the start: the other pump runs and counts as "ran last"
+set Pump1OK_NC FALSE           # pump 1 tripped before the first demand
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE                # demand 1: pump 1 would be next, but it is faulted
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+wait 1s
+expect Pump2 TRUE
+expect Pump1 FALSE
+set Demand FALSE
+wait 500ms
+set Pump1OK_NC TRUE            # pump 1 repaired
+wait 500ms
+set Demand TRUE                # demand 2: pump 2 ran last, so pump 1
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+set Demand FALSE
+wait 500ms
+set Demand TRUE                # demand 3: back to normal alternation
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+
+scenario a pump that stays faulted is skipped on every demand
+set Pump1OK_NC TRUE
+set Pump2OK_NC FALSE           # pump 2 out of service
+scan
+set Demand TRUE                # demand 1: pump 1
+until Pump1 TRUE within 100ms
+set Demand FALSE
+wait 300ms
+set Demand TRUE                # demand 2: pump 2 would be next but is faulted
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+set Demand FALSE
+wait 300ms
+set Demand TRUE                # demand 3: still pump 1
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+set Demand FALSE
+wait 300ms
+set Pump2OK_NC TRUE            # pump 2 back in service
+wait 300ms
+set Demand TRUE                # demand 4: pump 1 ran last, so pump 2
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+
+scenario running pump trips: it stops at once and the other pump takes over
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE
+until Pump1 TRUE within 100ms
+wait 1s
+set Pump1OK_NC FALSE           # pump 1 overload trips mid-run
+scan
+expect Pump1 FALSE             # a faulted pump is switched off at once
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+wait 1s
+expect Pump2 TRUE
+expect Pump1 FALSE
+
+scenario after a takeover there is no bumping back, and the next demand uses the other pump
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE                # demand 1: pump 1
+until Pump1 TRUE within 100ms
+wait 500ms
+set Pump1OK_NC FALSE           # pump 1 trips...
+until Pump2 TRUE within 100ms
+wait 500ms
+set Pump1OK_NC TRUE            # ...and is reset while pump 2 is still running
+scan
+expect Pump2 TRUE              # pump 2 keeps running: no swap back
+expect Pump1 FALSE
+wait 2s
+expect Pump2 TRUE
+expect Pump1 FALSE
+set Demand FALSE
+until Pump2 FALSE within 100ms
+expect Pump1 FALSE
+wait 500ms
+set Demand TRUE                # demand 2: pump 2 ran last, so pump 1
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+
+scenario a trip of the idle standby pump does not disturb the running pump
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE
+until Pump1 TRUE within 100ms
+set Pump2OK_NC FALSE           # standby pump trips
+scan
+expect Pump1 TRUE
+expect Pump2 FALSE
+wait 1s
+expect Pump1 TRUE
+expect Pump2 FALSE
+
+scenario a fault that comes and goes while idle does not change the alternation
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE                # demand 1: pump 1 runs
+until Pump1 TRUE within 100ms
+wait 300ms
+set Demand FALSE
+wait 300ms
+set Pump1OK_NC FALSE           # pump 1 trips while idle...
+wait 300ms
+set Pump1OK_NC TRUE            # ...and is reset, still idle
+wait 300ms
+set Demand TRUE                # demand 2: pump 1 ran last, so pump 2
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+
+scenario both pumps faulted: nothing runs, then the first pump to recover starts
+set Pump1OK_NC FALSE
+set Pump2OK_NC FALSE
+scan
+set Demand TRUE
+wait 1s
+expect Pump1 FALSE
+expect Pump2 FALSE
+set Pump2OK_NC TRUE            # pump 2 recovers while the demand is still there
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE
+set Pump1OK_NC TRUE            # pump 1 recovers too: pump 2 keeps running
+wait 1s
+expect Pump2 TRUE
+expect Pump1 FALSE
+
+scenario no healthy pump: nothing runs, and a demand in which nothing ran does not change the alternation
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE                # demand 1: pump 1
+until Pump1 TRUE within 100ms
+set Demand FALSE
+wait 300ms
+set Pump2OK_NC FALSE           # pump 2 (next in line) trips while idle
+set Pump1OK_NC FALSE           # and so does pump 1
+wait 100ms
+set Demand TRUE                # demand 2: no healthy pump
+wait 1s
+expect Pump1 FALSE
+expect Pump2 FALSE
+set Demand FALSE
+wait 300ms
+expect Pump1 FALSE
+expect Pump2 FALSE
+set Pump1OK_NC TRUE            # both repaired while idle
+set Pump2OK_NC TRUE
+wait 300ms
+set Demand TRUE                # demand 3: nothing ran in demand 2, so pump 1 is still
+until Pump2 TRUE within 100ms  # the pump that ran last, and pump 2 gets this demand
+expect Pump1 FALSE
+
+scenario the selected pump is repaired during a demand: the pump already running keeps running
+set Pump1OK_NC TRUE
+set Pump2OK_NC TRUE
+scan
+set Demand TRUE                # demand 1: pump 1
+until Pump1 TRUE within 100ms
+set Demand FALSE
+wait 300ms
+set Pump2OK_NC FALSE           # pump 2 (next in line) trips while idle
+wait 300ms
+set Demand TRUE                # demand 2: pump 2 is faulted, so pump 1 runs instead
+until Pump1 TRUE within 100ms
+expect Pump2 FALSE
+wait 500ms
+set Pump2OK_NC TRUE            # pump 2 repaired while pump 1 is running
+scan
+expect Pump1 TRUE              # no swap in the middle of a demand
+expect Pump2 FALSE
+wait 2s
+expect Pump1 TRUE
+expect Pump2 FALSE
+set Demand FALSE
+until Pump1 FALSE within 100ms
+wait 300ms
+set Demand TRUE                # demand 3: pump 1 ran last, so pump 2
+until Pump2 TRUE within 100ms
+expect Pump1 FALSE

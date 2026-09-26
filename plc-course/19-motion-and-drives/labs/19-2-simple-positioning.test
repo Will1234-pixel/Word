@@ -1,0 +1,311 @@
+# Lab 19-2 acceptance tests: two-speed positioning with in-position window, stop and
+# travel timeout, driving the provided FB_AxisSim.
+# Tests: nothing moves at power-up; forward and reverse moves run at FastSpeed, change to
+# CreepSpeed inside SlowDist and come to rest inside the in-position window; short moves
+# creep all the way; a move that is already in position completes without motion; Start is
+# edge-triggered and ignored while Stop is pressed; InPosition is monitored (it drops if
+# the carriage is pushed out of the window, and nothing restarts); Stop abandons the move
+# in the fast and in the creep phase, and releasing it does not restart; a jammed axis
+# faults on the travel timeout (checked at 90 % and 110 %), the fault latches, blocks
+# Start, and Reset clears it without restarting; a jam during creep still faults 10 s
+# after Start (one watchdog for the whole move); the watchdog restarts for every move.
+#
+# Parameters from the lab sheet: FastSpeed 100 mm/s, CreepSpeed 10 mm/s, SlowDist 20 mm,
+# InPosWindow 0.5 mm, MoveTimeout 10 s. The simulated drive ramps at 500 mm/s^2.
+# Only interface variables are used (Axis is the provided FB_AxisSim instance; the tests
+# jam it with Axis.Jam, push it by writing Axis.ActPos and read Axis.ActSpeed).
+
+scenario power-up: nothing moves and no flags are set
+set StopPB_NC TRUE
+scan
+expect Busy FALSE
+expect InPosition FALSE
+expect Fault FALSE
+expect SpeedCmd ~ 0.0 0.001
+wait 1s
+expect ActPos ~ 0.0 0.001
+expect Busy FALSE
+expect Fault FALSE
+
+scenario forward move: fast, then creep, then rest inside the window
+set StopPB_NC TRUE
+set TargetPos 300.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+scan
+expect Busy TRUE
+expect InPosition FALSE
+wait 500ms
+expect SpeedCmd ~ 100.0 0.01           # fast while far away
+until ActPos >= 200.0 within 4s
+expect SpeedCmd ~ 100.0 0.01           # 100 mm to go: still fast
+until ActPos >= 285.0 within 2s
+expect SpeedCmd ~ 10.0 0.01            # 15 mm to go: creep
+expect Busy TRUE
+expect InPosition FALSE
+until InPosition TRUE within 5s
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001
+wait 500ms
+expect Axis.ActSpeed ~ 0.0 0.001       # the carriage has stopped...
+expect ActPos ~ 300.0 0.5              # ...inside the in-position window
+expect InPosition TRUE
+wait 2s
+expect ActPos ~ 300.0 0.5              # and stays there
+expect Busy FALSE
+expect InPosition TRUE
+expect Fault FALSE
+
+scenario in position is monitored: pushing the carriage out drops it, nothing restarts
+set StopPB_NC TRUE
+set TargetPos 60.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+until InPosition TRUE within 4s
+wait 500ms
+expect InPosition TRUE
+set Axis.ActPos 63.0                   # someone pushes the carriage 3 mm out of position
+scan
+scan
+expect InPosition FALSE                # monitored, not just remembered
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001            # no automatic correction
+wait 1s
+expect ActPos ~ 63.0 0.01
+expect InPosition FALSE
+expect Fault FALSE
+
+scenario reverse move: negative speed reference, same profile
+set StopPB_NC TRUE
+set TargetPos 250.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+until InPosition TRUE within 8s
+wait 300ms
+set TargetPos 100.0
+set StartPB TRUE
+scan
+set StartPB FALSE
+scan
+expect Busy TRUE
+expect InPosition FALSE                # cleared when the new move starts
+wait 500ms
+expect SpeedCmd ~ -100.0 0.01
+until ActPos <= 115.0 within 3s
+expect SpeedCmd ~ -10.0 0.01
+until InPosition TRUE within 5s
+expect Busy FALSE
+wait 500ms
+expect Axis.ActSpeed ~ 0.0 0.001
+expect ActPos ~ 100.0 0.5
+expect Fault FALSE
+
+scenario a short move (inside the slow-down distance) creeps all the way
+set StopPB_NC TRUE
+set TargetPos 12.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 100ms
+expect Busy TRUE
+expect SpeedCmd ~ 10.0 0.01
+until InPosition TRUE within 4s
+wait 500ms
+expect ActPos ~ 12.0 0.5
+expect Axis.ActSpeed ~ 0.0 0.001
+
+scenario already in position: Start completes at once, without moving
+set StopPB_NC TRUE
+set TargetPos 0.3                      # the axis is at 0.0, inside the 0.5 mm window
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 100ms
+expect InPosition TRUE
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001
+wait 500ms
+expect ActPos ~ 0.0 0.02               # no creeping towards the exact target
+expect Fault FALSE
+
+scenario Start is edge-triggered: holding it does not start another move
+set StopPB_NC TRUE
+set TargetPos 50.0
+scan
+set StartPB TRUE                       # held for the whole scenario
+until InPosition TRUE within 4s
+wait 300ms
+set TargetPos 150.0                    # new target while Start is still held
+wait 1s
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001
+expect ActPos ~ 50.0 0.5
+set StartPB FALSE
+scan
+set StartPB TRUE                       # a fresh press starts the move
+scan
+set StartPB FALSE
+until InPosition TRUE within 4s
+wait 500ms
+expect ActPos ~ 150.0 0.5
+
+scenario Stop abandons the move; releasing Stop does not restart it
+set StopPB_NC TRUE
+set TargetPos 300.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Busy TRUE
+set StopPB_NC FALSE                    # operator presses Stop at about 90 mm
+scan
+expect SpeedCmd ~ 0.0 0.001
+expect Busy FALSE
+expect InPosition FALSE
+wait 500ms
+expect Axis.ActSpeed ~ 0.0 0.001       # the drive has ramped down
+expect ActPos < 150.0
+set StopPB_NC TRUE                     # ...and releases it
+wait 2s
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001
+expect ActPos < 150.0                  # still where it stopped
+expect InPosition FALSE
+set StartPB TRUE                       # a new Start finishes the job
+scan
+set StartPB FALSE
+until InPosition TRUE within 6s
+wait 500ms
+expect ActPos ~ 300.0 0.5
+expect Fault FALSE
+
+scenario Stop also works in the creep phase
+set StopPB_NC TRUE
+set TargetPos 12.0                     # a short move: creep all the way
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 300ms
+expect Busy TRUE
+expect SpeedCmd ~ 10.0 0.01            # creeping, at about 3 mm
+set StopPB_NC FALSE                    # Stop pressed during creep
+scan
+expect SpeedCmd ~ 0.0 0.001
+expect Busy FALSE
+expect InPosition FALSE
+wait 500ms
+expect Axis.ActSpeed ~ 0.0 0.001
+expect ActPos < 5.0                    # stopped well short of the 12 mm target
+set StopPB_NC TRUE                     # releasing Stop does not restart
+wait 1s
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001
+expect ActPos < 5.0
+expect InPosition FALSE
+
+scenario Start is ignored while Stop is pressed, and is not remembered
+set StopPB_NC FALSE
+set TargetPos 100.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Busy FALSE
+expect SpeedCmd ~ 0.0 0.001
+expect ActPos ~ 0.0 0.01
+set StopPB_NC TRUE
+wait 1s
+expect Busy FALSE
+expect ActPos ~ 0.0 0.01
+
+scenario jammed axis: travel timeout at 10 s, latched, Reset does not restart
+set StopPB_NC TRUE
+set Axis.Jam TRUE                      # the carriage is jammed and cannot move
+set TargetPos 300.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 9s                                # 90 % of MoveTimeout
+expect Busy TRUE
+expect Fault FALSE
+wait 2s                                # 110 % of MoveTimeout
+expect Fault TRUE
+expect Busy FALSE
+expect InPosition FALSE
+expect SpeedCmd ~ 0.0 0.001
+set Axis.Jam FALSE                     # the jam clears by itself...
+wait 1s
+expect ActPos ~ 0.0 0.01               # ...but nothing moves: the fault stopped the move
+expect Fault TRUE
+set StartPB TRUE                       # Start is ignored while faulted
+scan
+set StartPB FALSE
+wait 1s
+expect Busy FALSE
+expect ActPos ~ 0.0 0.01
+expect Fault TRUE
+set ResetPB TRUE                       # reset clears the fault...
+scan
+set ResetPB FALSE
+scan
+expect Fault FALSE
+wait 1s
+expect Busy FALSE                      # ...but never restarts the move
+expect ActPos ~ 0.0 0.01
+set StartPB TRUE                       # a new Start after the reset works
+scan
+set StartPB FALSE
+until InPosition TRUE within 6s
+wait 500ms
+expect ActPos ~ 300.0 0.5
+expect Fault FALSE
+
+scenario a jam in the creep phase: the timeout still counts from the start of the move
+set StopPB_NC TRUE
+set TargetPos 300.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 3300ms                            # about 291 mm: creeping (creep starts at about 2.9 s)
+expect Busy TRUE
+expect SpeedCmd ~ 10.0 0.01
+set Axis.Jam TRUE                      # jams 8-9 mm before the target
+wait 5700ms                            # 9 s after Start: 90 % of MoveTimeout
+expect Busy TRUE
+expect Fault FALSE
+wait 2s                                # 11 s after Start: 110 % of MoveTimeout
+expect Fault TRUE
+expect Busy FALSE
+expect InPosition FALSE
+expect SpeedCmd ~ 0.0 0.001
+
+scenario the watchdog restarts for every move (two 6 s moves, no fault)
+set StopPB_NC TRUE
+set TargetPos 500.0
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+until InPosition TRUE within 9s
+set TargetPos 0.0
+set StartPB TRUE
+scan
+set StartPB FALSE
+until InPosition TRUE within 9s
+expect Fault FALSE
+wait 500ms
+expect ActPos ~ 0.0 0.5
+expect Fault FALSE

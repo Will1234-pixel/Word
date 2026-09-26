@@ -1,0 +1,337 @@
+# Lab 03-1 acceptance tests: packing eight status flags into StatusWord (bit n = flag n,
+# bit 15 = command word rejected) and unpacking CmdWord bits 0..7 into eight command BOOLs,
+# rejecting the whole word when any reserved bit 8..15 is set (a rejected word forces every
+# command FALSE, even one that was active a moment before).
+# Only the interface variables from the lab sheet are used. Each step runs two scans, so the
+# order of the statements inside your program does not matter.
+
+scenario power-up: status word is zero and no command is active
+scan 2
+expect StatusWord 16#0000
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+
+scenario each status flag sets exactly its own bit (walking one)
+set Running TRUE
+scan 2
+expect StatusWord 16#0001             # bit 0
+set Running FALSE
+set InAuto TRUE
+scan 2
+expect StatusWord 16#0002             # bit 1
+set InAuto FALSE
+set Tripped TRUE
+scan 2
+expect StatusWord 16#0004             # bit 2
+set Tripped FALSE
+set SuctionLow TRUE
+scan 2
+expect StatusWord 16#0008             # bit 3
+set SuctionLow FALSE
+set DischargeHigh TRUE
+scan 2
+expect StatusWord 16#0010             # bit 4
+set DischargeHigh FALSE
+set SealLeak TRUE
+scan 2
+expect StatusWord 16#0020             # bit 5
+set SealLeak FALSE
+set SumpHigh TRUE
+scan 2
+expect StatusWord 16#0040             # bit 6
+set SumpHigh FALSE
+set PanelDoorOpen TRUE
+scan 2
+expect StatusWord 16#0080             # bit 7
+
+scenario all flags on, then two complementary patterns
+set Running TRUE
+set InAuto TRUE
+set Tripped TRUE
+set SuctionLow TRUE
+set DischargeHigh TRUE
+set SealLeak TRUE
+set SumpHigh TRUE
+set PanelDoorOpen TRUE
+scan 2
+expect StatusWord 16#00FF             # 255: bits 8..15 stay 0
+set InAuto FALSE
+set SuctionLow FALSE
+set DischargeHigh FALSE
+set SumpHigh FALSE
+scan 2
+expect StatusWord 16#00A5             # 2#1010_0101: bits 0, 2, 5, 7
+set Running FALSE
+set InAuto TRUE
+set Tripped FALSE
+set SuctionLow TRUE
+set DischargeHigh TRUE
+set SealLeak FALSE
+set SumpHigh TRUE
+set PanelDoorOpen FALSE
+scan 2
+expect StatusWord 16#005A             # 2#0101_1010: bits 1, 3, 4, 6
+
+scenario a bit clears when its flag goes FALSE (the word is rebuilt every scan)
+set Tripped TRUE
+set SealLeak TRUE
+scan 2
+expect StatusWord 16#0024
+set Tripped FALSE
+scan 2
+expect StatusWord 16#0020             # bit 2 must clear, not stay latched
+set SealLeak FALSE
+scan 2
+expect StatusWord 16#0000
+
+scenario the status bits do not depend on the command word
+set CmdWord 16#00FF                   # every command bit on, no reserved bits
+scan 2
+expect StatusWord 16#0000
+set Running TRUE
+scan 2
+expect StatusWord 16#0001
+
+scenario each command bit sets exactly its own BOOL (walking one)
+set CmdWord 16#0001
+scan 2
+expect CmdStart TRUE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0002
+scan 2
+expect CmdStart FALSE
+expect CmdStop TRUE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0004
+scan 2
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset TRUE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0008
+scan 2
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto TRUE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0010
+scan 2
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual TRUE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0020
+scan 2
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit TRUE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0040
+scan 2
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest TRUE
+expect CmdSilence FALSE
+expect CmdRejected FALSE
+set CmdWord 16#0080
+scan 2
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence TRUE
+expect CmdRejected FALSE
+
+scenario all command bits and two complementary patterns
+set CmdWord 16#00FF
+scan 2
+expect CmdStart TRUE
+expect CmdStop TRUE
+expect CmdReset TRUE
+expect CmdAuto TRUE
+expect CmdManual TRUE
+expect CmdInhibit TRUE
+expect CmdLampTest TRUE
+expect CmdSilence TRUE
+expect CmdRejected FALSE
+set CmdWord 16#00A5                   # bits 0, 2, 5, 7
+scan 2
+expect CmdStart TRUE
+expect CmdStop FALSE
+expect CmdReset TRUE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit TRUE
+expect CmdLampTest FALSE
+expect CmdSilence TRUE
+set CmdWord 16#005A                   # bits 1, 3, 4, 6
+scan 2
+expect CmdStart FALSE
+expect CmdStop TRUE
+expect CmdReset FALSE
+expect CmdAuto TRUE
+expect CmdManual TRUE
+expect CmdInhibit FALSE
+expect CmdLampTest TRUE
+expect CmdSilence FALSE
+
+scenario commands follow the word: they drop when SCADA clears the bit
+set CmdWord 16#0001
+scan 2
+expect CmdStart TRUE
+set CmdWord 16#0000
+scan 2
+expect CmdStart FALSE
+
+scenario every reserved bit on its own rejects the command word
+set CmdWord 16#0100
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#0200
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#0400
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#0800
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#1000
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#2000
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#4000
+scan 2
+expect CmdRejected TRUE
+set CmdWord 16#8000
+scan 2
+expect CmdRejected TRUE
+
+scenario a rejected word is not acted on, not even its low byte
+set CmdWord 16#0101                   # Start bit set, but so is reserved bit 8
+scan 2
+expect CmdRejected TRUE
+expect CmdStart FALSE
+set CmdWord 16#3A98                   # 15000: a level value written to the wrong register
+scan 2
+expect CmdRejected TRUE
+expect CmdAuto FALSE                  # the low byte 16#98 has bits 3, 4 and 7 set
+expect CmdManual FALSE
+expect CmdSilence FALSE
+set CmdWord 16#FFFF
+scan 2
+expect CmdRejected TRUE
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+
+scenario a rejected word drops commands that were already active (not held)
+set CmdWord 16#00FF                   # every command on, word valid
+scan 2
+expect CmdRejected FALSE
+expect CmdStart TRUE
+expect CmdSilence TRUE
+set CmdWord 16#01FF                   # same low byte, but reserved bit 8 is now set
+scan 2
+expect CmdRejected TRUE
+expect CmdStart FALSE                 # forced FALSE, not left at the last good value
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+set CmdWord 16#00FF
+scan 2
+expect CmdRejected FALSE
+expect CmdStart TRUE
+set CmdWord 16#80FF                   # reserved bit 15 on its own also drops everything
+scan 2
+expect CmdRejected TRUE
+expect CmdStart FALSE
+expect CmdStop FALSE
+expect CmdReset FALSE
+expect CmdAuto FALSE
+expect CmdManual FALSE
+expect CmdInhibit FALSE
+expect CmdLampTest FALSE
+expect CmdSilence FALSE
+
+scenario a valid word is accepted again after a rejected one
+set CmdWord 16#8001
+scan 2
+expect CmdRejected TRUE
+expect CmdStart FALSE
+set CmdWord 16#0001
+scan 2
+expect CmdRejected FALSE
+expect CmdStart TRUE
+
+scenario bit 15 of the status word reports a rejected command word
+set CmdWord 16#0100
+scan 2
+expect StatusWord 16#8000             # 32768 as a WORD; SCADA reading it as INT shows -32768
+set Running TRUE
+set Tripped TRUE
+set SealLeak TRUE
+set PanelDoorOpen TRUE
+scan 2
+expect StatusWord 16#80A5
+set CmdWord 16#0000
+scan 2
+expect StatusWord 16#00A5             # bit 15 clears when the command word is valid again

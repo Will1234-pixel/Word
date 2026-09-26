@@ -1,0 +1,282 @@
+# Lab 07-1 acceptance tests: star-delta starter.
+# Checks the start sequence (main + star, then delta after StarTime and a
+# 100 ms dead time), that star and delta are never on together, the adjustable
+# star time, stop and overload priority, and that nothing restarts on its own.
+# Only interface variables are used: StartPB, StopPB_NC, OverloadOK_NC,
+# MainK, StarK, DeltaK and StarTime. Timing checks allow at least +/-30 ms.
+
+scenario everything is off at power-up
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+scan
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+wait 2s
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+
+scenario start closes main and star together, delta stays open
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+expect MainK TRUE
+expect StarK TRUE
+expect DeltaK FALSE
+
+scenario after standing idle, a start still closes only main and star
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+wait 2s                        # idle with everything healthy: no timer may be "ready"
+set StartPB TRUE
+scan
+expect MainK TRUE
+expect StarK TRUE
+expect DeltaK FALSE            # not even for one scan
+set StartPB FALSE
+wait 100ms
+expect StarK TRUE
+expect DeltaK FALSE
+
+scenario default star time is 5 s, then a dead time, then delta
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE              # the run is sealed in
+wait 4500ms                    # 90 % of the 5 s star time
+expect MainK TRUE
+expect StarK TRUE
+expect DeltaK FALSE
+until StarK = FALSE within 1s  # star must end by 5.5 s
+expect DeltaK FALSE            # ...and delta must NOT close in the same scan
+expect MainK TRUE
+wait 70ms                      # inside the 100 ms dead time
+expect StarK FALSE
+expect DeltaK FALSE
+expect MainK TRUE
+until DeltaK = TRUE within 60ms
+expect StarK FALSE
+expect MainK TRUE
+wait 10s                       # runs on in delta
+expect MainK TRUE
+expect StarK FALSE
+expect DeltaK TRUE
+
+scenario the star time is adjustable
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1800ms                    # 90 % of 2 s
+expect StarK TRUE
+expect DeltaK FALSE
+until StarK = FALSE within 400ms
+expect DeltaK FALSE
+wait 70ms
+expect DeltaK FALSE
+until DeltaK = TRUE within 60ms
+expect StarK FALSE
+expect MainK TRUE
+
+scenario a longer star time is also honoured
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#8s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 7200ms                    # 90 % of 8 s
+expect StarK TRUE
+expect DeltaK FALSE
+until StarK = FALSE within 1600ms
+expect DeltaK FALSE
+until DeltaK = TRUE within 200ms
+expect StarK FALSE
+
+scenario holding Start down does not upset the sequence
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+wait 1800ms
+expect StarK TRUE
+expect DeltaK FALSE
+until DeltaK = TRUE within 600ms
+expect StarK FALSE
+wait 1s
+expect DeltaK TRUE
+expect StarK FALSE
+
+scenario pressing Start again while running in delta changes nothing
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 3s
+expect DeltaK TRUE
+set StartPB TRUE
+scan
+expect DeltaK TRUE
+expect StarK FALSE
+wait 500ms
+set StartPB FALSE
+wait 500ms
+expect MainK TRUE
+expect StarK FALSE
+expect DeltaK TRUE
+
+scenario stop during star drops everything, and a restart gets a full star period
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1500ms
+set StopPB_NC FALSE            # operator presses Stop during star
+scan
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+wait 100ms
+set StopPB_NC TRUE             # ...and releases it
+wait 1s
+expect MainK FALSE             # no restart on its own
+expect StarK FALSE
+expect DeltaK FALSE
+set StartPB TRUE               # a new start
+scan
+set StartPB FALSE
+expect MainK TRUE
+expect StarK TRUE
+expect DeltaK FALSE
+wait 1800ms                    # the star timer must have started again from zero
+expect StarK TRUE
+expect DeltaK FALSE
+until DeltaK = TRUE within 600ms
+expect StarK FALSE
+
+scenario a quick restart during the star period still gets a full star period
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set StopPB_NC FALSE            # stop half-way through star...
+scan
+expect MainK FALSE
+expect StarK FALSE
+set StopPB_NC TRUE
+wait 200ms
+set StartPB TRUE               # ...and restart before the first 2 s would have run out
+scan
+set StartPB FALSE
+expect MainK TRUE
+expect StarK TRUE
+expect DeltaK FALSE
+wait 1800ms                    # 90 % of a full star period, timed from the restart
+expect StarK TRUE
+expect DeltaK FALSE
+until StarK = FALSE within 400ms
+expect DeltaK FALSE
+until DeltaK = TRUE within 200ms
+expect MainK TRUE
+
+scenario stop during delta drops everything
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 3s
+expect DeltaK TRUE
+set StopPB_NC FALSE
+scan
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+set StopPB_NC TRUE
+wait 2s
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+
+scenario overload trip stops the motor and resetting the overload does not restart it
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StarTime T#2s
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 3s
+expect DeltaK TRUE
+set OverloadOK_NC FALSE        # thermal overload trips (or its wire breaks)
+scan
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+wait 1s
+set OverloadOK_NC TRUE         # overload relay is reset
+wait 2s
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+set StartPB TRUE               # a deliberate restart begins again in star
+scan
+set StartPB FALSE
+expect MainK TRUE
+expect StarK TRUE
+expect DeltaK FALSE
+
+scenario overload trip during star stops the motor
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set OverloadOK_NC FALSE
+scan
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+wait 6s
+expect DeltaK FALSE
+
+scenario start is ignored while the overload is tripped
+set StopPB_NC TRUE
+set OverloadOK_NC FALSE
+set StartPB TRUE
+scan
+expect MainK FALSE
+expect StarK FALSE
+wait 500ms
+set StartPB FALSE
+scan
+set OverloadOK_NC TRUE         # the start press must not have been remembered
+wait 1s
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE
+
+scenario stop wins when Start and Stop are pressed together
+set OverloadOK_NC TRUE
+set StopPB_NC FALSE
+set StartPB TRUE
+scan
+expect MainK FALSE
+expect StarK FALSE
+wait 1s
+expect MainK FALSE
+expect StarK FALSE
+expect DeltaK FALSE

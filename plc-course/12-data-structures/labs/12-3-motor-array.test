@@ -1,0 +1,362 @@
+# Lab 12-3 acceptance tests: four pumps processed from one array of structures.
+# Tested: power-up state and the configured timeouts; start, proof by
+# feedback, Starts counter, stop and stop priority; command bits cleared by
+# the PLC; fail-to-start, feedback-lost and uncommanded-run alarms, each
+# timed with the pump's OWN Cfg.FbTimeoutMs (checked at about 90 % and 110 %);
+# a disagreement that clears early restarts the allowance; latched alarms,
+# start refused while faulted, reset that never starts a pump and re-trips
+# if the cause is still there; the NC area stop; independence of the four
+# pumps (staggered faults catch a timer shared between pumps); the fault
+# lamp and RunningCount.
+# Only interface names are used: the program I/O, RunningCount, and
+# Motors[1..4] .Cmd.Start/.Stop/.Reset, .Cfg.FbTimeoutMs, .Sts.State/
+# .RunCmd/.Starts, .Alm.FailToStart/.FbLost/.Uncommanded.
+# Every scenario starts with the NC area stop healthy. Checks after a change
+# allow two scans, so the order of your mapping and logic does not matter.
+
+scenario power-up: all pumps stopped, timeouts configured
+set StopAll_NC TRUE
+scan 2
+expect Motors[1].Sts.State Stopped
+expect Motors[4].Sts.State Stopped
+expect P101_Contactor FALSE
+expect P104_Contactor FALSE
+expect FaultLamp FALSE
+expect RunningCount 0
+expect Motors[1].Cfg.FbTimeoutMs 2000
+expect Motors[3].Cfg.FbTimeoutMs 2000
+expect Motors[4].Cfg.FbTimeoutMs 5000
+wait 3s
+expect Motors[2].Sts.State Stopped
+expect P102_Contactor FALSE
+expect FaultLamp FALSE
+
+scenario a start command starts one pump, and the feedback proves it
+set StopAll_NC TRUE
+scan
+set Motors[1].Cmd.Start TRUE
+scan 2
+expect Motors[1].Cmd.Start FALSE      # the PLC clears command bits
+expect Motors[1].Sts.State Starting
+expect Motors[1].Sts.RunCmd TRUE
+expect P101_Contactor TRUE
+expect P102_Contactor FALSE           # the other pumps are not touched
+expect P103_Contactor FALSE
+expect P104_Contactor FALSE
+expect RunningCount 0                 # commanded, not yet proven
+set P101_RunFb TRUE
+scan 2
+expect Motors[1].Sts.State Running
+expect Motors[1].Sts.Starts 1
+expect RunningCount 1
+wait 5s
+expect Motors[1].Sts.State Running    # it keeps running: no alarm while all is well
+expect P101_Contactor TRUE
+expect Motors[1].Alm.FailToStart FALSE
+expect FaultLamp FALSE
+
+scenario stop command stops the pump and it stays stopped
+set StopAll_NC TRUE
+set Motors[2].Cmd.Start TRUE
+set P102_RunFb TRUE
+scan 2
+expect Motors[2].Sts.State Running
+set Motors[2].Cmd.Stop TRUE
+scan 2
+expect Motors[2].Cmd.Stop FALSE
+expect Motors[2].Sts.State Stopped
+expect P102_Contactor FALSE
+wait 200ms
+set P102_RunFb FALSE                  # the contactor drops out a moment later: no alarm
+wait 3s
+expect Motors[2].Sts.State Stopped
+expect P102_Contactor FALSE
+expect Motors[2].Alm.Uncommanded FALSE
+expect FaultLamp FALSE
+expect RunningCount 0
+
+scenario stop wins when start and stop arrive together
+set StopAll_NC TRUE
+set Motors[3].Cmd.Start TRUE
+set Motors[3].Cmd.Stop TRUE
+scan 2
+expect Motors[3].Sts.State Stopped
+expect P103_Contactor FALSE
+expect Motors[3].Cmd.Start FALSE
+expect Motors[3].Cmd.Stop FALSE
+wait 1s
+expect P103_Contactor FALSE
+
+scenario no feedback after a start: fail-to-start at the pump's own timeout (2 s)
+set StopAll_NC TRUE
+scan
+set Motors[2].Cmd.Start TRUE
+scan
+wait 1800ms
+expect Motors[2].Sts.State Starting   # 90 % of 2 s: still waiting
+expect P102_Contactor TRUE
+expect Motors[2].Alm.FailToStart FALSE
+expect FaultLamp FALSE
+wait 400ms
+expect Motors[2].Sts.State Faulted    # 110 %: faulted
+expect Motors[2].Alm.FailToStart TRUE
+expect Motors[2].Alm.FbLost FALSE
+expect Motors[2].Alm.Uncommanded FALSE
+expect Motors[2].Sts.RunCmd FALSE
+expect P102_Contactor FALSE
+expect FaultLamp TRUE
+expect Motors[1].Sts.State Stopped    # the others are not affected
+expect Motors[3].Alm.FailToStart FALSE
+
+scenario a faulted pump refuses a start, and reset does not start it
+set StopAll_NC TRUE
+set Motors[1].Cmd.Start TRUE
+scan
+wait 2500ms
+expect Motors[1].Sts.State Faulted
+set Motors[1].Cmd.Start TRUE
+scan 2
+expect Motors[1].Cmd.Start FALSE
+expect Motors[1].Sts.State Faulted
+expect P101_Contactor FALSE
+wait 500ms
+expect P101_Contactor FALSE
+set Motors[1].Cmd.Reset TRUE
+scan 2
+expect Motors[1].Cmd.Reset FALSE
+expect Motors[1].Alm.FailToStart FALSE
+expect Motors[1].Sts.State Stopped
+expect P101_Contactor FALSE           # reset never starts anything
+expect FaultLamp FALSE
+wait 3s
+expect Motors[1].Sts.State Stopped
+expect P101_Contactor FALSE
+set Motors[1].Cmd.Start TRUE
+set P101_RunFb TRUE
+scan 2
+expect Motors[1].Sts.State Running   # a new start after the reset works
+expect Motors[1].Sts.Starts 1
+
+scenario each pump uses its own Cfg.FbTimeoutMs (P-104: 5 s, P-103 set to 3 s)
+set StopAll_NC TRUE
+set Motors[3].Cfg.FbTimeoutMs 3000
+scan
+set Motors[4].Cmd.Start TRUE
+set Motors[3].Cmd.Start TRUE
+scan
+wait 2700ms
+expect Motors[3].Sts.State Starting   # 90 % of 3 s
+wait 600ms
+expect Motors[3].Sts.State Faulted    # 110 % of 3 s
+expect Motors[3].Alm.FailToStart TRUE
+expect Motors[4].Sts.State Starting   # P-104 has longer
+wait 1200ms
+expect Motors[4].Sts.State Starting   # 4.5 s: 90 % of 5 s
+expect P104_Contactor TRUE
+wait 1000ms
+expect Motors[4].Sts.State Faulted    # 5.5 s
+expect Motors[4].Alm.FailToStart TRUE
+expect P104_Contactor FALSE
+
+scenario a slow flow switch within its 5 s allowance is not a fault
+set StopAll_NC TRUE
+set Motors[4].Cmd.Start TRUE
+scan
+wait 4s
+set P104_RunFb TRUE
+scan 2
+expect Motors[4].Sts.State Running
+expect Motors[4].Alm.FailToStart FALSE
+wait 6s
+expect Motors[4].Sts.State Running
+expect FaultLamp FALSE
+
+scenario feedback lost while running: FbLost after the timeout, not before
+set StopAll_NC TRUE
+set Motors[2].Cmd.Start TRUE
+set P102_RunFb TRUE
+scan 2
+expect Motors[2].Sts.State Running
+wait 1s
+set P102_RunFb FALSE                  # overload trips, contactor drops out
+wait 1800ms
+expect Motors[2].Sts.RunCmd TRUE      # 90 %: not yet
+expect Motors[2].Alm.FbLost FALSE
+expect FaultLamp FALSE
+wait 400ms
+expect Motors[2].Sts.State Faulted
+expect Motors[2].Alm.FbLost TRUE
+expect Motors[2].Alm.FailToStart FALSE    # it did start: this is a different alarm
+expect Motors[2].Alm.Uncommanded FALSE
+expect P102_Contactor FALSE
+expect FaultLamp TRUE
+expect RunningCount 0
+
+scenario a disagreement that clears early restarts the allowance
+set StopAll_NC TRUE
+set Motors[1].Cmd.Start TRUE
+set P101_RunFb TRUE
+scan 2
+set P101_RunFb FALSE
+wait 1500ms
+set P101_RunFb TRUE                   # feedback back after 1.5 s
+scan 2
+set P101_RunFb FALSE                  # and gone again for 1.5 s
+wait 1500ms
+expect Motors[1].Sts.State Running    # neither gap reached 2 s: no fault
+expect Motors[1].Alm.FbLost FALSE
+expect FaultLamp FALSE
+set P101_RunFb TRUE
+wait 1s
+expect Motors[1].Sts.State Running
+
+scenario uncommanded running: feedback without a command raises an alarm
+set StopAll_NC TRUE
+scan
+set P103_RunFb TRUE                   # welded contactor, or started from a local panel
+wait 1800ms
+expect Motors[3].Sts.State Stopped
+expect Motors[3].Alm.Uncommanded FALSE
+wait 400ms
+expect Motors[3].Sts.State Faulted
+expect Motors[3].Alm.Uncommanded TRUE
+expect Motors[3].Alm.FailToStart FALSE
+expect Motors[3].Alm.FbLost FALSE
+expect P103_Contactor FALSE           # the PLC never switches the contactor on for it
+expect FaultLamp TRUE
+expect RunningCount 0
+
+scenario reset with the cause still present: the alarm comes back
+set StopAll_NC TRUE
+scan
+set P103_RunFb TRUE
+wait 2500ms
+expect Motors[3].Alm.Uncommanded TRUE
+set Motors[3].Cmd.Reset TRUE
+scan 2
+expect Motors[3].Alm.Uncommanded FALSE    # reset clears the latch...
+expect Motors[3].Sts.State Stopped
+expect P103_Contactor FALSE
+wait 2500ms
+expect Motors[3].Alm.Uncommanded TRUE     # ...but the cause is still there
+expect Motors[3].Sts.State Faulted
+set P103_RunFb FALSE                      # fixed in the field
+scan 2
+set Motors[3].Cmd.Reset TRUE
+scan 2
+expect Motors[3].Sts.State Stopped
+expect FaultLamp FALSE
+wait 3s
+expect Motors[3].Sts.State Stopped
+expect Motors[3].Alm.Uncommanded FALSE
+
+scenario reset while running changes nothing
+set StopAll_NC TRUE
+set Motors[4].Cmd.Start TRUE
+set P104_RunFb TRUE
+scan 2
+set Motors[4].Cmd.Reset TRUE
+scan 2
+expect Motors[4].Sts.State Running
+expect P104_Contactor TRUE
+wait 6s
+expect Motors[4].Sts.State Running
+
+scenario the NC area stop stops every pump, and nothing restarts by itself
+set StopAll_NC TRUE
+set Motors[1].Cmd.Start TRUE
+set Motors[2].Cmd.Start TRUE
+set P101_RunFb TRUE
+set P102_RunFb TRUE
+scan 2
+expect RunningCount 2
+set StopAll_NC FALSE                  # area stop pressed (or its wire broken)
+scan 2
+expect P101_Contactor FALSE
+expect P102_Contactor FALSE
+expect Motors[1].Sts.State Stopped
+expect Motors[2].Sts.State Stopped
+set P101_RunFb FALSE
+set P102_RunFb FALSE
+set Motors[3].Cmd.Start TRUE
+scan
+expect P103_Contactor FALSE           # starts are refused while the area stop is active:
+scan                                  # not even a one-scan pulse on the contactor
+expect P103_Contactor FALSE
+scan
+expect P103_Contactor FALSE
+expect Motors[3].Sts.State Stopped
+set StopAll_NC TRUE                   # released
+wait 2s
+expect P101_Contactor FALSE           # no automatic restart
+expect P102_Contactor FALSE
+expect P103_Contactor FALSE
+expect FaultLamp FALSE
+set Motors[1].Cmd.Start TRUE
+scan 2
+expect P101_Contactor TRUE
+
+scenario staggered faults: every pump times its own disagreement
+set StopAll_NC TRUE
+scan
+set Motors[1].Cmd.Start TRUE
+scan
+wait 1s
+set Motors[2].Cmd.Start TRUE
+scan
+wait 1100ms                           # P-101 at 2.1 s, P-102 at 1.1 s
+expect Motors[1].Sts.State Faulted
+expect Motors[2].Sts.State Starting
+expect P102_Contactor TRUE
+wait 700ms                            # P-102 at 1.8 s
+expect Motors[2].Sts.State Starting
+wait 400ms                            # P-102 at 2.2 s
+expect Motors[2].Sts.State Faulted
+expect Motors[2].Alm.FailToStart TRUE
+expect Motors[3].Sts.State Stopped
+expect Motors[4].Sts.State Stopped
+expect FaultLamp TRUE
+set Motors[2].Cmd.Reset TRUE
+scan 2
+expect Motors[2].Sts.State Stopped
+expect Motors[1].Sts.State Faulted    # a reset of P-102 is only for P-102
+expect Motors[1].Alm.FailToStart TRUE
+expect FaultLamp TRUE
+set Motors[1].Cmd.Reset TRUE
+scan 2
+expect Motors[1].Sts.State Stopped
+expect FaultLamp FALSE
+
+scenario the start counter and the running count
+set StopAll_NC TRUE
+set Motors[1].Cmd.Start TRUE
+set Motors[2].Cmd.Start TRUE
+set Motors[3].Cmd.Start TRUE
+set P101_RunFb TRUE
+set P102_RunFb TRUE
+set P103_RunFb TRUE
+scan 2
+expect RunningCount 3
+expect Motors[1].Sts.Starts 1
+set Motors[1].Cmd.Stop TRUE
+scan 2
+set P101_RunFb FALSE
+scan 2
+expect RunningCount 2
+set Motors[1].Cmd.Start TRUE
+scan 2
+set P101_RunFb TRUE
+scan 2
+set Motors[1].Cmd.Stop TRUE
+scan 2
+set P101_RunFb FALSE
+scan 2
+set Motors[1].Cmd.Start TRUE
+scan 2
+set P101_RunFb TRUE
+scan 2
+expect Motors[1].Sts.Starts 3
+expect Motors[2].Sts.Starts 1
+expect RunningCount 3
+wait 1s
+expect Motors[1].Sts.Starts 3         # counted once per start, not once per scan

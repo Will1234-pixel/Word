@@ -1,0 +1,36 @@
+# Lab 22-1 STARTER: write the acceptance tests for the pump dry-run trip.
+# Module 22 (Software engineering).
+#
+# In this lab the program is finished and correct: labs/22-1-dry-run-trip.st.
+# YOUR job is to write the tests. Copy this file to my-work/ and add
+# scenarios until your test file
+#   1. PASSES the correct implementation   labs/22-1-dry-run-trip.st
+#   2. FAILS every mutant                  labs/mutants/22-1-mutant-*.st
+# The README explains how to run both checks.
+#
+# Rules (the same ones the course's own tests follow):
+#   - use only the interface variables: StartPB, StopPB_NC, FlowSw, ResetPB,
+#     PumpRun, DryRunAlarm
+#   - every scenario starts from a fresh PLC, where all inputs are FALSE:
+#     set StopPB_NC TRUE first (a healthy NC stop button)
+#   - check timing with 'wait' and 'until ... within', never by counting scans
+#
+# The example scenario below passes the correct program, but it kills no
+# mutant: every mutant starts and seals in correctly. Keep it, and add one
+# scenario per requirement R1-R7 in the README.
+
+scenario R1 start runs the pump and it seals in
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+expect PumpRun TRUE
+set StartPB FALSE
+wait 1s
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+
+# TODO R1: stop, and stop winning over start
+# TODO R2/R3: when exactly does a dry pump trip? Check just before AND just after.
+# TODO R3: what must NOT trip the pump?
+# TODO R4-R7: latching, blocking, reset, normal stop

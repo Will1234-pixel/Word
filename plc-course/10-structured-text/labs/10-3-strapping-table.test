@@ -1,0 +1,145 @@
+# Lab 10-3 acceptance tests: tank strapping table (level -> volume).
+# The first scenarios use the table given in the program: a horizontal
+# cylindrical tank, 2.0 m diameter and 5.0 m long. The last scenario loads a
+# different table, so the lookup must use LevelBP/VolumeBP and not numbers
+# typed into the code. Expected volumes are linear interpolation between
+# breakpoints, checked to +/- 0.001 m3.
+
+scenario exactly on a breakpoint gives the table value
+set Level 0.0
+scan
+expect Volume ~ 0.0 0.001
+expect OutOfTable FALSE          # the ends of the table are still inside it
+set Level 0.5
+scan
+expect Volume ~ 3.071 0.001
+set Level 1.0
+scan
+expect Volume ~ 7.854 0.001
+set Level 1.75
+scan
+expect Volume ~ 14.575 0.001
+set Level 2.0
+scan
+expect Volume ~ 15.708 0.001
+expect OutOfTable FALSE
+
+scenario between breakpoints: linear interpolation in the right segment
+set Level 0.1                    # first segment
+scan
+expect Volume ~ 0.4532 0.001
+expect OutOfTable FALSE
+set Level 0.4
+scan
+expect Volume ~ 2.2958 0.001
+set Level 1.1
+scan
+expect Volume ~ 8.8436 0.001
+set Level 1.6
+scan
+expect Volume ~ 13.4122 0.001
+set Level 1.9                    # last segment
+scan
+expect Volume ~ 15.2548 0.001
+expect OutOfTable FALSE
+
+scenario below the table: clamp to the first volume and flag it
+set Level -0.05                  # transmitter reads slightly below zero
+scan
+expect Volume ~ 0.0 0.001        # never a negative volume
+expect OutOfTable TRUE
+
+scenario above the table: clamp to the last volume and flag it
+set Level 2.2                    # above the top of the tank: overfill or transmitter fault
+scan
+expect Volume ~ 15.708 0.001
+expect OutOfTable TRUE
+
+scenario the out-of-table flag clears when the level is back in range
+set Level 2.3
+scan
+expect OutOfTable TRUE
+set Level 1.0
+scan
+expect OutOfTable FALSE
+expect Volume ~ 7.854 0.001
+set Level -1.0
+scan
+expect OutOfTable TRUE
+set Level 0.25
+scan
+expect OutOfTable FALSE
+expect Volume ~ 1.133 0.001
+
+scenario the level falls through the table: the right segment is found every scan
+set Level 1.9
+scan
+expect Volume ~ 15.2548 0.001
+set Level 1.1
+scan
+expect Volume ~ 8.8436 0.001
+set Level 0.4
+scan
+expect Volume ~ 2.2958 0.001
+set Level 0.1
+scan
+expect Volume ~ 0.4532 0.001
+set Level 0.0                    # exactly on the first breakpoint, coming from above
+scan
+expect Volume ~ 0.0 0.001        # a search that finds no segment here keeps the old value
+expect OutOfTable FALSE
+
+scenario a different table: vertical tank with a dished bottom, table starting at 0.1 m
+set LevelBP[1] 0.1
+set LevelBP[2] 0.3
+set LevelBP[3] 0.6
+set LevelBP[4] 1.0
+set LevelBP[5] 1.5
+set LevelBP[6] 2.0
+set LevelBP[7] 2.5
+set LevelBP[8] 3.0
+set LevelBP[9] 3.5
+set VolumeBP[1] 0.5
+set VolumeBP[2] 1.5
+set VolumeBP[3] 3.5
+set VolumeBP[4] 7.0
+set VolumeBP[5] 12.0
+set VolumeBP[6] 17.5
+set VolumeBP[7] 23.0
+set VolumeBP[8] 28.0
+set VolumeBP[9] 32.0
+set Level 0.05                   # below the first breakpoint (0.1 m)
+scan
+expect Volume ~ 0.5 0.001
+expect OutOfTable TRUE
+set Level 0.1
+scan
+expect Volume ~ 0.5 0.001
+expect OutOfTable FALSE
+set Level 0.2
+scan
+expect Volume ~ 1.0 0.001
+set Level 0.45
+scan
+expect Volume ~ 2.5 0.001
+set Level 1.2
+scan
+expect Volume ~ 9.0 0.001
+set Level 2.25
+scan
+expect Volume ~ 20.25 0.001
+set Level 3.4
+scan
+expect Volume ~ 31.2 0.001
+set Level 3.5
+scan
+expect Volume ~ 32.0 0.001
+expect OutOfTable FALSE
+set Level 3.6
+scan
+expect Volume ~ 32.0 0.001
+expect OutOfTable TRUE
+set Level 0.1                    # back to the first breakpoint, from above the table
+scan
+expect Volume ~ 0.5 0.001
+expect OutOfTable FALSE

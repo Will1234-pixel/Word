@@ -1,0 +1,188 @@
+# Lab 02-2 acceptance tests: one pair of Open/Close buttons drives two valves in
+# series on a transfer line:
+#   XV-201 single-solenoid spring-return (XV201_Sol: TRUE = open),
+#   XV-202 double-solenoid, maintained signals (OpenSol / CloseSol).
+# Checked: power-up state, open and close with seal-in, close priority, the
+# high-high trip, no re-opening after the trip clears, wire breaks on both NC
+# inputs, and that the two XV-202 coils are never energised together.
+# Healthy NC inputs read TRUE, so every scenario sets them first.
+
+scenario power-up: XV-201 de-energised, XV-202 driven closed
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE          # the PLC doesn't know where XV-202 was left: drive it closed
+wait 1s
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+
+scenario open opens both valves and they stay open
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+scan
+set OpenPB TRUE
+scan
+expect XV201_Sol TRUE
+expect XV202_OpenSol TRUE
+expect XV202_CloseSol FALSE
+set OpenPB FALSE                    # button released
+wait 2s
+expect XV201_Sol TRUE               # spring-return valve: solenoid must STAY energised
+expect XV202_OpenSol TRUE           # maintained signal
+expect XV202_CloseSol FALSE
+
+scenario close closes both valves and they stay closed
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 1s
+set ClosePB_NC FALSE                # Close pressed
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE          # a double-solenoid valve must be DRIVEN closed
+set ClosePB_NC TRUE                 # Close released
+wait 2s
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE          # maintained signal
+
+scenario the line can be opened again after a close
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+scan
+set ClosePB_NC FALSE
+scan
+set ClosePB_NC TRUE
+wait 500ms
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 1s
+expect XV201_Sol TRUE
+expect XV202_OpenSol TRUE
+expect XV202_CloseSol FALSE
+
+scenario close wins when both buttons are pressed
+set ClosePB_NC FALSE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+wait 500ms
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+
+scenario high-high level closes both valves
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 1s
+expect XV202_OpenSol TRUE
+set HighLevelOK_NC FALSE            # receiving tank reaches high-high
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+wait 1s
+expect XV202_CloseSol TRUE
+
+scenario open is blocked while the high-high level is present
+set ClosePB_NC TRUE
+set HighLevelOK_NC FALSE
+scan
+set OpenPB TRUE
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+wait 500ms
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+
+scenario valves do not re-open by themselves when the high-high clears
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 1s
+set HighLevelOK_NC FALSE            # trip
+wait 1s
+set HighLevelOK_NC TRUE             # level falls back below high-high
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+wait 3s
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+set OpenPB TRUE                     # operator decides to re-open
+scan
+set OpenPB FALSE
+wait 500ms
+expect XV201_Sol TRUE
+expect XV202_OpenSol TRUE
+expect XV202_CloseSol FALSE
+
+scenario broken wire on the close button closes the line (fail-safe)
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 500ms
+set ClosePB_NC FALSE                # wire break reads the same as pressing Close
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+
+scenario broken wire on the high-high switch closes the line (fail-safe)
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 500ms
+set HighLevelOK_NC FALSE            # wire break reads the same as high-high
+scan
+expect XV201_Sol FALSE
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+
+scenario the two XV-202 coils are never energised together
+set ClosePB_NC TRUE
+set HighLevelOK_NC TRUE
+scan
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+set OpenPB TRUE                     # opening: the close coil must drop in the same scan
+scan
+expect XV202_OpenSol TRUE
+expect XV202_CloseSol FALSE
+set OpenPB FALSE
+set ClosePB_NC FALSE                # closing: the open coil must drop in the same scan
+scan
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE
+set ClosePB_NC TRUE
+set OpenPB TRUE
+set HighLevelOK_NC FALSE            # open pressed during a trip
+scan
+expect XV202_OpenSol FALSE
+expect XV202_CloseSol TRUE

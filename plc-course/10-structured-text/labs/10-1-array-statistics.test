@@ -1,0 +1,159 @@
+# Lab 10-1 acceptance tests: array statistics over ten cold-store probes.
+# The test writes the ten readings into Samples[1..10] and checks MinValue,
+# MaxValue, Average and MaxIndex. Only the interface variables are used, so
+# any correct loop structure passes. REAL results are checked with a small
+# tolerance because floating-point sums are not exact.
+
+scenario all probes reading zero at power-up
+scan
+expect MinValue ~ 0.0 0.001
+expect MaxValue ~ 0.0 0.001
+expect Average ~ 0.0 0.001
+expect MaxIndex 1
+
+scenario normal freezer: every reading below zero
+set Samples[1] -21.5
+set Samples[2] -19.8
+set Samples[3] -22.4
+set Samples[4] -18.6
+set Samples[5] -20.0
+set Samples[6] -23.1
+set Samples[7] -19.2
+set Samples[8] -20.7
+set Samples[9] -21.0
+set Samples[10] -22.2
+scan
+expect MinValue ~ -23.1 0.001
+expect MaxValue ~ -18.6 0.001    # a maximum that starts at 0.0 fails here
+expect Average ~ -20.85 0.001
+expect MaxIndex 4
+
+scenario warmest probe is the first one, coldest is the last one
+set Samples[1] -15.0
+set Samples[2] -18.0
+set Samples[3] -19.5
+set Samples[4] -20.0
+set Samples[5] -20.5
+set Samples[6] -21.0
+set Samples[7] -21.5
+set Samples[8] -22.0
+set Samples[9] -22.5
+set Samples[10] -25.0
+scan
+expect MaxValue ~ -15.0 0.001
+expect MaxIndex 1
+expect MinValue ~ -25.0 0.001    # the loop must reach probe 10
+expect Average ~ -20.5 0.001
+
+scenario warmest probe is the last one, coldest is the first one
+set Samples[1] -26.0
+set Samples[2] -22.0
+set Samples[3] -21.0
+set Samples[4] -20.0
+set Samples[5] -20.0
+set Samples[6] -20.0
+set Samples[7] -19.0
+set Samples[8] -19.0
+set Samples[9] -18.0
+set Samples[10] -12.5
+scan
+expect MaxValue ~ -12.5 0.001
+expect MaxIndex 10               # the loop must reach probe 10
+expect MinValue ~ -26.0 0.001
+expect Average ~ -19.75 0.001
+
+scenario chiller failure: every reading above zero
+set Samples[1] 4.0
+set Samples[2] 6.5
+set Samples[3] 3.2
+set Samples[4] 8.1
+set Samples[5] 5.0
+set Samples[6] 7.7
+set Samples[7] 2.9
+set Samples[8] 6.0
+set Samples[9] 5.5
+set Samples[10] 4.4
+scan
+expect MinValue ~ 2.9 0.001      # a minimum that starts at 0.0 fails here
+expect MaxValue ~ 8.1 0.001
+expect MaxIndex 4
+expect Average ~ 5.33 0.001
+
+scenario two probes share the warmest value: the lower probe number wins
+set Samples[1] -20.0
+set Samples[2] -19.0
+set Samples[3] -21.0
+set Samples[4] -17.5
+set Samples[5] -22.0
+set Samples[6] -18.0
+set Samples[7] -20.0
+set Samples[8] -17.5
+set Samples[9] -19.0
+set Samples[10] -21.0
+scan
+expect MaxValue ~ -17.5 0.001
+expect MaxIndex 4                # probes 4 and 8 both read -17.5
+expect MinValue ~ -22.0 0.001
+expect Average ~ -19.5 0.001
+
+scenario all probes equal
+set Samples[1] -18.0
+set Samples[2] -18.0
+set Samples[3] -18.0
+set Samples[4] -18.0
+set Samples[5] -18.0
+set Samples[6] -18.0
+set Samples[7] -18.0
+set Samples[8] -18.0
+set Samples[9] -18.0
+set Samples[10] -18.0
+scan
+expect MinValue ~ -18.0 0.001
+expect MaxValue ~ -18.0 0.001
+expect Average ~ -18.0 0.001
+expect MaxIndex 1
+
+scenario results are recalculated from scratch every scan
+set Samples[1] -21.5
+set Samples[2] -19.8
+set Samples[3] -22.4
+set Samples[4] -18.6
+set Samples[5] -20.0
+set Samples[6] -23.1
+set Samples[7] -19.2
+set Samples[8] -20.7
+set Samples[9] -21.0
+set Samples[10] -22.2
+wait 1s                          # 100 scans: the sum must not keep growing
+expect Average ~ -20.85 0.001
+expect MinValue ~ -23.1 0.001
+# probe 6 gets colder and probe 9 warms up (door left open near it)
+set Samples[6] -30.0
+set Samples[9] -10.0
+scan
+expect MinValue ~ -30.0 0.001
+expect MaxValue ~ -10.0 0.001
+expect MaxIndex 9
+expect Average ~ -20.44 0.001
+# probe 6 recovers: the minimum must rise again, not stick at -30.0
+set Samples[6] -20.0
+set Samples[9] -21.0
+wait 200ms
+expect MinValue ~ -22.4 0.001
+expect MaxValue ~ -18.6 0.001
+expect MaxIndex 4
+expect Average ~ -20.54 0.001
+# probe 1 becomes the warmest: MaxIndex must go back to 1, so it has to be
+# reset every scan, not only set by the declaration's initial value
+set Samples[1] -15.0
+scan
+expect MaxValue ~ -15.0 0.001
+expect MaxIndex 1
+expect Average ~ -19.89 0.001
+# probe 1 cools again and probe 7 ties with probe 4: the lower number still wins
+set Samples[1] -21.5
+set Samples[7] -18.6
+scan
+expect MaxValue ~ -18.6 0.001
+expect MaxIndex 4
+expect Average ~ -20.48 0.001

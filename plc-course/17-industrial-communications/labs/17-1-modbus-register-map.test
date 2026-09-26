@@ -1,0 +1,269 @@
+# Lab 17-1 acceptance tests: Modbus register map for glycol skid GC-3.
+# What is checked:
+#   - RunSeconds (DINT) split into HR_RunSecA / HR_RunSecB in both word orders, over the
+#     whole signed range (negative values, a low word with bit 15 set, the limits);
+#   - MeterRegA / MeterRegB joined into MeterTotal in both word orders;
+#   - PressureBar sent as HR_Pressure = bar x 100, rounded, clamped with PressOutOfRange;
+#   - HR_SupplySP (degC x 10) range-checked (-100..150) into SupplySP, keeping the last
+#     good value and setting SPRejected when the raw value is out of range;
+#   - HR_Status bits 0..3, bits 4..15 always 0, and PLC-owned registers rewritten every scan.
+# Only interface variables are used. Each step runs two scans, so the order of the
+# statements inside your program does not matter.
+
+scenario power-up values
+scan 2
+expect HR_Status 16#0000
+expect HR_Pressure 0
+expect HR_RunSecA 16#0000
+expect HR_RunSecB 16#0000
+expect MeterTotal 0
+expect HR_SupplySP 50               # the default setpoint is already in the register
+expect SupplySP 5.0
+expect SPRejected FALSE
+expect PressOutOfRange FALSE
+
+scenario RunSeconds packed high word first (RunSecLowFirst = FALSE)
+set RunSeconds 100000               # 16#0001_86A0
+scan 2
+expect HR_RunSecA 16#0001
+expect HR_RunSecB 16#86A0
+set RunSeconds 305419896            # 16#1234_5678
+scan 2
+expect HR_RunSecA 16#1234
+expect HR_RunSecB 16#5678
+set RunSeconds 65535                # 16#0000_FFFF
+scan 2
+expect HR_RunSecA 16#0000
+expect HR_RunSecB 16#FFFF
+set RunSeconds 65536                # 16#0001_0000
+scan 2
+expect HR_RunSecA 16#0001
+expect HR_RunSecB 16#0000
+set RunSeconds 2147483647           # largest DINT, 16#7FFF_FFFF
+scan 2
+expect HR_RunSecA 16#7FFF
+expect HR_RunSecB 16#FFFF
+
+scenario RunSeconds packing works for negative values (full DINT range)
+set RunSeconds -2                   # 16#FFFF_FFFE
+scan 2
+expect HR_RunSecA 16#FFFF
+expect HR_RunSecB 16#FFFE
+set RunSeconds -100000              # 16#FFFE_7960: dividing by 65536 would give FFFF here
+scan 2
+expect HR_RunSecA 16#FFFE
+expect HR_RunSecB 16#7960
+set RunSeconds -65536               # 16#FFFF_0000
+scan 2
+expect HR_RunSecA 16#FFFF
+expect HR_RunSecB 16#0000
+set RunSeconds -2147483648          # smallest DINT, 16#8000_0000
+scan 2
+expect HR_RunSecA 16#8000
+expect HR_RunSecB 16#0000
+
+scenario RunSeconds packed low word first (RunSecLowFirst = TRUE)
+set RunSecLowFirst TRUE
+set RunSeconds 100000
+scan 2
+expect HR_RunSecA 16#86A0
+expect HR_RunSecB 16#0001
+set RunSeconds -100000
+scan 2
+expect HR_RunSecA 16#7960
+expect HR_RunSecB 16#FFFE
+set RunSecLowFirst FALSE            # the selector is live: the registers follow at once
+scan 2
+expect HR_RunSecA 16#FFFE
+expect HR_RunSecB 16#7960
+
+scenario meter total, high word first (MeterLowFirst = FALSE)
+set MeterRegA 16#0001
+set MeterRegB 16#86A0               # low word with bit 15 set: must not sign-extend
+scan 2
+expect MeterTotal 100000
+set MeterRegA 16#0000
+set MeterRegB 16#FFFF
+scan 2
+expect MeterTotal 65535
+set MeterRegA 16#1234
+set MeterRegB 16#5678
+scan 2
+expect MeterTotal 305419896
+set MeterRegA 16#7FFF
+set MeterRegB 16#FFFF
+scan 2
+expect MeterTotal 2147483647
+
+scenario meter total, negative values
+set MeterRegA 16#FFFE
+set MeterRegB 16#7960
+scan 2
+expect MeterTotal -100000
+set MeterRegA 16#FFFF
+set MeterRegB 16#FFFF
+scan 2
+expect MeterTotal -1
+set MeterRegA 16#8000
+set MeterRegB 16#0000
+scan 2
+expect MeterTotal -2147483648
+
+scenario meter total, low word first (MeterLowFirst = TRUE)
+set MeterLowFirst TRUE
+set MeterRegA 16#86A0               # low word first
+set MeterRegB 16#0001
+scan 2
+expect MeterTotal 100000
+set MeterRegA 16#7960
+set MeterRegB 16#FFFE
+scan 2
+expect MeterTotal -100000
+set MeterRegA 16#0001               # a high-word-first device read with the wrong setting:
+set MeterRegB 16#86A0               # 16#86A0_0001, the classic word-swap garbage value
+scan 2
+expect MeterTotal -2036334591
+set MeterLowFirst FALSE             # correct the setting: the same registers now read right
+scan 2
+expect MeterTotal 100000
+
+scenario pressure x 100 is rounded to the nearest integer, not truncated
+set PressureBar 4.567               # 456.7 -> 457
+scan 2
+expect HR_Pressure 457
+expect PressOutOfRange FALSE
+set PressureBar 0.006               # 0.6 -> 1 (truncation would give 0)
+scan 2
+expect HR_Pressure 1
+set PressureBar -0.123              # -12.3 -> -12 (slight vacuum is legal)
+scan 2
+expect HR_Pressure -12
+set PressureBar -2.468              # -246.8 -> -247
+scan 2
+expect HR_Pressure -247
+set PressureBar 12.0
+scan 2
+expect HR_Pressure 1200
+expect HR_Status 16#0000
+
+scenario pressure outside the INT range is clamped and flagged, then recovers
+set PressureBar 327.6               # 32760 still fits
+scan 2
+expect HR_Pressure 32760
+expect PressOutOfRange FALSE
+set PressureBar 327.7               # 32770 does not fit
+scan 2
+expect HR_Pressure 32767
+expect PressOutOfRange TRUE
+expect HR_Status 16#0004
+set PressureBar 400.0               # without a range check this would wrap to -25536
+scan 2
+expect HR_Pressure 32767
+expect PressOutOfRange TRUE
+set PressureBar -327.6
+scan 2
+expect HR_Pressure -32760
+expect PressOutOfRange FALSE
+expect HR_Status 16#0000
+set PressureBar -350.0
+scan 2
+expect HR_Pressure -32768
+expect PressOutOfRange TRUE
+set PressureBar 5.0                 # back in range: the flag clears by itself
+scan 2
+expect HR_Pressure 500
+expect PressOutOfRange FALSE
+expect HR_Status 16#0000
+
+scenario setpoint from SCADA: valid values are converted with their decimals
+set HR_SupplySP 125                 # 12.5 degC (integer division would give 12)
+scan 2
+expect SupplySP 12.5
+expect SPRejected FALSE
+set HR_SupplySP -75                 # -7.5 degC
+scan 2
+expect SupplySP -7.5
+set HR_SupplySP -1                  # 16#FFFF on the wire: -0.1 degC
+scan 2
+expect SupplySP -0.1
+set HR_SupplySP 0
+scan 2
+expect SupplySP 0.0
+expect SPRejected FALSE
+
+scenario setpoint limits are inclusive, and a bad write keeps the last good value
+set HR_SupplySP 150                 # +15.0 degC: the upper limit is allowed
+scan 2
+expect SupplySP 15.0
+expect SPRejected FALSE
+set HR_SupplySP 151                 # just above: rejected
+scan 2
+expect SupplySP 15.0
+expect SPRejected TRUE
+expect HR_Status 16#0008
+set HR_SupplySP 1234                # a value meant for another register
+scan 2
+expect SupplySP 15.0
+expect SPRejected TRUE
+set HR_SupplySP -100                # -10.0 degC: the lower limit is allowed
+scan 2
+expect SupplySP -10.0
+expect SPRejected FALSE
+expect HR_Status 16#0000
+set HR_SupplySP -101                # just below: rejected
+scan 2
+expect SupplySP -10.0
+expect SPRejected TRUE
+set HR_SupplySP -32768
+scan 2
+expect SupplySP -10.0
+expect SPRejected TRUE
+set HR_SupplySP 80                  # a good value clears the rejection
+scan 2
+expect SupplySP 8.0
+expect SPRejected FALSE
+
+scenario status word: each bit on its own, then combinations
+set PumpRunning TRUE
+scan 2
+expect HR_Status 16#0001
+set PumpRunning FALSE
+set PumpFault TRUE
+scan 2
+expect HR_Status 16#0002
+set PumpFault FALSE
+set PressureBar 999.0
+scan 2
+expect HR_Status 16#0004
+set PressureBar 1.0
+set HR_SupplySP 999
+scan 2
+expect HR_Status 16#0008
+set PumpRunning TRUE
+set PressureBar 999.0
+scan 2
+expect HR_Status 16#000D            # bits 0, 2 and 3
+set PumpFault TRUE
+scan 2
+expect HR_Status 16#000F            # bits 4..15 stay 0
+set PumpRunning FALSE
+set PumpFault FALSE
+set PressureBar 1.0
+set HR_SupplySP 20
+scan 2
+expect HR_Status 16#0000
+
+scenario registers owned by the PLC are rewritten every scan
+set PumpRunning TRUE
+set PressureBar 3.21
+set RunSeconds 70000                # 16#0001_1170
+scan 2
+set HR_Status 16#FFFF               # a SCADA write into a read-only register...
+set HR_Pressure 9999
+set HR_RunSecA 16#AAAA
+set HR_RunSecB 16#5555
+scan 2
+expect HR_Status 16#0001            # ...is overwritten at the next scan
+expect HR_Pressure 321
+expect HR_RunSecA 16#0001
+expect HR_RunSecB 16#1170

@@ -1,0 +1,176 @@
+# Lab 04-1 acceptance tests: start/stop from two stations.
+# Tests: starts in parallel (either station starts), stops in series (either
+# station stops), seal-in, stop-dominance across stations, fail-safe NC stop
+# wiring, and lamps that follow the motor in the same scan.
+# Healthy NC stop buttons read TRUE, so every scenario sets them first.
+
+scenario power-up: motor off, stopped lamp on
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+expect StoppedLamp TRUE
+wait 1s
+expect Motor FALSE
+expect StoppedLamp TRUE
+
+scenario local start runs the motor and it seals in
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set LocalStartPB TRUE
+scan
+expect Motor TRUE
+expect RunLamp TRUE                 # lamps change in the same scan as the motor
+expect StoppedLamp FALSE
+set LocalStartPB FALSE
+wait 2s
+expect Motor TRUE
+expect RunLamp TRUE
+expect StoppedLamp FALSE
+
+scenario remote start runs the motor and it seals in
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set RemoteStartPB TRUE
+scan
+expect Motor TRUE
+expect RunLamp TRUE
+expect StoppedLamp FALSE
+set RemoteStartPB FALSE
+wait 2s
+expect Motor TRUE
+
+scenario local stop stops a motor started remotely, and it stays stopped
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set RemoteStartPB TRUE
+scan
+set RemoteStartPB FALSE
+wait 500ms
+expect Motor TRUE
+set LocalStopPB_NC FALSE            # local Stop pressed
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+expect StoppedLamp TRUE
+set LocalStopPB_NC TRUE             # ...and released
+wait 1s
+expect Motor FALSE                  # no restart without a new Start
+expect StoppedLamp TRUE
+
+scenario remote stop stops a motor started locally, and it stays stopped
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+wait 500ms
+expect Motor TRUE
+set RemoteStopPB_NC FALSE           # remote Stop pressed
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+expect StoppedLamp TRUE
+set RemoteStopPB_NC TRUE
+wait 1s
+expect Motor FALSE
+
+scenario stop at either station wins over start held at the same station
+set LocalStopPB_NC FALSE
+set RemoteStopPB_NC TRUE
+set LocalStartPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+set LocalStartPB FALSE
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC FALSE
+set RemoteStartPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+expect StoppedLamp TRUE
+
+scenario remote stop wins over local start held down (stop-dominant across stations)
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set LocalStartPB TRUE               # someone holds local Start...
+scan
+expect Motor TRUE
+wait 500ms
+set RemoteStopPB_NC FALSE           # ...while the control room presses Stop
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 1s
+expect Motor FALSE                  # stays off for as long as Stop is held
+
+scenario local stop wins over remote start held down
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set RemoteStartPB TRUE
+scan
+expect Motor TRUE
+set LocalStopPB_NC FALSE
+scan
+expect Motor FALSE
+wait 1s
+expect Motor FALSE
+expect StoppedLamp TRUE
+
+scenario a broken wire on the local stop circuit stops the motor and blocks starting
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set RemoteStartPB TRUE
+scan
+set RemoteStartPB FALSE
+wait 500ms
+set LocalStopPB_NC FALSE            # wire break reads the same as Stop pressed
+scan
+expect Motor FALSE
+set RemoteStartPB TRUE              # neither station can start it now
+scan
+expect Motor FALSE
+set RemoteStartPB FALSE
+set LocalStartPB TRUE
+wait 500ms
+expect Motor FALSE
+
+scenario a broken wire on the remote stop circuit stops the motor and blocks starting
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+wait 500ms
+set RemoteStopPB_NC FALSE
+scan
+expect Motor FALSE
+set LocalStartPB TRUE
+wait 500ms
+expect Motor FALSE
+expect StoppedLamp TRUE
+
+scenario restart after a stop needs a new start press, from either station
+set LocalStopPB_NC TRUE
+set RemoteStopPB_NC TRUE
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+scan
+set RemoteStopPB_NC FALSE
+scan
+set RemoteStopPB_NC TRUE
+wait 500ms
+expect Motor FALSE
+set RemoteStartPB TRUE
+scan
+expect Motor TRUE
+expect RunLamp TRUE
+expect StoppedLamp FALSE
+set RemoteStartPB FALSE
+wait 1s
+expect Motor TRUE

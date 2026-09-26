@@ -1,0 +1,361 @@
+# Lab 17-2 acceptance tests: communication watchdog for the reservoir telemetry link.
+# What is checked:
+#   - TxHeartbeat counts about once per second and wraps from 32767 to 0;
+#   - CommLost is TRUE at power-up (link unproven) and stays TRUE until the heartbeat has
+#     kept changing for 5 s; a single change is not enough;
+#   - CommLost goes TRUE 3 s after the last heartbeat change; any change counts
+#     (wrap-around, a decrease, a restart at 0, a slow but in-time partner);
+#   - LossCount counts healthy -> lost transitions once each, not the power-up state;
+#   - fallback values while lost (LevelPct = 100.0, InletOpen = FALSE), live values otherwise;
+#   - FillPump hysteresis (start below 40 %, stop at 90 %), stop on comm loss or closed inlet,
+#     and no restart half-way up the band after recovery.
+# The test plays the part of the Modbus client: it writes RxHeartbeat / RxLevel / RxStatus as
+# if a poll had just returned. Timing checks allow at least +/-300 ms.
+
+scenario power-up: the link is unproven and fallback values are used
+set RxLevel 300                     # would ask for the pump if it were trusted
+set RxStatus 16#0001
+scan 2
+expect CommLost TRUE
+expect LevelPct 100.0
+expect InletOpen FALSE
+expect FillPump FALSE
+expect LossCount 0
+wait 10s                            # the heartbeat never changes
+expect CommLost TRUE
+expect FillPump FALSE
+expect LossCount 0                  # the power-up state is not a loss event
+
+scenario our own heartbeat counts about once per second
+scan
+wait 490ms                          # t = 0.5 s
+expect TxHeartbeat <= 1
+wait 10s                            # t = 10.5 s
+expect TxHeartbeat >= 9
+expect TxHeartbeat <= 11
+wait 10s                            # t = 20.5 s
+expect TxHeartbeat >= 19
+expect TxHeartbeat <= 21
+
+scenario our heartbeat wraps from 32767 to 0 instead of overflowing
+until TxHeartbeat = 32767 within 10h     # about 9 hours of PLC time
+until TxHeartbeat <> 32767 within 1500ms
+expect TxHeartbeat 0
+
+scenario a heartbeat that changes every second proves the link after 5 s
+set RxLevel 500
+set RxStatus 16#0001
+set RxHeartbeat 1                   # first poll arrives, t = 0
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 700ms                          # t = 4.7 s: healthy for less than 5 s
+expect CommLost TRUE
+expect LevelPct 100.0
+expect InletOpen FALSE
+wait 600ms                          # t = 5.3 s
+expect CommLost FALSE
+expect LevelPct 50.0                # live value: 500 / 10
+expect InletOpen TRUE
+expect FillPump FALSE               # 50 % is inside the band: no start
+expect LossCount 0
+
+scenario live values and the fill-pump band while the link is healthy
+set RxLevel 500
+set RxStatus 16#0001
+set RxHeartbeat 1
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 1s
+set RxHeartbeat 6
+wait 500ms                          # t = 5.5 s, link proven
+expect CommLost FALSE
+set RxLevel 400                     # exactly 40.0 %: not below the start point
+scan 2
+expect LevelPct 40.0
+expect FillPump FALSE
+set RxLevel 399                     # 39.9 %: start
+scan 2
+expect LevelPct 39.9
+expect FillPump TRUE
+set RxLevel 655                     # inside the band: keep running
+scan 2
+expect LevelPct 65.5
+expect FillPump TRUE
+set RxLevel 899
+scan 2
+expect FillPump TRUE
+set RxLevel 900                     # 90.0 %: stop
+scan 2
+expect FillPump FALSE
+set RxLevel 700                     # falling again, still inside the band: stay stopped
+scan 2
+expect FillPump FALSE
+set RxLevel 300
+scan 2
+expect FillPump TRUE
+
+scenario the inlet valve bit is masked correctly and a closed valve stops the pump
+set RxLevel 300
+set RxStatus 16#0001
+set RxHeartbeat 1
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 1s
+set RxHeartbeat 6
+wait 500ms
+expect CommLost FALSE
+expect FillPump TRUE
+set RxStatus 16#FFFE                # every bit except bit 0: valve NOT open
+scan 2
+expect InletOpen FALSE
+expect FillPump FALSE
+set RxStatus 16#8001                # bit 0 set (bit 15 is not ours to judge)
+scan 2
+expect InletOpen TRUE
+expect FillPump TRUE                # level 30 % is below the start point
+set RxStatus 16#0000
+scan 2
+expect InletOpen FALSE
+expect FillPump FALSE
+
+scenario comm loss 3 s after the last change: flag, fallback values, pump stops, counted once
+set RxLevel 500
+set RxStatus 16#0001
+set RxHeartbeat 1
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 1s
+set RxHeartbeat 6
+wait 500ms                          # t = 5.5 s
+expect CommLost FALSE
+set RxHeartbeat 7                   # the last heartbeat change the PLC will see
+set RxLevel 300
+scan                                # t = 5.51 s
+expect FillPump TRUE
+wait 2700ms                         # 2.7 s after the last change: data held, not yet lost
+expect CommLost FALSE
+expect LevelPct 30.0
+expect FillPump TRUE
+wait 600ms                          # 3.3 s after the last change
+expect CommLost TRUE
+expect LevelPct 100.0               # "assume full"
+expect InletOpen FALSE              # "assume closed"
+expect FillPump FALSE
+expect LossCount 1
+wait 5s
+expect CommLost TRUE
+expect LossCount 1                  # one event, however long it lasts
+
+scenario recovery needs 5 s of healthy heartbeat, and the pump does not restart mid-band
+set RxLevel 500
+set RxStatus 16#0001
+set RxHeartbeat 1
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 1s
+set RxHeartbeat 6
+wait 500ms
+set RxHeartbeat 7
+set RxLevel 300
+scan                                # t = 5.51 s, pump running
+expect FillPump TRUE
+wait 3300ms                         # t = 8.81 s: lost
+expect CommLost TRUE
+expect FillPump FALSE
+set RxLevel 600                     # while we were blind the reservoir filled to 60 %
+set RxHeartbeat 8                   # the link comes back
+wait 1s
+set RxHeartbeat 9
+wait 1s
+set RxHeartbeat 10
+wait 1s
+set RxHeartbeat 11
+wait 1s
+set RxHeartbeat 12
+wait 700ms                          # 4.7 s after the first new change
+expect CommLost TRUE
+expect FillPump FALSE
+wait 300ms
+set RxHeartbeat 13
+wait 300ms                          # 5.3 s after the first new change
+expect CommLost FALSE
+expect LevelPct 60.0
+expect InletOpen TRUE
+expect FillPump FALSE               # 60 %: inside the band, no surprise restart
+expect LossCount 1
+set RxHeartbeat 14
+set RxLevel 390
+scan 2
+expect FillPump TRUE                # below the start point: a normal start
+set RxLevel 950
+scan 2
+expect FillPump FALSE
+
+scenario a single heartbeat change after power-up does not prove the link
+set RxLevel 300
+set RxStatus 16#0001
+wait 2500ms
+set RxHeartbeat 42                  # one poll gets through, then nothing
+scan
+expect CommLost TRUE
+wait 1500ms                         # t = 4.0 s
+expect CommLost TRUE
+wait 500ms
+expect CommLost TRUE
+wait 250ms
+expect CommLost TRUE
+wait 250ms                          # t = 5.0 s
+expect CommLost TRUE
+wait 250ms
+expect CommLost TRUE
+wait 250ms
+expect CommLost TRUE
+wait 250ms
+expect CommLost TRUE
+wait 500ms
+expect CommLost TRUE
+wait 2s                             # t = 8.0 s
+expect CommLost TRUE
+expect FillPump FALSE
+expect LevelPct 100.0
+expect LossCount 0
+
+scenario a single heartbeat change after a loss does not restore the link
+set RxLevel 300
+set RxStatus 16#0001
+set RxHeartbeat 1
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 1s
+set RxHeartbeat 6
+wait 500ms
+expect CommLost FALSE
+wait 3s                             # t = 8.5 s: lost
+expect CommLost TRUE
+expect LossCount 1
+set RxHeartbeat 99                  # one stray update
+scan
+wait 1s
+expect CommLost TRUE
+wait 1s
+expect CommLost TRUE
+wait 1s
+expect CommLost TRUE
+wait 1s
+expect CommLost TRUE
+wait 1s
+expect CommLost TRUE
+wait 1s
+expect CommLost TRUE
+expect FillPump FALSE
+expect LossCount 1
+
+scenario any change counts: wrap-around, a partner restart, and a slow alternating partner
+set RxLevel 500
+set RxStatus 16#0001
+set RxHeartbeat 32764
+wait 1s
+set RxHeartbeat 32765
+wait 1s
+set RxHeartbeat 32766
+wait 1s
+set RxHeartbeat 32767
+wait 1s
+set RxHeartbeat -32768              # INT wrap-around is a change like any other
+wait 1s
+set RxHeartbeat -32767
+wait 500ms                          # t = 5.5 s
+expect CommLost FALSE
+wait 500ms
+set RxHeartbeat 0                   # the outstation rebooted: its counter restarts
+wait 1s
+set RxHeartbeat 1
+wait 1s                             # t = 8.0 s
+expect CommLost FALSE
+set RxHeartbeat 5                   # from here the partner changes only every 2.5 s,
+wait 2500ms                         # and it alternates between two values
+expect CommLost FALSE
+set RxHeartbeat 4
+wait 2500ms
+expect CommLost FALSE
+set RxHeartbeat 5
+wait 2500ms
+expect CommLost FALSE
+set RxHeartbeat 4
+wait 2500ms
+expect CommLost FALSE
+expect LossCount 0
+wait 1s                             # now a 3.5 s gap: that is a loss
+expect CommLost TRUE
+expect LossCount 1
+
+scenario every separate loss is counted
+set RxLevel 500
+set RxStatus 16#0001
+set RxHeartbeat 1
+wait 1s
+set RxHeartbeat 2
+wait 1s
+set RxHeartbeat 3
+wait 1s
+set RxHeartbeat 4
+wait 1s
+set RxHeartbeat 5
+wait 1s
+set RxHeartbeat 6
+wait 500ms
+expect CommLost FALSE
+wait 3s                             # loss 1
+expect CommLost TRUE
+set RxHeartbeat 11
+wait 1s
+set RxHeartbeat 12
+wait 1s
+set RxHeartbeat 13
+wait 1s
+set RxHeartbeat 14
+wait 1s
+set RxHeartbeat 15
+wait 1s
+set RxHeartbeat 16
+wait 500ms
+expect CommLost FALSE
+wait 3s                             # loss 2
+expect CommLost TRUE
+expect LossCount 2

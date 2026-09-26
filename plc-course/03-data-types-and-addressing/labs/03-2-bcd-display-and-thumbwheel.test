@@ -1,0 +1,181 @@
+# Lab 03-2 acceptance tests: INT -> 4-digit BCD for a display (clamped to 0..9999 with an
+# over-range lamp) and 4-digit BCD thumbwheel -> INT (invalid digits flagged, last good
+# value held). Only the interface variables from the lab sheet are used. Each step runs two
+# scans, so the order of the statements inside your program does not matter.
+
+scenario power-up: zero shows 0000 and nothing is faulted
+scan 2
+expect DisplayBCD 16#0000
+expect DisplayOverRange FALSE
+expect BatchSize 0
+expect ThumbwheelFault FALSE
+
+# ---------------------------------------------------------------- Part A: display
+scenario each decimal digit lands in its own nibble
+set DisplayValue 7
+scan 2
+expect DisplayBCD 16#0007
+set DisplayValue 10
+scan 2
+expect DisplayBCD 16#0010             # binary 10 would be 16#000A
+set DisplayValue 99
+scan 2
+expect DisplayBCD 16#0099
+set DisplayValue 100
+scan 2
+expect DisplayBCD 16#0100
+set DisplayValue 1000
+scan 2
+expect DisplayBCD 16#1000
+set DisplayValue 1234
+scan 2
+expect DisplayBCD 16#1234             # binary 1234 would be 16#04D2
+set DisplayValue 5060
+scan 2
+expect DisplayBCD 16#5060             # zeros inside the number
+set DisplayValue 8421
+scan 2
+expect DisplayBCD 16#8421
+set DisplayValue 9999
+scan 2
+expect DisplayBCD 16#9999             # the largest value 4 digits can show
+expect DisplayOverRange FALSE
+set DisplayValue 0
+scan 2
+expect DisplayBCD 16#0000
+expect DisplayOverRange FALSE
+
+scenario values above 9999 show 9999 and light the over-range lamp
+set DisplayValue 10000
+scan 2
+expect DisplayBCD 16#9999
+expect DisplayOverRange TRUE
+set DisplayValue 32767
+scan 2
+expect DisplayBCD 16#9999
+expect DisplayOverRange TRUE
+set DisplayValue 42
+scan 2
+expect DisplayBCD 16#0042
+expect DisplayOverRange FALSE         # the lamp goes out when the value fits again
+
+scenario negative values show 0000 and light the over-range lamp
+set DisplayValue -1
+scan 2
+expect DisplayBCD 16#0000
+expect DisplayOverRange TRUE
+set DisplayValue -32768
+scan 2
+expect DisplayBCD 16#0000
+expect DisplayOverRange TRUE
+set DisplayValue 3
+scan 2
+expect DisplayBCD 16#0003
+expect DisplayOverRange FALSE
+
+scenario the display does not affect the thumbwheel side
+set DisplayValue 20000
+set ThumbwheelBCD 16#0250
+scan 2
+expect BatchSize 250
+expect ThumbwheelFault FALSE
+
+# ---------------------------------------------------------------- Part B: thumbwheel
+scenario valid BCD readings decode to their decimal value
+set ThumbwheelBCD 16#0001
+scan 2
+expect BatchSize 1
+set ThumbwheelBCD 16#0010
+scan 2
+expect BatchSize 10                   # not 16
+set ThumbwheelBCD 16#0100
+scan 2
+expect BatchSize 100                  # not 256
+set ThumbwheelBCD 16#1000
+scan 2
+expect BatchSize 1000                 # not 4096
+set ThumbwheelBCD 16#0250
+scan 2
+expect BatchSize 250                  # read as binary this would be 592
+set ThumbwheelBCD 16#2468
+scan 2
+expect BatchSize 2468
+set ThumbwheelBCD 16#0909
+scan 2
+expect BatchSize 909
+set ThumbwheelBCD 16#9999
+scan 2
+expect BatchSize 9999
+expect ThumbwheelFault FALSE          # 9 is a valid digit in every position
+set ThumbwheelBCD 16#0000
+scan 2
+expect BatchSize 0
+expect ThumbwheelFault FALSE
+
+scenario digit 9 is valid and digit A is invalid in every position
+set ThumbwheelBCD 16#0009
+scan 2
+expect ThumbwheelFault FALSE
+expect BatchSize 9
+set ThumbwheelBCD 16#000A
+scan 2
+expect ThumbwheelFault TRUE
+set ThumbwheelBCD 16#0090
+scan 2
+expect ThumbwheelFault FALSE
+expect BatchSize 90
+set ThumbwheelBCD 16#00A0
+scan 2
+expect ThumbwheelFault TRUE
+set ThumbwheelBCD 16#0900
+scan 2
+expect ThumbwheelFault FALSE
+expect BatchSize 900
+set ThumbwheelBCD 16#0A00
+scan 2
+expect ThumbwheelFault TRUE
+set ThumbwheelBCD 16#9000
+scan 2
+expect ThumbwheelFault FALSE
+expect BatchSize 9000
+set ThumbwheelBCD 16#A000
+scan 2
+expect ThumbwheelFault TRUE
+
+scenario an invalid digit holds the last good value until the reading is valid again
+set ThumbwheelBCD 16#1234
+scan 2
+expect BatchSize 1234
+expect ThumbwheelFault FALSE
+set ThumbwheelBCD 16#123F             # units nibble = 15
+scan 2
+expect ThumbwheelFault TRUE
+expect BatchSize 1234                 # last good value, not 0 and not a made-up number
+set ThumbwheelBCD 16#12C4             # tens nibble = 12
+scan 2
+expect ThumbwheelFault TRUE
+expect BatchSize 1234
+set ThumbwheelBCD 16#1B34             # hundreds nibble = 11
+scan 2
+expect ThumbwheelFault TRUE
+expect BatchSize 1234
+set ThumbwheelBCD 16#E234             # thousands nibble = 14
+scan 2
+expect ThumbwheelFault TRUE
+expect BatchSize 1234
+set ThumbwheelBCD 16#FFFF             # e.g. every input stuck on
+scan 2
+expect ThumbwheelFault TRUE
+expect BatchSize 1234
+wait 1s
+expect BatchSize 1234                 # still held
+set ThumbwheelBCD 16#0042
+scan 2
+expect ThumbwheelFault FALSE          # clears by itself when the reading is valid
+expect BatchSize 42
+
+scenario an invalid reading at power-up leaves the batch size at 0
+set ThumbwheelBCD 16#00F0
+scan 2
+expect ThumbwheelFault TRUE
+expect BatchSize 0

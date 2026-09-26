@@ -1,0 +1,1075 @@
+# Capstone 24-2 acceptance test (FAT): batch mixing plant, vessel T-201.
+#
+# This is the factory acceptance test for the brief 24-2-batch-mixing-plant.md.
+# It plays the operator at the HMI (Hmi.Cmd..., Hmi.RecipeNo, Recipes[]),
+# the engineer (Cfg), and the plant, through the given simulation (Sim).
+# It checks behaviour, not internals: it only uses the interface in the
+# brief (the I/O list, Hmi, Report, Recipes, Cfg and Sim).
+#
+# The simulation doubles as an independent referee. Its observer outputs
+# (Sim.DeliveredA, Sim.MaxTempC, Sim.DeadheadS ...) record what really
+# happened in the vessel, whatever your program believes.
+#
+# Handy numbers (see the brief):
+#   1 % level = 20 L.  A: 4 L/s, 0.5 L per pulse, 4 L in flight.
+#   B: 1 L/s, 0.1 L per pulse, 1 L in flight.  Drain: 6 L/s.
+#   Recipe 1 "Floor cleaner" 400 L A + 50 L B, 60 degC, mix 60 s, hold 90 s
+#   Recipe 2 "Degreaser"     250 L A + 120 L B, 45 degC, mix 120 s, hold 30 s
+#   Recipe 3 "Cold blend"    260 L A + 40 L B, 20 degC (no heating), mix 30 s
+#   Loop calibrator on TT-203: mA = 4 + 16 * degC / 150  (60 degC = 10.4 mA)
+#
+# Every scenario starts from a freshly powered-up PLC with an empty vessel
+# at 20 degC, so each one first makes the e-stop circuit healthy.
+# Scenario names start with the brief's milestone (M1-M8).
+
+# ======================================================================
+# M1  Power-up, measurements and the HMI command handshake
+# ======================================================================
+
+scenario M1 power-up: the plant is idle and quiet
+set EStopOK_NC TRUE
+scan
+wait 5s
+expect Hmi.State Idle
+expect Hmi.Phase PhaseNone
+expect Hmi.ActiveRecipe 0
+expect InletAValve FALSE
+expect InletBValve FALSE
+expect OutletValve FALSE
+expect AgitatorRun FALSE
+expect PumpRun FALSE
+expect HeatValveRaw 0
+expect AlarmHorn FALSE
+expect AlarmLamp FALSE
+expect Hmi.AlmActive 0
+expect Hmi.AlmUnack 0
+expect Hmi.LevelPct ~ 0.0 0.3
+expect Hmi.TempC ~ 20.0 0.3
+wait 1m
+expect Hmi.State Idle
+expect Sim.MaxVolumeL 0.0                   # nothing was let into the vessel
+expect Hmi.AlmUnack 0
+
+scenario M1 LT-201 scaling, checked with a loop calibrator and with real liquid
+set EStopOK_NC TRUE
+set Sim.LtForce TRUE
+set Sim.LtForcemA 8.0
+scan
+wait 8s                                     # time for a level filter of up to 1 s
+expect Hmi.LevelPct ~ 25.0 0.3
+set Sim.LtForcemA 12.0
+wait 8s
+expect Hmi.LevelPct ~ 50.0 0.3
+set Sim.LtForcemA 20.0
+wait 8s
+expect Hmi.LevelPct ~ 100.0 0.3
+set Sim.LtForcemA 20.4                      # saturated high: a measurement, not a fault
+wait 8s
+expect Hmi.LevelPct ~ 100.0 0.3
+set Sim.LtForcemA 3.9                       # saturated low: a measurement, not a fault
+wait 8s
+expect Hmi.LevelPct ~ 0.0 0.3
+expect Hmi.AlmActive 0
+set Sim.LtForce FALSE
+set Sim.VolumeL 1000.0
+wait 8s
+expect Hmi.LevelPct ~ 50.0 0.3
+set Sim.VolumeL 300.0
+wait 8s
+expect Hmi.LevelPct ~ 15.0 0.3
+expect Hmi.AlmActive 0
+
+scenario M1 TT-203 scaling, checked with a loop calibrator
+set EStopOK_NC TRUE
+set Sim.TtForce TRUE
+set Sim.TtForcemA 4.0
+scan
+wait 8s                                     # time for a filter of up to 1 s
+expect Hmi.TempC ~ 0.0 0.3
+set Sim.TtForcemA 12.0
+wait 8s
+expect Hmi.TempC ~ 75.0 0.3
+set Sim.TtForcemA 20.0
+wait 8s
+expect Hmi.TempC ~ 150.0 0.3
+set Sim.TtForcemA 10.4
+wait 8s
+expect Hmi.TempC ~ 60.0 0.3
+expect Hmi.AlmActive 0
+expect HeatValveRaw 0                       # no steam in Idle, whatever the reading
+
+scenario M1 HMI commands are cleared by the PLC and do nothing in Idle
+set EStopOK_NC TRUE
+scan
+set Hmi.CmdHold TRUE
+set Hmi.CmdRestart TRUE
+set Hmi.CmdAbort TRUE
+set Hmi.CmdReset TRUE
+set Hmi.CmdAck TRUE
+set Hmi.CmdDrain TRUE                       # vessel empty: nothing to drain
+scan
+expect Hmi.CmdHold FALSE
+expect Hmi.CmdRestart FALSE
+expect Hmi.CmdAbort FALSE
+expect Hmi.CmdReset FALSE
+expect Hmi.CmdAck FALSE
+expect Hmi.CmdDrain FALSE
+expect Hmi.State Idle
+wait 5s
+expect Hmi.State Idle
+expect OutletValve FALSE
+expect PumpRun FALSE
+expect AgitatorRun FALSE
+
+# ======================================================================
+# M2  Recipes and the Start permissives
+# ======================================================================
+
+scenario M2 start with a recipe number out of range is rejected (code 1)
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 0
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.CmdStart FALSE
+expect Hmi.RejectCode 1
+expect Hmi.State Idle
+set Hmi.RecipeNo 6
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 1
+wait 3s
+expect Hmi.State Idle
+expect InletAValve FALSE
+expect Hmi.ActiveRecipe 0
+
+scenario M2 start with invalid recipe parameters is rejected (code 2)
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 4                          # an empty recipe
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
+set Hmi.RecipeNo 1
+set Recipes[1].QtyA 1460.0                  # 1510 L: more than MaxBatchL
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
+set Recipes[1].QtyA 200.0                   # 250 L: less than MinBatchL
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
+set Recipes[1].QtyA 400.0
+set Recipes[1].QtyB -5.0                    # negative quantity
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
+set Recipes[1].QtyB 50.0
+set Recipes[1].TempSP 85.0                  # above MaxTempSP
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
+set Recipes[1].TempSP 15.0                  # below MinTempSP: cannot be reached
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
+wait 3s
+expect Hmi.State Idle
+expect InletAValve FALSE
+set Recipes[1].TempSP 60.0                  # valid again
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 0
+expect Hmi.State Running
+
+scenario M2 start is refused while the vessel is not empty (code 3)
+set EStopOK_NC TRUE
+set Sim.VolumeL 60.0                        # 3 %
+scan
+wait 5s
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 3
+wait 2s
+expect Hmi.State Idle
+expect InletAValve FALSE
+set Sim.VolumeL 10.0                        # 0.5 %: empty enough
+wait 5s
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 0
+expect Hmi.State Running
+
+scenario M2 start is refused while an alarm is active (code 4)
+set EStopOK_NC TRUE
+set Sim.TtForce TRUE
+set Sim.TtForcemA 0.0                       # TT-203 wire break
+scan
+until Hmi.AlmActive = 16#0080 within 4s
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 4
+set Sim.TtForce FALSE                       # wire repaired ...
+wait 3s
+expect Hmi.AlmActive 16#0080                # ... but the fault stays latched
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 4
+expect Hmi.State Idle
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 0
+expect Hmi.State Running
+
+scenario M2 an accepted start: charge A begins with the selected recipe
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 2
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.CmdStart FALSE
+expect Hmi.RejectCode 0
+expect Hmi.State Running
+expect Hmi.Phase PhaseChargeA
+expect Hmi.ActiveRecipe 2
+until InletAValve TRUE within 50ms
+expect InletBValve FALSE
+expect OutletValve FALSE
+expect PumpRun FALSE
+expect HeatValveRaw 0
+wait 10s
+expect InletAValve TRUE
+expect Hmi.TotalA > 30.0                    # the meter is being counted
+set Hmi.CmdStart TRUE                       # Start while running: refused
+scan
+expect Hmi.RejectCode 5
+expect Hmi.State Running
+expect Hmi.Phase PhaseChargeA
+expect Hmi.ActiveRecipe 2
+
+scenario M2 the running batch uses a copy of the recipe made at Start
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3                          # 260 L A + 40 L B
+set Hmi.CmdStart TRUE
+scan
+wait 10s
+set Recipes[3].QtyA 100.0                   # an operator edits the recipe ...
+set Recipes[3].QtyB 100.0
+set Hmi.RecipeNo 1                          # ... and selects another one
+until Hmi.Phase = PhaseChargeB within 2m
+expect Sim.DeliveredA ~ 260.0 1.0           # the batch kept its own copy
+expect Hmi.ActiveRecipe 3
+until Hmi.Phase = PhaseHeat within 2m
+expect Sim.DeliveredB ~ 40.0 0.4
+
+# ======================================================================
+# M3  Dosing by flow-meter totals
+# ======================================================================
+
+scenario M3 charge A: in-flight compensation lands on the target, then settles
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1                          # 400 L A
+set Hmi.CmdStart TRUE
+scan
+until Sim.DeliveredA >= 300.0 within 2m
+expect InletAValve TRUE
+expect InletBValve FALSE
+expect Sim.HeatValvePct 0.0
+until InletAValve FALSE within 1m
+expect Sim.DeliveredA < 398.0               # closed early: the preact
+expect Hmi.Phase PhaseChargeA
+wait 1500ms
+expect Hmi.Phase PhaseChargeA               # still counting the in-flight liquid
+expect InletBValve FALSE
+until Hmi.Phase = PhaseChargeB within 5s
+expect Sim.DeliveredA ~ 400.0 1.0
+expect Hmi.TotalA ~ 400.0 1.25
+until InletBValve TRUE within 1s
+wait 10s
+expect Sim.DeliveredA ~ 400.0 1.0           # inlet A stayed shut
+
+scenario M3 charge B: in-flight compensation and totals
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3                          # 40 L B
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseChargeB within 2m
+until InletBValve TRUE within 1s
+expect InletAValve FALSE
+until InletBValve FALSE within 1m
+expect Sim.DeliveredB < 39.6
+wait 1500ms
+expect Hmi.Phase PhaseChargeB
+until Hmi.Phase = PhaseHeat within 5s
+expect Sim.DeliveredB ~ 40.0 0.4
+expect Hmi.TotalB ~ 40.0 0.45
+expect Hmi.TotalA ~ 260.0 1.25
+expect Sim.DeliveredA ~ 260.0 1.0
+
+scenario M3 a recipe without ingredient B skips charge B
+set EStopOK_NC TRUE
+scan
+set Recipes[3].QtyA 300.0
+set Recipes[3].QtyB 0.0
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseHeat within 2m
+expect Sim.DeliveredA ~ 300.0 1.0
+expect Sim.DeliveredB 0.0
+until Hmi.State = Complete within 5m
+expect Sim.DeliveredB 0.0
+expect Report.ActualB ~ 0.0 0.05
+
+scenario M3 K-factor and preact come from Cfg, not from constants
+set EStopOK_NC TRUE
+scan
+set Cfg.PreactA 2.0                         # too small: A overshoots by about 2 L
+set Cfg.LitresPerPulseB 0.2                 # wrong K-factor: B is counted double
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseChargeB within 2m
+expect Sim.DeliveredA ~ 262.0 1.0
+until Hmi.Phase = PhaseHeat within 2m
+expect Sim.DeliveredB ~ 20.5 0.5            # closes at 39 "L" = 19.5 L real, + 1 L in flight
+expect Hmi.TotalB ~ 41.0 1.0
+
+# ======================================================================
+# M4  Agitator, temperature control and the mix/hold timers
+# ======================================================================
+
+scenario M4 agitator starts once the impeller is covered and never runs dry
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Sim.VolumeL >= 180.0 within 1m
+expect AgitatorRun FALSE                    # below 10 %
+until AgitatorRun TRUE within 15s
+expect Sim.VolumeL <= 215.0
+until AgitatorRunning TRUE within 3s
+until Hmi.Phase = PhaseDrain within 5m
+expect AgitatorRun TRUE
+until Sim.VolumeL <= 140.0 within 2m
+expect AgitatorRun FALSE                    # stopped below 8 % while draining
+until Hmi.State = Complete within 2m
+expect AgitatorRun FALSE
+expect Sim.AgitatorDryS <= 0.5
+
+scenario M4 heating: steam only in heat and mix, quick heat-up, no overshoot
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1                          # 450 L to 60 degC, mix 60 s, hold 90 s
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseChargeB within 3m
+expect HeatValveRaw 0
+until Hmi.Phase = PhaseHeat within 2m
+until Sim.HeatValvePct > 50.0 within 30s    # heat-up starts
+until Hmi.Phase = PhaseMix within 4m        # reaches 58 degC within 4 minutes
+set Sim.MaxTempC 0.0
+wait 80s
+expect Hmi.Phase PhaseMix                   # held for 90 s at temperature
+until Hmi.Phase = PhaseDrain within 20s
+expect Sim.MaxTempC <= 63.0                 # overshoot no more than 3 degC
+expect Hmi.TempC ~ 60.0 2.0
+until HeatValveRaw = 0 within 1s            # no steam while draining
+wait 10s
+expect Sim.HeatValvePct 0.0
+until Hmi.State = Complete within 3m
+expect Sim.HeatNoAgitS <= 0.3
+
+scenario M4 the hold timer counts only while the contents are at temperature
+set EStopOK_NC TRUE
+scan
+set Recipes[1].MixTime T#20s
+set Recipes[1].HoldTime T#60s
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 10m
+wait 10s
+set Sim.TempC 50.0                          # process upset: 10 degC below the setpoint
+wait 65s
+expect Hmi.Phase PhaseMix                   # 75 s in, but not 60 s at temperature
+until Hmi.Phase = PhaseDrain within 2m
+expect Hmi.TempC ~ 60.0 2.0                 # the loop recovered
+
+scenario M4 the mix time is a minimum agitation time
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 2                          # mix 120 s, hold 30 s
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 10m
+set Sim.MaxTempC 0.0
+wait 110s
+expect Hmi.Phase PhaseMix
+expect AgitatorRun TRUE
+until Hmi.Phase = PhaseDrain within 15s
+expect Sim.MaxTempC <= 48.0
+
+scenario M4 no steam unless the agitator is proven running
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 2
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 10m
+until Sim.HeatValvePct > 1.0 within 30s
+set Sim.AgitatorFail TRUE                   # M-201 trips
+scan 2
+expect HeatValveRaw 0                       # steam off at once
+until Hmi.AlmActive = 16#0020 within 4s
+until Hmi.State = Held within 5s
+expect Sim.HeatNoAgitS <= 0.3
+expect HeatValveRaw 0
+
+# ======================================================================
+# M5  Draining, completion and the batch report
+# ======================================================================
+
+scenario M5 drain: valve before pump, pump off before valve, vessel emptied
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseDrain within 5m
+until OutletValve TRUE within 1s
+expect PumpRun FALSE
+wait 1500ms
+expect PumpRun FALSE                        # the valve leads the pump
+until PumpRun TRUE within 2s
+until PumpRunning TRUE within 2s
+until PumpRun FALSE within 2m
+expect Sim.VolumeL < 20.0
+expect OutletValve TRUE
+wait 1500ms
+expect OutletValve TRUE                     # the valve lags the pump
+until OutletValve FALSE within 2s
+until Hmi.State = Complete within 3s
+expect Sim.VolumeL <= 5.0                   # run-on emptied the vessel
+expect Sim.DeadheadS < 0.05
+expect InletAValve FALSE
+expect InletBValve FALSE
+expect AgitatorRun FALSE
+expect PumpRun FALSE
+expect HeatValveRaw 0
+expect Hmi.AlmActive 0
+expect Hmi.AlmUnack 0
+
+scenario M5 batch report, then Reset returns to Idle
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.State = Complete within 6m
+expect Report.BatchCount 1
+expect Report.RecipeNo 3
+expect Report.RecipeName 'Cold blend'
+expect Report.ActualA ~ 260.0 1.25
+expect Report.ActualB ~ 40.0 0.45
+expect Report.MaxTemp ~ 20.0 1.0
+expect Hmi.ActiveRecipe 3
+wait 10s
+expect Hmi.State Complete                   # waits for the operator
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 5                     # Reset first
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.State Idle
+expect Hmi.Phase PhaseNone
+expect Hmi.ActiveRecipe 0
+expect Report.BatchCount 1                  # the report is kept
+expect Report.ActualA ~ 260.0 1.25
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 0
+expect Hmi.State Running
+expect Hmi.TotalA < 1.0                     # totals restart with the new batch
+expect Report.BatchCount 1
+
+scenario M5 batch time runs from Start to Complete
+set EStopOK_NC TRUE
+scan
+wait 30s                                    # idle time is not batch time
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.State = Complete within 6m
+expect Report.BatchTime >= T#190s
+expect Report.BatchTime <= T#210s
+
+scenario M5 batch time includes time spent held
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 5m
+wait 10s
+set Hmi.CmdHold TRUE
+scan
+until Hmi.State = Held within 5s
+wait 40s
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.State = Complete within 5m
+expect Report.BatchTime >= T#230s
+expect Report.BatchTime <= T#252s
+
+# ======================================================================
+# M6  Hold, Restart, Abort, e-stop and the manual drain
+# ======================================================================
+
+scenario M6 hold while charging A: inlet shuts, restart doses only the remainder
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Sim.DeliveredA >= 100.0 within 1m
+set Hmi.CmdHold TRUE
+scan
+expect Hmi.CmdHold FALSE
+expect InletAValve FALSE
+until Hmi.State = Held within 5s
+expect Hmi.Phase PhaseChargeA
+wait 20s
+expect InletAValve FALSE
+expect Sim.DeliveredA < 106.0               # only the in-flight volume followed
+set Hmi.CmdHold TRUE                        # Hold while held: nothing changes
+scan
+expect Hmi.State Held
+set Hmi.CmdRestart TRUE
+scan
+expect Hmi.CmdRestart FALSE
+until Hmi.State = Running within 2s
+until InletAValve TRUE within 1s
+until Hmi.Phase = PhaseChargeB within 3m
+expect Sim.DeliveredA ~ 400.0 1.0           # no double dosing
+expect Hmi.TotalA ~ 400.0 1.25
+
+scenario M6 hold while mixing: steam off, agitator on, timers resume where they stopped
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 2                          # mix 120 s
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 10m
+wait 60s
+set Hmi.CmdHold TRUE
+scan
+until HeatValveRaw = 0 within 50ms
+until Hmi.State = Held within 5s
+expect AgitatorRun TRUE                     # keeps the product mixed
+wait 60s
+expect Hmi.Phase PhaseMix
+expect HeatValveRaw 0
+expect AgitatorRun TRUE
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.State = Running within 2s
+wait 50s
+expect Hmi.Phase PhaseMix                   # 110 s of mixing so far
+until Hmi.Phase = PhaseDrain within 20s     # the last 10 s, not another 120 s
+expect Sim.HeatNoAgitS <= 0.3
+
+scenario M6 hold while draining: pump stops first, restart finishes the drain
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseDrain within 5m
+until PumpRun TRUE within 5s
+wait 10s
+set Hmi.CmdHold TRUE
+scan
+expect PumpRun FALSE
+expect OutletValve TRUE
+wait 1500ms
+expect OutletValve TRUE
+until OutletValve FALSE within 2s
+until Hmi.State = Held within 5s
+expect Hmi.Phase PhaseDrain
+wait 10s
+expect PumpRun FALSE
+set Hmi.CmdRestart TRUE
+scan
+until OutletValve TRUE within 2s
+until PumpRun TRUE within 4s
+until Hmi.State = Complete within 2m
+expect Sim.VolumeL <= 5.0
+expect Sim.DeadheadS < 0.05
+
+scenario M6 abort: everything stops, the batch cannot resume; then empty the vessel
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseHeat within 4m
+wait 20s
+expect AgitatorRun TRUE
+set Hmi.CmdAbort TRUE
+scan
+expect Hmi.CmdAbort FALSE
+until Hmi.State = Aborted within 5s
+expect InletAValve FALSE
+expect InletBValve FALSE
+expect OutletValve FALSE
+expect AgitatorRun FALSE
+expect PumpRun FALSE
+expect HeatValveRaw 0
+set Hmi.CmdRestart TRUE
+scan
+wait 2s
+expect Hmi.State Aborted
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 5
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.State Idle
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 3                     # 450 L still in the vessel
+expect Hmi.State Idle
+set Hmi.CmdDrain TRUE
+scan
+expect Hmi.CmdDrain FALSE
+expect Hmi.State Running
+expect Hmi.Phase PhaseDrain
+until PumpRun TRUE within 4s
+until Hmi.State = Idle within 3m
+expect Sim.VolumeL <= 5.0
+expect Sim.DeadheadS < 0.05
+expect Report.BatchCount 0                  # neither run makes a batch report
+expect PumpRun FALSE
+expect OutletValve FALSE
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 0
+
+scenario M6 e-stop: every output off at once, batch aborted, no restart on release
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseChargeB within 3m
+until AgitatorRunning TRUE within 5s
+expect InletBValve TRUE
+set EStopOK_NC FALSE                        # e-stop pressed
+scan
+expect InletAValve FALSE
+expect InletBValve FALSE
+expect OutletValve FALSE
+expect AgitatorRun FALSE
+expect PumpRun FALSE
+expect HeatValveRaw 0
+scan
+expect Hmi.State Aborted
+expect AlarmHorn TRUE
+wait 5s
+expect Hmi.AlmActive 16#0200                # the e-stop, and no consequential alarms
+set EStopOK_NC TRUE                         # released and the safety relay reset
+wait 5s
+expect Hmi.State Aborted
+expect InletBValve FALSE
+expect AgitatorRun FALSE
+expect Hmi.AlmActive 0
+expect Hmi.AlmUnack 16#0200
+set Hmi.CmdAck TRUE
+scan
+expect AlarmHorn FALSE
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.State Idle
+
+scenario M6 e-stop in Idle blocks a start (code 4)
+set EStopOK_NC FALSE
+scan
+wait 1s
+expect Hmi.AlmActive 16#0200
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 4
+expect Hmi.State Idle
+expect InletAValve FALSE
+
+scenario M6 restart is refused while the cause of the hold is still there
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+wait 10s
+set Sim.HHWireBreak TRUE                    # LSHH-201 circuit opens
+scan 2
+expect InletAValve FALSE
+until Hmi.State = Held within 5s
+set Hmi.CmdRestart TRUE
+scan
+expect Hmi.State Held                       # refused outright, not "restart then hold again"
+wait 2s
+expect Hmi.State Held
+expect InletAValve FALSE
+set Sim.HHWireBreak FALSE                   # repaired
+wait 1s
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.State = Running within 2s
+until InletAValve TRUE within 1s
+until Hmi.Phase = PhaseChargeB within 2m
+expect Sim.DeliveredA ~ 260.0 1.0
+
+# ======================================================================
+# M7  Alarms and faults
+# ======================================================================
+
+scenario M7 high-high level: inlets shut at once, batch held, alarm annunciated
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Sim.DeliveredA >= 50.0 within 30s
+set Sim.VolumeL 1810.0                      # jump to high-high level
+scan 2
+expect InletAValve FALSE
+until Hmi.State = Held within 5s
+expect Hmi.AlmActive 16#0001
+expect Hmi.AlmUnack 16#0001
+expect AlarmHorn TRUE
+expect AlarmLamp TRUE
+set Hmi.CmdAck TRUE
+scan
+expect AlarmHorn FALSE
+expect AlarmLamp TRUE                       # acknowledged, still active
+expect Hmi.AlmUnack 0
+set Hmi.CmdRestart TRUE                     # refused: still at high-high
+scan
+expect Hmi.State Held
+wait 2s
+expect Hmi.State Held
+set Sim.VolumeL 60.0                        # level brought back down
+wait 3s
+expect Hmi.AlmActive 0
+expect AlarmLamp FALSE
+set Hmi.CmdRestart TRUE
+scan
+until InletAValve TRUE within 2s
+until Hmi.Phase = PhaseChargeB within 3m
+expect Sim.DeliveredA ~ 400.0 1.0
+
+scenario M7 dosing fault: no flow on ingredient A
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+wait 5s
+set Sim.FlowFactorA 0.0                     # supply A fails
+wait 8s
+expect Hmi.AlmActive 0                      # not yet: 10 s without a pulse
+until Hmi.AlmActive = 16#0004 within 6s
+until Hmi.State = Held within 5s
+expect InletAValve FALSE
+expect Hmi.Phase PhaseChargeA
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
+set Sim.FlowFactorA 1.0                     # supply restored
+set Hmi.CmdRestart TRUE
+scan
+until InletAValve TRUE within 2s
+until Hmi.Phase = PhaseChargeB within 3m
+expect Sim.DeliveredA ~ 400.0 1.0
+
+scenario M7 dosing fault: charge B takes too long (partly blocked supply)
+set EStopOK_NC TRUE
+scan
+set Cfg.MaxChargeTime T#80s                 # charge A of recipe 3 takes about 68 s
+set Sim.FlowFactorB 0.3
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseChargeB within 2m
+expect Hmi.AlmActive 0
+wait 70s
+expect Hmi.AlmActive 0                      # pulses keep coming: no "no flow"
+until Hmi.AlmActive = 16#0008 within 20s
+until Hmi.State = Held within 5s
+expect InletBValve FALSE
+
+scenario M7 heating timeout
+set EStopOK_NC TRUE
+scan
+set Recipes[3].TempSP 50.0
+set Cfg.MaxHeatTime T#2m
+set Sim.HeatFail TRUE                       # no steam
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseHeat within 3m
+wait 110s
+expect Hmi.AlmActive 0
+expect Hmi.Phase PhaseHeat
+until Hmi.AlmActive = 16#0010 within 20s
+until Hmi.State = Held within 5s
+expect HeatValveRaw 0
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
+set Sim.HeatFail FALSE
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.Phase = PhaseMix within 4m
+
+scenario M7 agitator fails to start: fault, batch held, reset does not restart it
+set EStopOK_NC TRUE
+scan
+set Sim.AgitatorFail TRUE
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until AgitatorRun TRUE within 2m
+wait 2s
+expect Hmi.AlmActive 0                      # 3 s allowed for the feedback
+until Hmi.AlmActive = 16#0020 within 3s
+expect AgitatorRun FALSE
+until Hmi.State = Held within 5s
+expect InletAValve FALSE
+set Hmi.CmdReset TRUE
+scan
+wait 5s
+expect Hmi.AlmActive 0
+expect AgitatorRun FALSE                    # a reset must not start equipment
+set Sim.AgitatorFail FALSE
+set Hmi.CmdRestart TRUE
+scan
+until AgitatorRunning TRUE within 3s
+until Hmi.Phase = PhaseChargeB within 2m
+expect Hmi.AlmActive 0
+
+scenario M7 drain pump fails: fault, valve shuts after the pump, batch held
+set EStopOK_NC TRUE
+scan
+set Sim.PumpFail TRUE
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseDrain within 5m
+until PumpRun TRUE within 4s
+until Hmi.AlmActive = 16#0040 within 5s
+expect PumpRun FALSE
+until OutletValve FALSE within 3s
+until Hmi.State = Held within 5s
+set Sim.PumpFail FALSE
+set Hmi.CmdReset TRUE
+scan
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.State = Complete within 3m
+expect Sim.VolumeL <= 5.0
+expect Sim.DeadheadS < 0.05
+
+scenario M7 TT-203 wire break: steam off, fault latched until reset
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseHeat within 4m
+until Sim.HeatValvePct > 50.0 within 30s
+set Sim.TtForce TRUE
+set Sim.TtForcemA 0.0
+wait 1s
+expect Hmi.AlmActive 0                      # NE43 failure must last 2 s
+until Hmi.AlmActive = 16#0080 within 2500ms
+expect HeatValveRaw 0
+until Hmi.State = Held within 5s
+set Sim.TtForce FALSE
+wait 3s
+expect Hmi.AlmActive 16#0080                # still latched
+set Hmi.CmdRestart TRUE                     # refused until reset
+scan
+expect Hmi.State Held
+wait 1s
+expect Hmi.State Held
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.State = Running within 2s
+until Sim.HeatValvePct > 10.0 within 30s    # heating resumes
+
+scenario M7 LT-201 failure holds the batch
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+wait 20s
+set Sim.LtForce TRUE
+set Sim.LtForcemA 22.0                      # failed upscale
+until Hmi.AlmActive = 16#0100 within 3500ms
+until Hmi.State = Held within 5s
+expect InletAValve FALSE
+
+scenario M7 high temperature: steam off, batch held, 2 degC deadband
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 10m
+set Sim.TtForce TRUE
+set Sim.TtForcemA 13.1733                   # 86 degC
+scan
+until Hmi.AlmActive = 16#0002 within 5s     # allows a TT-203 filter of up to 1 s
+until HeatValveRaw = 0 within 100ms
+until Hmi.State = Held within 5s
+set Sim.TtForcemA 12.96                     # 84 degC: inside the deadband
+wait 3s
+expect Hmi.AlmActive 16#0002
+set Hmi.CmdRestart TRUE
+scan
+expect Hmi.State Held
+wait 1s
+expect Hmi.State Held
+set Sim.TtForcemA 12.7467                   # 82 degC
+wait 3s
+expect Hmi.AlmActive 0
+set Sim.TtForce FALSE
+wait 2s
+set Hmi.CmdRestart TRUE
+scan
+until Hmi.State = Running within 2s
+
+scenario M7 acknowledge: horn until Ack, lamp while active, new alarms sound again
+set EStopOK_NC TRUE
+scan
+set Sim.HHWireBreak TRUE
+wait 1s
+set Sim.HHWireBreak FALSE                   # returns to normal before anyone acknowledges
+wait 1s
+expect Hmi.AlmActive 0
+expect Hmi.AlmUnack 16#0001                 # ... but it still needs acknowledging
+expect AlarmHorn TRUE
+expect AlarmLamp FALSE
+set Hmi.CmdAck TRUE
+scan
+expect Hmi.AlmUnack 0
+expect AlarmHorn FALSE
+set Sim.TtForce TRUE
+set Sim.TtForcemA 0.0
+until Hmi.AlmActive = 16#0080 within 4s
+expect AlarmHorn TRUE
+expect AlarmLamp TRUE
+set Hmi.CmdAck TRUE
+scan
+expect AlarmHorn FALSE
+expect AlarmLamp TRUE
+set Sim.LtForce TRUE
+set Sim.LtForcemA 0.0
+until Hmi.AlmActive = 16#0180 within 4s
+expect Hmi.AlmUnack 16#0100                 # only the new one is unacknowledged
+expect AlarmHorn TRUE
+set Hmi.CmdAck TRUE
+scan
+expect Hmi.AlmUnack 0
+set Hmi.CmdAck TRUE                         # an Ack in the very scan a new alarm appears ...
+set Sim.HHWireBreak TRUE
+scan
+expect Hmi.AlmUnack 16#0001                 # ... must not acknowledge an alarm nobody has seen
+expect AlarmHorn TRUE
+set Sim.HHWireBreak FALSE
+set Hmi.CmdAck TRUE
+scan
+set Sim.TtForce FALSE
+set Sim.LtForce FALSE
+wait 3s
+expect Hmi.AlmActive 16#0180                # latched until reset
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
+expect AlarmLamp FALSE
+expect AlarmHorn FALSE
+
+# ======================================================================
+# M8  Full batches end to end (the FAT run)
+# ======================================================================
+
+scenario M8 two batches back to back: recipe 1 then recipe 2, with reports
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.State = Complete within 15m
+expect Report.BatchCount 1
+expect Report.RecipeNo 1
+expect Report.RecipeName 'Floor cleaner'
+expect Report.ActualA ~ 400.0 1.25
+expect Report.ActualB ~ 50.0 0.45
+expect Report.MaxTemp >= 59.0
+expect Report.MaxTemp <= 63.0
+expect Report.BatchTime >= T#380s
+expect Report.BatchTime <= T#660s
+expect Sim.DeliveredA ~ 400.0 1.0
+expect Sim.DeliveredB ~ 50.0 0.4
+expect Sim.MaxTempC <= 63.0
+expect Sim.MaxVolumeL <= 455.0
+expect Sim.VolumeL <= 5.0
+expect Sim.AgitatorDryS <= 0.5
+expect Sim.HeatNoAgitS <= 0.3
+expect Sim.DeadheadS < 0.05
+expect Hmi.AlmActive 0
+expect Hmi.AlmUnack 0
+set Hmi.CmdReset TRUE
+scan
+set Hmi.RecipeNo 2
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 0
+# TT-203 still reads the hot, empty vessel at this Start, and that reading
+# is part of this batch. The overshoot is judged on the true temperature
+# of the new contents instead.
+until Hmi.Phase = PhaseChargeB within 3m
+set Sim.MaxTempC 0.0
+until Hmi.State = Complete within 15m
+expect Report.BatchCount 2
+expect Report.RecipeNo 2
+expect Report.RecipeName 'Degreaser'
+expect Report.ActualA ~ 250.0 1.25
+expect Report.ActualB ~ 120.0 0.45
+expect Report.MaxTemp >= 44.0
+expect Report.BatchTime >= T#380s           # this batch only, not both
+expect Report.BatchTime <= T#660s
+expect Sim.MaxTempC <= 48.0
+expect Sim.DeliveredA ~ 650.0 2.0
+expect Sim.DeliveredB ~ 170.0 0.8
+expect Sim.VolumeL <= 5.0
+expect Sim.AgitatorDryS <= 0.5
+expect Sim.HeatNoAgitS <= 0.3
+expect Sim.DeadheadS < 0.05
+expect Hmi.AlmUnack 0

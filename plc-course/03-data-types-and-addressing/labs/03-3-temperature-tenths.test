@@ -1,0 +1,127 @@
+# Lab 03-3 acceptance tests: INT tenths of degC -> REAL degC and degF, INT tenths of degF
+# (rounded to nearest, correct over the whole -200.0..+850.0 degC range), and a sensor fault
+# flag with last-good-value hold. Only the interface variables from the lab sheet are used.
+# REAL values are checked to within 0.01. Each step runs two scans.
+
+scenario ordinary readings convert correctly
+set RawTenths 235
+scan 2
+expect SensorFault FALSE
+expect TempC ~ 23.5 0.01              # not 23.0: the tenths must survive
+expect TempF ~ 74.3 0.01
+expect TempF_x10 743
+set RawTenths 0
+scan 2
+expect TempC ~ 0.0 0.01
+expect TempF ~ 32.0 0.01
+expect TempF_x10 320
+set RawTenths 1000
+scan 2
+expect TempC ~ 100.0 0.01
+expect TempF ~ 212.0 0.01
+expect TempF_x10 2120
+set RawTenths -400
+scan 2
+expect TempC ~ -40.0 0.01             # the one temperature that is the same in both scales
+expect TempF ~ -40.0 0.01
+expect TempF_x10 -400
+set RawTenths -105
+scan 2
+expect TempC ~ -10.5 0.01
+expect TempF ~ 13.1 0.01
+expect TempF_x10 131
+
+scenario tenths of degF are rounded to the nearest tenth, not truncated
+set RawTenths 237                     # 23.7 degC = 74.66 degF
+scan 2
+expect TempF ~ 74.66 0.01
+expect TempF_x10 747                  # truncating would give 746
+set RawTenths 1                       # 0.1 degC = 32.18 degF
+scan 2
+expect TempC ~ 0.1 0.01
+expect TempF_x10 322                  # truncating would give 321
+set RawTenths 999                     # 99.9 degC = 211.82 degF
+scan 2
+expect TempF_x10 2118
+
+scenario rounding is also correct for negative temperatures
+set RawTenths -1                      # -0.1 degC = 31.82 degF
+scan 2
+expect TempC ~ -0.1 0.01
+expect TempF ~ 31.82 0.01
+expect TempF_x10 318                  # integer maths truncating toward zero gives 319
+set RawTenths -2                      # -0.2 degC = 31.64 degF
+scan 2
+expect TempF_x10 316
+set RawTenths -3                      # -0.3 degC = 31.46 degF
+scan 2
+expect TempF_x10 315
+set RawTenths -1777                   # -177.7 degC = -287.86 degF
+scan 2
+expect TempF ~ -287.86 0.01
+expect TempF_x10 -2879
+
+scenario no overflow anywhere in the measuring range
+set RawTenths 3640                    # 3640 * 9 = 32760 still fits in an INT
+scan 2
+expect TempF_x10 6872
+set RawTenths 3641                    # 3641 * 9 = 32769 does not
+scan 2
+expect TempC ~ 364.1 0.01
+expect TempF ~ 687.38 0.01
+expect TempF_x10 6874
+set RawTenths 3700
+scan 2
+expect TempF_x10 6980
+set RawTenths 5555
+scan 2
+expect TempC ~ 555.5 0.01
+expect TempF ~ 1031.9 0.01
+expect TempF_x10 10319
+set RawTenths 8500                    # top of the range: 850.0 degC
+scan 2
+expect SensorFault FALSE
+expect TempC ~ 850.0 0.01
+expect TempF ~ 1562.0 0.01
+expect TempF_x10 15620
+set RawTenths -2000                   # bottom of the range: -200.0 degC
+scan 2
+expect SensorFault FALSE
+expect TempC ~ -200.0 0.01
+expect TempF ~ -328.0 0.01
+expect TempF_x10 -3280
+
+scenario readings outside the range raise SensorFault and hold the last good values
+set RawTenths 8500
+scan 2
+expect SensorFault FALSE
+set RawTenths 8501                    # just above the range
+scan 2
+expect SensorFault TRUE
+expect TempC ~ 850.0 0.01             # last good values are held
+expect TempF ~ 1562.0 0.01
+expect TempF_x10 15620
+set RawTenths 32767                   # a typical "sensor broken" code
+scan 2
+expect SensorFault TRUE
+expect TempC ~ 850.0 0.01
+expect TempF_x10 15620
+set RawTenths 235                     # good again: fault clears, values update
+scan 2
+expect SensorFault FALSE
+expect TempC ~ 23.5 0.01
+expect TempF_x10 743
+
+scenario below-range readings are faults too
+set RawTenths 235
+scan 2
+set RawTenths -2001                   # just below the range
+scan 2
+expect SensorFault TRUE
+expect TempC ~ 23.5 0.01
+expect TempF ~ 74.3 0.01
+expect TempF_x10 743
+set RawTenths -32768
+scan 2
+expect SensorFault TRUE
+expect TempF_x10 743

@@ -1,0 +1,433 @@
+# Lab 08-1 acceptance tests: bottle packing with a counter.
+# Tested: each bottle counts once, on arrival, however long it blocks the beam;
+# the infeed stops in the same scan as the box becomes full; the box conveyor
+# then runs for IndexTime (checked at about 90 % and 110 %); counting restarts
+# from zero and the infeed restarts when the index ends; BoxSize and IndexTime
+# come from the HMI; nothing the eye sees during an index counts towards the
+# next box; ResetPB holds the count at zero and stops the infeed while held,
+# does not count a bottle that is in the beam when it is released, does not
+# stop, pause or lengthen an index (also when held past its end) and does
+# not touch BoxesPacked.
+# BottleCount during an index is not checked: the lab allows it to show
+# either BoxSize or 0 then.
+# Only interface variables are used. Each scenario starts from a fresh PLC.
+
+scenario at power-up the count is zero, the infeed runs and the box conveyor is stopped
+scan
+expect BottleCount 0
+expect BoxesPacked 0
+expect InfeedConv TRUE
+expect BoxConv FALSE
+wait 1s
+expect BottleCount 0
+expect InfeedConv TRUE
+expect BoxConv FALSE
+
+scenario each bottle counts once, on arrival, however long it blocks the beam
+scan
+set BottlePE TRUE              # a bottle arrives
+scan
+expect BottleCount 1           # counted in the same scan
+wait 2s
+expect BottleCount 1           # a bottle standing in the beam is still one bottle
+set BottlePE FALSE             # ...and leaving is not a new bottle
+scan
+expect BottleCount 1
+wait 500ms
+expect BottleCount 1
+set BottlePE TRUE
+wait 100ms
+set BottlePE FALSE
+wait 100ms
+expect BottleCount 2
+set BottlePE TRUE              # three quick bottles: one scan in the beam, one scan clear
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+expect BottleCount 5
+expect InfeedConv TRUE
+expect BoxConv FALSE
+
+scenario a box of 12: the 12th bottle stops the infeed at once and the box indexes for IndexTime
+scan
+set BottlePE TRUE              # eleven bottles
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+expect BottleCount 11
+expect InfeedConv TRUE         # 11 is not full yet
+expect BoxConv FALSE
+expect BoxesPacked 0
+set BottlePE TRUE              # the 12th bottle
+scan
+expect InfeedConv FALSE        # the infeed stops in the same scan
+until BoxConv = TRUE within 20ms
+expect BoxesPacked 1
+set BottlePE FALSE
+wait 1800ms                    # about 90 % of IndexTime (2 s): still indexing
+expect BoxConv TRUE
+expect InfeedConv FALSE
+wait 400ms                     # about 110 %: the index has finished
+expect BoxConv FALSE
+expect InfeedConv TRUE         # the infeed has restarted...
+expect BottleCount 0           # ...and counting starts again from zero
+expect BoxesPacked 1
+wait 1s
+expect BoxConv FALSE           # the box conveyor does not run again by itself
+expect InfeedConv TRUE
+set BottlePE TRUE              # the next box needs a full 12 again
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+expect BottleCount 11
+expect InfeedConv TRUE
+set BottlePE TRUE
+scan
+expect InfeedConv FALSE
+expect BoxesPacked 2
+
+scenario BoxSize comes from the HMI, and consecutive boxes are counted
+set BoxSize 4
+scan
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+expect BottleCount 3
+expect InfeedConv TRUE
+set BottlePE TRUE              # 4th bottle: this box is full
+scan
+expect InfeedConv FALSE
+expect BoxesPacked 1
+set BottlePE FALSE
+until InfeedConv = TRUE within 2500ms
+expect BoxConv FALSE
+expect BottleCount 0
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+expect BottleCount 3
+expect InfeedConv TRUE
+expect BoxesPacked 1
+set BottlePE TRUE
+scan
+expect InfeedConv FALSE
+expect BoxesPacked 2
+set BottlePE FALSE
+until InfeedConv = TRUE within 2500ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+expect BoxesPacked 3
+expect InfeedConv FALSE
+
+scenario IndexTime comes from the HMI
+set IndexTime T#3s
+set BoxSize 2
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE              # 2nd bottle: full
+scan
+expect InfeedConv FALSE
+set BottlePE FALSE
+wait 2700ms                    # 90 % of 3 s
+expect BoxConv TRUE
+expect InfeedConv FALSE
+wait 600ms                     # 110 % of 3 s
+expect BoxConv FALSE
+expect InfeedConv TRUE
+
+scenario nothing the eye sees during an index counts towards the next box
+set BoxSize 3
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE              # 3rd bottle: full. It stays in the beam...
+scan
+expect InfeedConv FALSE
+until BoxConv = TRUE within 20ms
+wait 500ms
+set BottlePE FALSE             # ...wobbles as the box moves off...
+wait 100ms
+set BottlePE TRUE
+wait 100ms
+set BottlePE FALSE
+wait 100ms
+set BottlePE TRUE              # ...and ends up standing in the beam
+until InfeedConv = TRUE within 2s
+expect BottleCount 0           # the flickers did not count towards the new box
+wait 500ms
+expect BottleCount 0           # and the bottle still in the beam is not a new bottle
+set BottlePE FALSE
+scan
+set BottlePE TRUE              # the first bottle of the new box
+scan
+expect BottleCount 1
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+expect BottleCount 2
+expect InfeedConv TRUE         # 2 of 3: not full, so no bottles were counted early
+
+scenario reset holds the count at zero, stops the infeed while held and leaves BoxesPacked alone
+set BoxSize 4
+scan
+set BottlePE TRUE              # fill one box first
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+expect BoxesPacked 1
+until InfeedConv = TRUE within 2500ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+set BottlePE TRUE
+wait 50ms
+set BottlePE FALSE
+wait 50ms
+expect BottleCount 2
+set ResetPB TRUE               # operator swaps in an empty box by hand
+scan
+expect BottleCount 0
+expect InfeedConv FALSE        # no bottles may drop in uncounted
+expect BoxConv FALSE           # reset does not index a box
+expect BoxesPacked 1           # the production total is not a bottle count
+set BottlePE TRUE              # a bottle pushed through by hand while Reset is held
+wait 300ms
+expect BottleCount 0
+expect InfeedConv FALSE
+set ResetPB FALSE              # released with that bottle still in the beam
+scan
+expect InfeedConv TRUE
+expect BottleCount 0           # it is not counted "late"
+wait 500ms
+expect BottleCount 0
+set BottlePE FALSE
+scan
+set BottlePE TRUE              # counting restarts from zero: 3 of 4
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+expect BottleCount 3
+expect InfeedConv TRUE
+expect BoxesPacked 1
+set BottlePE TRUE
+scan
+expect InfeedConv FALSE
+expect BoxesPacked 2
+
+scenario reset pressed during an index does not stop or restart the index
+set BoxSize 2
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE              # 2nd bottle: full, the index starts now
+scan
+expect InfeedConv FALSE
+set BottlePE FALSE
+wait 500ms
+set ResetPB TRUE
+scan
+expect BoxConv TRUE            # pressing Reset does not stop or pause the index...
+expect InfeedConv FALSE
+wait 200ms
+expect BoxConv TRUE            # ...not even while it is held
+expect InfeedConv FALSE
+expect BoxesPacked 1
+set ResetPB FALSE
+scan
+expect BoxConv TRUE            # the index keeps running
+expect InfeedConv FALSE
+wait 1000ms                    # about 1.7 s after the box became full
+expect BoxConv TRUE
+until BoxConv = FALSE within 500ms   # ends about 2 s after full, not 2 s after the reset
+expect InfeedConv TRUE
+expect BottleCount 0
+expect BoxesPacked 1
+
+scenario reset held across the end of an index: the index ends on time and the infeed waits for the release
+set BoxSize 2
+scan
+set BottlePE TRUE
+scan
+set BottlePE FALSE
+scan
+set BottlePE TRUE              # 2nd bottle: full, the index starts now
+scan
+expect InfeedConv FALSE
+set BottlePE FALSE
+wait 1s
+set ResetPB TRUE               # pressed during the index and held past its end
+wait 800ms                     # about 1.8 s after full
+expect BoxConv TRUE
+wait 400ms                     # about 2.2 s after full
+expect BoxConv FALSE           # the index ended on time: Reset does not lengthen it
+expect InfeedConv FALSE        # but the infeed stays stopped while Reset is held
+expect BottleCount 0
+wait 1s
+expect BoxConv FALSE
+expect InfeedConv FALSE
+expect BoxesPacked 1
+set ResetPB FALSE
+scan
+expect InfeedConv TRUE
+expect BoxConv FALSE
+expect BottleCount 0
+set BottlePE TRUE              # counting starts from zero: 1 of 2
+scan
+expect BottleCount 1
+expect InfeedConv TRUE
+expect BoxesPacked 1

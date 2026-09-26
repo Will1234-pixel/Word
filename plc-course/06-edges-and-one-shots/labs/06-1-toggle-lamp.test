@@ -1,0 +1,174 @@
+# Lab 06-1 acceptance tests: one-button floodlight toggle (push-on / push-off).
+# Tested: the light toggles on the PRESS (rising edge), not the release; holding
+# the button never makes it flicker; one-scan presses count; the key switch
+# forces the light off and makes the button do nothing; switching the key back
+# on never switches the light on by itself, not even while someone is holding
+# the button (the "edge detector called inside an IF" bug).
+# Only interface variables are used. Each scenario starts from a fresh PLC.
+
+scenario light is off at power-up
+set LightsEnable TRUE
+scan
+expect Floodlight FALSE
+wait 1s
+expect Floodlight FALSE        # nothing happens without a press
+
+scenario a press switches the light on at once, on the press not the release
+set LightsEnable TRUE
+scan
+set LightPB TRUE
+scan
+expect Floodlight TRUE         # same scan as the press
+
+scenario holding the button does not make the light flicker
+set LightsEnable TRUE
+scan
+set LightPB TRUE
+scan
+expect Floodlight TRUE
+scan
+expect Floodlight TRUE         # "IF LightPB THEN toggle" fails here: it toggles every scan
+scan
+expect Floodlight TRUE
+wait 2s
+expect Floodlight TRUE         # still on after 2 s of holding
+set LightPB FALSE
+scan
+expect Floodlight TRUE         # releasing does nothing
+wait 1s
+expect Floodlight TRUE
+
+scenario a second press switches it off, and holding keeps it off
+set LightsEnable TRUE
+scan
+set LightPB TRUE
+scan
+set LightPB FALSE
+wait 200ms
+expect Floodlight TRUE
+set LightPB TRUE               # second press
+scan
+expect Floodlight FALSE
+scan
+expect Floodlight FALSE
+wait 2s
+expect Floodlight FALSE        # held for 2 s: stays off
+set LightPB FALSE
+wait 500ms
+expect Floodlight FALSE
+set LightPB TRUE               # third press: on again
+scan
+expect Floodlight TRUE
+
+scenario very short presses (one scan each) all count
+set LightsEnable TRUE
+scan
+set LightPB TRUE
+scan
+set LightPB FALSE
+scan
+expect Floodlight TRUE
+set LightPB TRUE
+scan
+set LightPB FALSE
+scan
+expect Floodlight FALSE
+set LightPB TRUE
+scan
+set LightPB FALSE
+scan
+expect Floodlight TRUE
+set LightPB TRUE
+scan
+set LightPB FALSE
+scan
+expect Floodlight FALSE
+set LightPB TRUE
+scan
+set LightPB FALSE
+scan
+expect Floodlight TRUE         # 5 presses: odd number, so on
+wait 1s
+expect Floodlight TRUE
+
+scenario turning the key switch off switches the light off
+set LightsEnable TRUE
+scan
+set LightPB TRUE
+scan
+set LightPB FALSE
+wait 500ms
+expect Floodlight TRUE
+set LightsEnable FALSE
+scan
+expect Floodlight FALSE
+
+scenario presses are ignored while the key switch is off
+set LightsEnable FALSE
+scan
+set LightPB TRUE
+scan
+expect Floodlight FALSE
+wait 500ms
+expect Floodlight FALSE
+set LightPB FALSE
+scan
+set LightPB TRUE
+scan
+expect Floodlight FALSE
+set LightPB FALSE
+wait 500ms
+expect Floodlight FALSE
+
+scenario switching the key back on does not switch the light on by itself
+set LightsEnable TRUE
+scan
+set LightPB TRUE
+scan
+set LightPB FALSE
+wait 300ms
+expect Floodlight TRUE
+set LightsEnable FALSE         # light goes off...
+wait 300ms
+expect Floodlight FALSE
+set LightsEnable TRUE          # ...and must stay off when the key comes back
+scan
+expect Floodlight FALSE
+wait 1s
+expect Floodlight FALSE
+set LightPB TRUE               # only a fresh press switches it on
+scan
+expect Floodlight TRUE
+
+scenario a button already held when the key is switched on does not count as a press
+set LightsEnable FALSE
+scan
+set LightPB TRUE               # someone presses (and holds) while disabled
+wait 500ms
+expect Floodlight FALSE
+set LightsEnable TRUE          # key switched on while the button is still held
+scan
+expect Floodlight FALSE        # an edge detector called only when enabled fires here
+wait 1s
+expect Floodlight FALSE
+set LightPB FALSE              # release...
+wait 200ms
+expect Floodlight FALSE
+set LightPB TRUE               # ...and a fresh press works normally
+scan
+expect Floodlight TRUE
+
+scenario held button, key off and on again while the light was on
+set LightsEnable TRUE
+scan
+set LightPB TRUE               # press and keep holding: light on
+scan
+expect Floodlight TRUE
+set LightsEnable FALSE
+scan
+expect Floodlight FALSE
+set LightsEnable TRUE          # button still held throughout
+scan
+expect Floodlight FALSE
+wait 500ms
+expect Floodlight FALSE

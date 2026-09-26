@@ -1,0 +1,155 @@
+# Lab 07-2 acceptance tests: flasher beacon with separate on and off times.
+# Each phase is measured from the scan in which the beacon changed: it must not
+# change 40 ms before the end of the phase, and must change within 40 ms after
+# it. Also checks: off when disabled, always starts with a full ON phase,
+# repeats indefinitely, and picks up new times.
+# Interface: Enable, Beacon, OnTime (default 500 ms), OffTime (default 1 s).
+
+scenario beacon is dark while not enabled
+scan
+expect Beacon FALSE
+wait 3s
+expect Beacon FALSE
+
+scenario enabling lights the beacon at once
+set Enable TRUE
+scan
+expect Beacon TRUE
+
+scenario default times are 500 ms on and 1 s off
+set Enable TRUE
+scan
+expect Beacon TRUE
+wait 450ms                     # 460 ms into the ON phase (the first scan counts)
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 960ms                     # OFF phase: still dark 40 ms before its end
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+wait 460ms                     # second ON phase
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 960ms                     # second OFF phase
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+
+scenario on and off times are adjustable (200 ms on, 300 ms off)
+set OnTime T#200ms
+set OffTime T#300ms
+set Enable TRUE
+scan
+expect Beacon TRUE
+wait 150ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 260ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+wait 160ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 260ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+wait 160ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 260ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+
+scenario a long off time with a short on time (100 ms on, 2 s off)
+set OnTime T#100ms
+set OffTime T#2s
+set Enable TRUE
+scan
+expect Beacon TRUE
+wait 50ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 1960ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+wait 60ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+
+scenario keeps flashing for a long time
+set Enable TRUE
+wait 20s
+until Beacon = TRUE within 1100ms
+until Beacon = FALSE within 580ms
+wait 960ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+wait 460ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+
+scenario removing Enable during the ON phase darkens the beacon at once
+set Enable TRUE
+scan
+wait 200ms
+expect Beacon TRUE
+set Enable FALSE
+scan
+expect Beacon FALSE
+wait 2s
+expect Beacon FALSE
+
+scenario removing Enable during the OFF phase keeps it dark
+set Enable TRUE
+scan
+until Beacon = FALSE within 580ms
+wait 300ms
+set Enable FALSE
+scan
+expect Beacon FALSE
+wait 2s
+expect Beacon FALSE
+
+scenario re-enabling part-way through a cycle starts again with a full ON phase
+set Enable TRUE
+scan
+wait 300ms                     # part-way through the first ON phase
+set Enable FALSE
+scan
+wait 100ms
+set Enable TRUE                # re-enable: a fresh, full 500 ms ON phase
+scan
+expect Beacon TRUE
+wait 450ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+
+scenario re-enabling during the OFF phase lights the beacon at once
+set Enable TRUE
+scan
+until Beacon = FALSE within 580ms
+wait 400ms                     # part-way through the OFF phase
+set Enable FALSE
+scan
+wait 50ms
+set Enable TRUE
+scan
+expect Beacon TRUE
+wait 450ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 960ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms
+
+scenario new times are used from the next phase at the latest
+set Enable TRUE
+scan
+until Beacon = FALSE within 580ms
+set OnTime T#200ms             # changed during the OFF phase
+set OffTime T#300ms
+until Beacon = TRUE within 1100ms
+wait 160ms
+expect Beacon TRUE
+until Beacon = FALSE within 80ms
+wait 260ms
+expect Beacon FALSE
+until Beacon = TRUE within 80ms

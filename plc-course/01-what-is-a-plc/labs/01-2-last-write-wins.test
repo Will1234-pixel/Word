@@ -1,0 +1,183 @@
+# Lab 01-2 acceptance tests: sump pump with HAND-OFF-AUTO and a common alarm lamp.
+# The starter writes Pump and AlarmLamp in two places each, so AUTO never runs
+# the pump and the high-high alarm never shows. These scenarios prove the fixed
+# behaviour: every selector position, overload in both modes, each alarm on its
+# own and together, and fail-safe wire breaks on the NC inputs.
+# Healthy state for the NC inputs is TRUE, so each scenario sets them first.
+
+scenario power-up in OFF with a normal level: pump off, no alarm
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+scan
+expect Pump FALSE
+expect AlarmLamp FALSE
+wait 1s
+expect Pump FALSE
+expect AlarmLamp FALSE
+
+scenario OFF: the pump never runs, even with a high level
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set LevelHigh TRUE
+scan
+expect Pump FALSE
+wait 2s
+expect Pump FALSE
+
+scenario AUTO: the pump runs while the high-level float is up
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set AutoSel TRUE
+scan
+expect Pump FALSE                   # level normal: no demand yet
+set LevelHigh TRUE                  # sump fills up to the float
+scan
+expect Pump TRUE
+wait 2s
+expect Pump TRUE
+expect AlarmLamp FALSE
+set LevelHigh FALSE                 # pumped down below the float
+scan
+expect Pump FALSE
+wait 1s
+expect Pump FALSE
+
+scenario HAND: the pump runs whatever the level, and stops in OFF
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set HandSel TRUE
+scan
+expect Pump TRUE                    # level low: HAND runs it anyway
+set LevelHigh TRUE
+wait 1s
+expect Pump TRUE
+set LevelHigh FALSE
+wait 1s
+expect Pump TRUE
+set HandSel FALSE                   # selector back to OFF
+scan
+expect Pump FALSE
+wait 1s
+expect Pump FALSE
+
+scenario switching between HAND and AUTO with a low level
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set AutoSel TRUE
+scan
+expect Pump FALSE
+set AutoSel FALSE                   # turn the selector through OFF...
+scan
+set HandSel TRUE                    # ...to HAND
+scan
+expect Pump TRUE
+set HandSel FALSE
+scan
+set AutoSel TRUE                    # back to AUTO, still no demand
+scan
+expect Pump FALSE
+
+scenario overload trip stops the pump in AUTO and lights the alarm
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set AutoSel TRUE
+set LevelHigh TRUE
+scan
+expect Pump TRUE
+expect AlarmLamp FALSE
+set OverloadOK_NC FALSE             # overload relay trips (NC contact opens)
+scan
+expect Pump FALSE
+expect AlarmLamp TRUE
+wait 1s
+expect Pump FALSE
+expect AlarmLamp TRUE
+
+scenario overload trip stops the pump in HAND too
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set HandSel TRUE
+scan
+expect Pump TRUE
+set OverloadOK_NC FALSE
+scan
+expect Pump FALSE
+expect AlarmLamp TRUE
+wait 1s
+expect Pump FALSE
+
+scenario a tripped overload blocks starting in HAND and AUTO
+set LevelHH_NC TRUE
+set OverloadOK_NC FALSE
+set HandSel TRUE
+scan
+expect Pump FALSE
+expect AlarmLamp TRUE
+set HandSel FALSE
+set AutoSel TRUE
+set LevelHigh TRUE
+scan
+expect Pump FALSE
+expect AlarmLamp TRUE
+
+scenario high-high level lights the alarm in OFF
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+scan
+expect AlarmLamp FALSE
+set LevelHigh TRUE
+set LevelHH_NC FALSE                # level rises past the high-high switch
+scan
+expect AlarmLamp TRUE
+expect Pump FALSE                   # OFF means off, alarm or not
+set LevelHH_NC TRUE                 # level falls back below high-high
+scan
+expect AlarmLamp FALSE
+
+scenario high-high level lights the alarm while pumping in AUTO
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set AutoSel TRUE
+set LevelHigh TRUE
+scan
+expect Pump TRUE
+set LevelHH_NC FALSE
+scan
+expect AlarmLamp TRUE
+expect Pump TRUE                    # the alarm does not stop the pump - it needs to run!
+
+scenario a broken wire on the high-high switch shows as an alarm (fail-safe)
+set LevelHH_NC TRUE
+set OverloadOK_NC TRUE
+set HandSel TRUE
+scan
+expect AlarmLamp FALSE
+set LevelHH_NC FALSE                # wire break: the input reads FALSE
+scan
+expect AlarmLamp TRUE
+
+scenario both alarms together, then clearing them one at a time
+set LevelHH_NC FALSE
+set OverloadOK_NC FALSE
+set AutoSel TRUE
+set LevelHigh TRUE
+scan
+expect AlarmLamp TRUE
+expect Pump FALSE
+set OverloadOK_NC TRUE              # overload reset: high-high still present
+scan
+expect AlarmLamp TRUE
+expect Pump TRUE
+set LevelHH_NC TRUE                 # high-high clears too
+scan
+expect AlarmLamp FALSE
+set LevelHH_NC FALSE                # and the other way round: only high-high...
+scan
+expect AlarmLamp TRUE
+set LevelHH_NC TRUE
+set OverloadOK_NC FALSE             # ...then only the overload
+scan
+expect AlarmLamp TRUE
+set OverloadOK_NC TRUE
+scan
+expect AlarmLamp FALSE

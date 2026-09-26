@@ -1,0 +1,271 @@
+# Lab 22-1 REFERENCE TEST: pump dry-run trip (write the tests).
+# Try the lab yourself first: start from labs/starter/22-1-dry-run-trip.test.
+#
+# This file must PASS labs/22-1-dry-run-trip.st (the correct implementation)
+# and FAIL every file in labs/mutants/. `plctest --all` checks both.
+#
+# Only the interface variables are used: StartPB, StopPB_NC, FlowSw, ResetPB,
+# PumpRun, DryRunAlarm. Times are checked just before and just after each
+# limit, never by counting scans.
+#
+# Timeline of a start with no flow at all (times from the start press):
+#   0 s     pump starts, priming time begins
+#   10 s    flow check armed, loss timer begins (no flow yet)
+#   15 s    loss timer done: trip, alarm latched
+
+# ---------------------------------------------------------------- R1 start/stop
+scenario R1 pump is off at power-up and nothing starts on its own
+set StopPB_NC TRUE
+set FlowSw TRUE
+scan
+expect PumpRun FALSE
+expect DryRunAlarm FALSE
+wait 2s
+expect PumpRun FALSE
+expect DryRunAlarm FALSE
+
+scenario R1 start runs the pump and it seals in
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+expect PumpRun TRUE
+set StartPB FALSE
+wait 3s
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+
+scenario R1 stop stops the pump and it stays stopped
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set StopPB_NC FALSE              # press Stop
+scan
+expect PumpRun FALSE
+set StopPB_NC TRUE               # release Stop: no restart
+wait 1s
+expect PumpRun FALSE
+
+scenario R1 stop wins when start and stop are pressed together
+set StopPB_NC FALSE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+expect PumpRun FALSE
+wait 1s
+expect PumpRun FALSE
+
+# ------------------------------------------------------- R2/R3 timing and arming
+scenario R2 R3 a pump that never makes flow trips 15 s after start, not before
+set StopPB_NC TRUE
+set FlowSw FALSE                 # dry from the very first moment
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 10500ms                     # just after arming: must NOT trip yet
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+wait 4200ms                      # 14.7 s after start: still just inside the limit
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+until DryRunAlarm = TRUE within 600ms   # trips at 15 s
+wait 100ms
+expect PumpRun FALSE
+
+scenario R2 no flow during priming is ignored if flow arrives in time
+set StopPB_NC TRUE
+set FlowSw FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 9500ms                      # flow appears just before the check is armed
+set FlowSw TRUE
+wait 30s
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+
+scenario R3 a healthy pump with steady flow runs indefinitely
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 2m
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+
+scenario R3 flow dips shorter than 5 s do not trip, and each dip starts a fresh count
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 20s                         # well past priming: the check is armed
+set FlowSw FALSE                 # dip 1: 4.5 s
+wait 4500ms
+expect PumpRun TRUE
+set FlowSw TRUE
+wait 500ms
+set FlowSw FALSE                 # dip 2: 4.5 s (would total 9 s if not reset)
+wait 4500ms
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+set FlowSw TRUE
+wait 1s
+set FlowSw FALSE                 # a short blip on its own must not trip either
+wait 200ms
+set FlowSw TRUE
+wait 5s
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+
+scenario R3 continuous loss of flow while armed trips after 5 s
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 30s
+set FlowSw FALSE
+wait 4700ms
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+until DryRunAlarm = TRUE within 600ms
+wait 100ms
+expect PumpRun FALSE
+
+scenario R2 every start gets the full priming time, not only the first one
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 20s                         # first run: primed and armed
+set StopPB_NC FALSE              # normal stop
+scan
+set StopPB_NC TRUE
+set FlowSw FALSE                 # the pipe has drained
+wait 2s
+set StartPB TRUE                 # second start, dry
+scan
+set StartPB FALSE
+wait 14700ms                     # a fresh 10 s + 5 s applies
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+until DryRunAlarm = TRUE within 600ms
+wait 100ms
+expect PumpRun FALSE
+
+# ------------------------------------------------------------- R4/R5 latching
+scenario R4 the alarm stays latched after the cause has gone
+set StopPB_NC TRUE
+set FlowSw FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+until DryRunAlarm = TRUE within 16s
+wait 100ms
+expect PumpRun FALSE
+set FlowSw TRUE                  # flow switch returns to normal
+wait 3s
+expect DryRunAlarm TRUE          # still latched
+expect PumpRun FALSE
+
+scenario R5 the pump cannot be started while the alarm is active
+set StopPB_NC TRUE
+set FlowSw FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+until DryRunAlarm = TRUE within 16s
+wait 1s
+set FlowSw TRUE
+set StartPB TRUE                 # operator tries to start again
+scan
+expect PumpRun FALSE
+wait 1s
+expect PumpRun FALSE
+set StartPB FALSE
+wait 1s
+expect PumpRun FALSE
+expect DryRunAlarm TRUE
+
+# -------------------------------------------------------------------- R6 reset
+scenario R6 reset clears the alarm but does not restart the pump
+set StopPB_NC TRUE
+set FlowSw FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+until DryRunAlarm = TRUE within 16s
+wait 1s
+set ResetPB TRUE                 # a 200 ms press
+wait 200ms
+set ResetPB FALSE
+wait 100ms
+expect DryRunAlarm FALSE
+expect PumpRun FALSE
+wait 2s
+expect PumpRun FALSE             # no restart without a new start command
+set FlowSw TRUE
+set StartPB TRUE                 # a new start is accepted after the reset
+scan
+set StartPB FALSE
+wait 1s
+expect PumpRun TRUE
+
+scenario R6 a jammed reset button cannot defeat the protection
+set StopPB_NC TRUE
+set ResetPB TRUE                 # reset held (or jammed) from the start
+set FlowSw FALSE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 14700ms
+expect PumpRun TRUE
+until DryRunAlarm = TRUE within 600ms
+wait 100ms
+expect PumpRun FALSE
+wait 2s
+expect DryRunAlarm TRUE          # a held reset has no new edge: alarm stays
+expect PumpRun FALSE
+
+scenario R6 after a reset the restart gets the full priming time
+set StopPB_NC TRUE
+set FlowSw FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+until DryRunAlarm = TRUE within 16s
+wait 1s
+set ResetPB TRUE
+wait 200ms
+set ResetPB FALSE
+wait 1s
+set StartPB TRUE                 # restart, still dry
+scan
+set StartPB FALSE
+wait 14700ms
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+until DryRunAlarm = TRUE within 600ms
+
+# ---------------------------------------------------------- R7 normal stopping
+scenario R7 a normal stop never raises the alarm, even though flow stops
+set StopPB_NC TRUE
+set FlowSw TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 20s
+set StopPB_NC FALSE              # stop the pump
+scan
+set StopPB_NC TRUE
+set FlowSw FALSE                 # flow naturally stops with the pump
+wait 30s
+expect PumpRun FALSE
+expect DryRunAlarm FALSE

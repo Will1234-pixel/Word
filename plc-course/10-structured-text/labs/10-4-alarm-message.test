@@ -1,0 +1,150 @@
+# Lab 10-4 acceptance tests: alarm message string.
+# The test sets the tag, units, process value and alarm flags, then checks
+# the exact text in Message. Format: '<TagName> <STATE> <value> <Units>',
+# value rounded to one decimal place; '<TagName> BAD PV' for a signal fault;
+# '' when no alarm is active. Priority: BadPV, HiHi, LoLo, Hi, Lo.
+# Test values avoid exact halves (x.x5), because platforms round those
+# differently.
+
+scenario no alarm: the message is empty
+set PV 42.0
+scan
+expect Message ''
+wait 500ms
+expect Message ''
+
+scenario high alarm, value rounded to one decimal
+set TagName 'TT-104'
+set Units 'degC'
+set PV 87.44
+set Hi TRUE
+scan
+expect Message 'TT-104 HIGH 87.4 degC'
+set PV 87.46                     # rounds up, not truncated
+scan
+expect Message 'TT-104 HIGH 87.5 degC'
+
+scenario high-high wins over high when both are active
+set TagName 'TT-104'
+set Units 'degC'
+set PV 95.52
+set Hi TRUE
+set HiHi TRUE
+scan
+expect Message 'TT-104 HIGH HIGH 95.5 degC'
+
+scenario low alarm with a small negative value keeps its minus sign
+set TagName 'TT-104'
+set Units 'degC'
+set PV -0.4
+set Lo TRUE
+scan
+expect Message 'TT-104 LOW -0.4 degC'
+set PV -3.04
+scan
+expect Message 'TT-104 LOW -3.0 degC'
+set PV -7.26
+scan
+expect Message 'TT-104 LOW -7.3 degC'
+set PV -0.72
+scan
+expect Message 'TT-104 LOW -0.7 degC'
+set PV -4.96                     # rounds to a whole number: the digits carry
+scan
+expect Message 'TT-104 LOW -5.0 degC'
+
+scenario a value that rounds to zero prints as 0.0, without a minus sign
+set TagName 'TT-104'
+set Units 'degC'
+set PV -0.04
+set Lo TRUE
+scan
+expect Message 'TT-104 LOW 0.0 degC'
+
+scenario priority: bad PV, then the trip levels (HiHi, LoLo), then the pre-alarms (Hi, Lo)
+# One healthy PV cannot be high and low at once, but latched (unacknowledged)
+# alarms from the alarm logic can leave both states TRUE.
+set TagName 'TT-104'
+set Units 'degC'
+set PV 88.0
+set Hi TRUE
+set LoLo TRUE
+scan
+expect Message 'TT-104 LOW LOW 88.0 degC'       # a latched low-low outranks a high
+set LoLo FALSE
+set Lo TRUE
+scan
+expect Message 'TT-104 HIGH 88.0 degC'          # high outranks low
+set HiHi TRUE
+set LoLo TRUE
+scan
+expect Message 'TT-104 HIGH HIGH 88.0 degC'     # high-high outranks everything but a bad PV
+set BadPV TRUE
+scan
+expect Message 'TT-104 BAD PV'
+set BadPV FALSE
+set HiHi FALSE
+set Hi FALSE
+set LoLo FALSE
+scan
+expect Message 'TT-104 LOW 88.0 degC'
+
+scenario low-low wins over low
+set TagName 'TT-104'
+set Units 'degC'
+set PV -12.0
+set Lo TRUE
+set LoLo TRUE
+scan
+expect Message 'TT-104 LOW LOW -12.0 degC'
+
+scenario bad PV overrides every alarm and shows no value
+set TagName 'TT-104'
+set Units 'degC'
+set PV 99.9
+set HiHi TRUE
+set Hi TRUE
+set BadPV TRUE
+scan
+expect Message 'TT-104 BAD PV'
+set BadPV FALSE                  # signal restored: back to the real alarm text
+scan
+expect Message 'TT-104 HIGH HIGH 99.9 degC'
+
+scenario another instrument: tag and units come from the inputs
+set TagName 'PT-2201'
+set Units 'barg'
+set PV 100.0
+set Hi TRUE
+scan
+expect Message 'PT-2201 HIGH 100.0 barg'
+set PV 5.06
+scan
+expect Message 'PT-2201 HIGH 5.1 barg'
+set PV 19.97
+scan
+expect Message 'PT-2201 HIGH 20.0 barg'
+set PV 2999.96
+scan
+expect Message 'PT-2201 HIGH 3000.0 barg'
+set PV 0.0
+scan
+expect Message 'PT-2201 HIGH 0.0 barg'
+
+scenario the message clears when the alarm clears
+set TagName 'LT-310'
+set Units '%'
+set PV 91.2
+set Hi TRUE
+scan
+expect Message 'LT-310 HIGH 91.2 %'
+set Hi FALSE
+scan
+expect Message ''
+set PV 8.7
+set Lo TRUE
+scan
+expect Message 'LT-310 LOW 8.7 %'
+set Lo FALSE
+scan
+expect Message ''

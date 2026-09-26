@@ -1,0 +1,310 @@
+# Lab 13-3 acceptance tests: drilling station in SFC.
+# Only outputs and the lab's settings/counter are checked, never step
+# flags, so an SFC and a CASE state machine can both pass. Checks the
+# start permissives, the clamp and spindle staying on across steps (S/R),
+# the spindle run-up delay before the feed (D), the dwell, the time-limited
+# blow-off that also stops with its step (L), the hole counter counting
+# once per hole (P), the unload step, and the feed-timeout branch with its
+# reset and retract.
+# Interface: StartPB, PartPE, ClampedLS, DrillUpLS, DrillDownLS, ResetPB,
+# ClampValve, Spindle, FeedDown, FeedUp, BlowAir, ReadyLamp, FaultLamp,
+# SpinUpTime (500 ms), DwellTime (1 s), BlowTime (1 s), FeedTimeout (5 s),
+# HoleCount.
+
+scenario power-up: ready, everything else off
+scan
+expect ReadyLamp TRUE
+expect ClampValve FALSE
+expect Spindle FALSE
+expect FeedDown FALSE
+expect FeedUp FALSE
+expect BlowAir FALSE
+expect FaultLamp FALSE
+expect HoleCount 0
+set PartPE TRUE
+set DrillUpLS TRUE
+wait 5s                        # a part alone does not start a cycle
+expect ReadyLamp TRUE
+expect ClampValve FALSE
+expect Spindle FALSE
+
+scenario Start needs a part in the fixture and the drill at the top
+set DrillUpLS TRUE
+scan
+set StartPB TRUE               # no part
+wait 200ms
+set StartPB FALSE
+scan
+expect ClampValve FALSE
+expect ReadyLamp TRUE
+set PartPE TRUE
+set DrillUpLS FALSE            # part, but the drill is not at the top
+set StartPB TRUE
+wait 200ms
+set StartPB FALSE
+scan
+expect ClampValve FALSE
+expect ReadyLamp TRUE
+set DrillUpLS TRUE             # now both
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect ClampValve TRUE
+expect ReadyLamp FALSE
+expect Spindle FALSE
+expect FeedDown FALSE
+
+scenario the spindle waits for the clamp, the feed waits for the spindle
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect ClampValve TRUE
+wait 3s                        # clamp closing slowly
+expect Spindle FALSE
+expect FeedDown FALSE
+set ClampedLS TRUE
+scan
+expect Spindle TRUE
+expect FeedDown FALSE
+expect ClampValve TRUE
+wait 440ms                     # about 90 % of SpinUpTime
+expect FeedDown FALSE
+until FeedDown = TRUE within 200ms
+expect Spindle TRUE
+expect FeedUp FALSE
+
+scenario a complete cycle: drill, dwell, retract with blow-off, unclamp, unload
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 300ms
+set ClampedLS TRUE
+until FeedDown = TRUE within 700ms
+set DrillUpLS FALSE            # the head leaves the top
+wait 1s
+expect FeedDown TRUE
+expect FeedUp FALSE
+expect Spindle TRUE
+expect BlowAir FALSE
+set DrillDownLS TRUE           # full depth
+scan
+expect FeedDown FALSE          # dwell: hold position...
+expect FeedUp FALSE
+expect Spindle TRUE            # ...with the spindle still turning
+expect ClampValve TRUE
+wait 50ms
+expect HoleCount 1
+wait 800ms                     # about 90 % of DwellTime
+expect FeedUp FALSE
+expect FeedDown FALSE
+expect Spindle TRUE
+until FeedUp = TRUE within 300ms
+expect BlowAir TRUE            # retract, blowing chips away
+expect Spindle TRUE
+expect ClampValve TRUE
+expect FeedDown FALSE
+set DrillDownLS FALSE
+wait 850ms                     # about 90 % of BlowTime
+expect BlowAir TRUE
+expect FeedUp TRUE
+until BlowAir = FALSE within 250ms
+expect FeedUp TRUE             # still retracting
+wait 500ms
+expect BlowAir FALSE
+set DrillUpLS TRUE             # back at the top
+scan
+expect FeedUp FALSE
+expect Spindle FALSE
+expect ClampValve FALSE
+expect BlowAir FALSE
+expect ReadyLamp FALSE
+wait 300ms
+set ClampedLS FALSE            # clamp open
+wait 1s
+expect ReadyLamp FALSE         # the drilled part is still in the fixture
+expect ClampValve FALSE
+set PartPE FALSE               # operator takes it out
+until ReadyLamp = TRUE within 50ms
+expect HoleCount 1
+expect FaultLamp FALSE
+
+scenario the blow-off also stops when the drill reaches the top early
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+set ClampedLS TRUE
+until FeedDown = TRUE within 700ms
+set DrillUpLS FALSE
+wait 500ms
+set DrillDownLS TRUE
+until FeedUp = TRUE within 1300ms
+expect BlowAir TRUE
+set DrillDownLS FALSE
+wait 300ms                     # a fast retract
+expect BlowAir TRUE
+set DrillUpLS TRUE
+scan
+expect BlowAir FALSE           # stops with its step, well before BlowTime
+expect FeedUp FALSE
+wait 1s
+expect BlowAir FALSE
+
+scenario the hole counter counts once per hole
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+set ClampedLS TRUE
+until FeedDown = TRUE within 700ms
+set DrillUpLS FALSE
+set DrillDownLS TRUE
+until FeedUp = TRUE within 1300ms
+set DrillDownLS FALSE
+set DrillUpLS TRUE
+scan
+set ClampedLS FALSE
+scan
+set PartPE FALSE
+until ReadyLamp = TRUE within 50ms
+expect HoleCount 1
+wait 500ms
+set PartPE TRUE                # second part
+wait 200ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect ClampValve TRUE
+set ClampedLS TRUE
+until FeedDown = TRUE within 700ms
+set DrillUpLS FALSE
+set DrillDownLS TRUE
+until FeedUp = TRUE within 1300ms
+set DrillDownLS FALSE
+set DrillUpLS TRUE
+scan
+set ClampedLS FALSE
+scan
+set PartPE FALSE
+until ReadyLamp = TRUE within 50ms
+wait 1s
+expect HoleCount 2
+
+scenario the drilled part must be taken out before the next cycle
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+set ClampedLS TRUE
+until FeedDown = TRUE within 700ms
+set DrillUpLS FALSE
+set DrillDownLS TRUE
+until FeedUp = TRUE within 1300ms
+set DrillDownLS FALSE
+set DrillUpLS TRUE
+scan
+set ClampedLS FALSE
+wait 200ms
+set StartPB TRUE               # Start with the drilled part still in place
+wait 200ms
+set StartPB FALSE
+wait 200ms
+expect ClampValve FALSE
+expect ReadyLamp FALSE
+set PartPE FALSE
+until ReadyLamp = TRUE within 50ms
+set PartPE TRUE                # a new part
+wait 200ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect ClampValve TRUE
+expect ReadyLamp FALSE
+
+scenario feed timeout: stop the spindle, hold the part, retract only after reset
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+set ClampedLS TRUE
+scan
+expect Spindle TRUE
+until FeedDown = TRUE within 700ms
+set DrillUpLS FALSE            # the head moves, then jams before full depth
+set ResetPB TRUE               # Reset while drilling changes nothing
+wait 100ms
+set ResetPB FALSE
+expect FeedDown TRUE
+expect Spindle TRUE
+wait 3800ms                    # about 4.5 s since the drill step started
+expect FaultLamp FALSE
+expect FeedDown TRUE
+until FaultLamp = TRUE within 1s
+expect Spindle FALSE
+expect FeedDown FALSE          # hold position
+expect FeedUp FALSE
+expect ClampValve TRUE         # keep the part clamped
+expect BlowAir FALSE
+expect ReadyLamp FALSE
+wait 3s                        # stays stopped until the operator resets
+expect FaultLamp TRUE
+expect Spindle FALSE
+expect FeedUp FALSE
+expect FeedDown FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+expect FaultLamp FALSE
+expect FeedUp TRUE             # retract
+expect Spindle FALSE           # without restarting the spindle
+expect ClampValve TRUE
+expect BlowAir TRUE
+wait 1500ms
+expect FeedUp TRUE
+set DrillUpLS TRUE
+scan
+expect FeedUp FALSE
+expect ClampValve FALSE        # unclamp
+set ClampedLS FALSE
+scan
+set PartPE FALSE
+until ReadyLamp = TRUE within 50ms
+expect HoleCount 0             # the faulty hole is not counted
+expect FaultLamp FALSE
+
+scenario the dwell and run-up times are adjustable
+set DwellTime T#3s
+set SpinUpTime T#2s
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+set ClampedLS TRUE
+scan
+wait 1800ms
+expect FeedDown FALSE
+expect Spindle TRUE
+until FeedDown = TRUE within 400ms
+set DrillUpLS FALSE
+set DrillDownLS TRUE
+scan
+wait 2700ms
+expect FeedUp FALSE
+expect Spindle TRUE
+until FeedUp = TRUE within 600ms

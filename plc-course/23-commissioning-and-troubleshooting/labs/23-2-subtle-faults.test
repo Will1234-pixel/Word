@@ -1,0 +1,233 @@
+# Lab 23-2 acceptance tests: drum filling station with three subtle faults.
+# Uses only the names in the interface table. Raw weights used below
+# (0..27648 = 0..300 kg, so 1 kg = 92.16 counts):
+#   2304 = 25.0 kg (empty drum)     11520 = 125.0 kg     13824 = 150.0 kg
+#   20552 = 223.0 kg (net 198)      20828 = 226.0 kg (net 201, full)
+#   9216 = 100.0 kg (not an empty drum)
+# plctest cannot power-cycle a PLC with retentive memory (every scenario is a
+# cold start), so the "power cut" scenarios write the retained values BEFORE
+# the first scan. That is exactly what a PLC which kept its memory would see.
+
+# ------------------------------------------------------------ basic operation
+
+scenario power-up: idle, valve closed, lamp off
+set StopPB_NC TRUE
+scan
+expect FillStep Idle
+expect FillValve FALSE
+expect DoneLamp FALSE
+expect DrumCount 0
+expect TotalKg 0
+
+scenario weight scaling from raw counts
+set StopPB_NC TRUE
+set WeightRaw 0
+scan
+expect Weight_kg ~ 0.0 0.05
+set WeightRaw 13824
+scan
+expect Weight_kg ~ 150.0 0.05
+set WeightRaw 27648
+scan
+expect Weight_kg ~ 300.0 0.05
+
+scenario push-button start fills to 200 kg net, counts the drum, waits for removal
+set StopPB_NC TRUE
+set DrumPresentPX TRUE
+set WeightRaw 2304             # empty drum, 25 kg
+wait 1s
+expect FillValve FALSE         # nothing happens without Start
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect FillValve TRUE
+expect FillStep Filling
+set WeightRaw 11520            # 125 kg gross = 100 kg net
+wait 1s
+expect FillValve TRUE
+set WeightRaw 20552            # 198 kg net: not yet
+scan
+expect FillValve TRUE
+expect DrumCount 0
+set WeightRaw 20828            # 201 kg net: full
+scan
+expect FillValve FALSE
+expect DoneLamp TRUE
+expect FillStep Done
+expect DrumCount 1
+expect TotalKg 200
+set StartPB TRUE               # Start on a full drum in Done: ignored
+scan
+set StartPB FALSE
+wait 1s
+expect FillValve FALSE
+expect DoneLamp TRUE
+set DrumPresentPX FALSE        # operator removes the full drum
+set WeightRaw 0
+scan
+expect DoneLamp FALSE
+expect FillStep Idle
+expect DrumCount 1
+
+scenario start is refused without a drum, on a heavy drum, or with Stop pressed
+set StopPB_NC TRUE
+set DrumPresentPX FALSE
+set WeightRaw 0
+set StartPB TRUE               # no drum
+scan
+set StartPB FALSE
+wait 500ms
+expect FillValve FALSE
+set DrumPresentPX TRUE
+set WeightRaw 9216             # 100 kg: not an empty drum
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+expect FillValve FALSE
+set WeightRaw 2304             # empty drum, but Stop is held
+set StopPB_NC FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+expect FillValve FALSE
+set StopPB_NC TRUE             # healthy stop circuit: now it starts
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect FillValve TRUE
+
+scenario stop aborts the fill and the drum is not counted
+set StopPB_NC TRUE
+set DrumPresentPX TRUE
+set WeightRaw 2304
+set StartPB TRUE
+scan
+set StartPB FALSE
+set WeightRaw 11520
+wait 1s
+expect FillValve TRUE
+set StopPB_NC FALSE            # operator presses Stop
+scan
+expect FillValve FALSE
+expect FillStep Idle
+set StopPB_NC TRUE             # release: the valve stays closed
+wait 1s
+expect FillValve FALSE
+expect DrumCount 0
+
+scenario a drum pulled off the scale during the fill aborts it
+set StopPB_NC TRUE
+set DrumPresentPX TRUE
+set WeightRaw 2304
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect FillValve TRUE
+set DrumPresentPX FALSE
+scan
+expect FillValve FALSE
+wait 1s
+expect FillValve FALSE
+expect DrumCount 0
+
+# ------------------------------------------------------------- HMI commands
+
+scenario HMI start command starts the fill and the PLC clears it
+set StopPB_NC TRUE
+set DrumPresentPX TRUE
+set WeightRaw 2304
+scan
+set HmiStartCmd TRUE           # the HMI writes the command between scans
+scan
+expect FillValve TRUE
+expect FillStep Filling
+expect HmiStartCmd FALSE       # handshake: the PLC has cleared it
+
+scenario an HMI start that cannot be accepted is cleared, not remembered
+set StopPB_NC TRUE
+set DrumPresentPX FALSE        # no drum yet
+scan
+set HmiStartCmd TRUE
+scan
+expect HmiStartCmd FALSE       # cleared even though it was refused
+expect FillValve FALSE
+set DrumPresentPX TRUE         # a drum arrives later
+set WeightRaw 2304
+wait 2s
+expect FillValve FALSE         # the old command must not start the fill
+
+scenario HMI reset of the shift count
+set StopPB_NC TRUE
+set DrumCount 12               # count so far this shift
+scan
+expect TotalKg 2400
+set HmiResetCountCmd TRUE
+scan
+expect DrumCount 0
+expect TotalKg 0
+expect HmiResetCountCmd FALSE
+
+# ------------------------------------------------------------- shift totals
+
+scenario shift total stays correct beyond 32 767 kg
+set StopPB_NC TRUE
+set DrumCount 163              # a busy shift: 163 drums = 32 600 kg
+scan
+expect TotalKg 32600
+set DrumPresentPX TRUE         # fill drum number 164
+set WeightRaw 2304
+set StartPB TRUE
+scan
+set StartPB FALSE
+set WeightRaw 20828
+scan
+expect DrumCount 164
+expect TotalKg 32800
+set DrumCount 250              # and much later in the shift
+scan
+expect TotalKg 50000
+
+# ------------------------------------------------- restart after a power cut
+
+scenario power returns during a fill: station starts in Idle, valve stays shut
+set FillStep Filling               # retained memory says "Filling"...
+set DrumCount 57               # ...and 57 drums done this shift
+set StopPB_NC TRUE
+set DrumPresentPX TRUE         # the part-filled drum is still on the scale
+set WeightRaw 11520            # 125 kg
+scan                           # first scan after power returns
+expect FillValve FALSE         # not even for one scan
+expect FillStep Idle
+expect DrumCount 57            # the retained shift count is kept
+expect TotalKg 11400
+wait 2s
+expect FillValve FALSE
+set StartPB TRUE               # part-filled (heavy) drum: Start is refused
+scan
+set StartPB FALSE
+wait 500ms
+expect FillValve FALSE
+
+scenario power returns while a full drum waits: no double count, valve shut
+set FillStep Done
+set DrumCount 30
+set StopPB_NC TRUE
+set DrumPresentPX TRUE
+set WeightRaw 20828
+scan
+expect FillValve FALSE
+expect FillStep Idle
+expect DrumCount 30
+set DrumPresentPX FALSE        # drum removed
+set WeightRaw 0
+wait 1s
+expect DrumCount 30
+set DrumPresentPX TRUE         # next empty drum: normal operation resumes
+set WeightRaw 2304
+set StartPB TRUE
+scan
+set StartPB FALSE
+expect FillValve TRUE

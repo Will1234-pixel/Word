@@ -1,0 +1,762 @@
+# Lab 18-2 acceptance tests: Off/Manual/Auto mode manager with Local/Remote
+# control source for wet-well pump P-201.
+#
+# The HMI is simulated by writing ModeReq and MotorCmd with "set". The level
+# controller is simulated by setting AutoDemand and AutoAvailable. The tests
+# check that:
+#   - the pump never starts by itself at power-up (mode Off, or Manual in
+#     Local), and requests already waiting at power-up are discarded,
+#   - HMI requests are handled once, cleared, and refused with the right code,
+#   - Local gives control to the field station and refuses HMI requests,
+#     except Stop, which is obeyed from anywhere,
+#   - every mode and source change is bumpless as specified,
+#   - Auto drops to Manual on loss of AutoAvailable (pump keeps its state)
+#     or on a local Stop (pump stops),
+#   - the run permissive wins in every mode,
+#   - the PLC-to-HMI registers are rewritten every scan.
+# Every scenario starts with a healthy local Stop (NC, TRUE), the run
+# permissive OK, Auto available and the selector in Remote, unless it says
+# otherwise. Modes: 1 Off, 2 Manual, 3 Auto. Commands: 1 Start, 2 Stop.
+
+scenario power-up: mode Off and pump stopped, even with auto demand present
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+expect ActiveMode 1
+expect MotorRun FALSE
+expect RejectCode 0
+wait 1s
+expect ActiveMode 1
+expect MotorRun FALSE
+
+scenario requests already waiting at power-up are discarded, not executed
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+set ModeReq 3                    # stale Auto request, written before the power cut
+set MotorCmd 1                   # stale Start
+scan
+expect ModeReq 0                 # cleared...
+expect MotorCmd 0
+expect ActiveMode 1              # ...but not executed
+expect MotorRun FALSE
+expect RejectCode 0
+wait 500ms
+expect ActiveMode 1
+expect MotorRun FALSE
+set ModeReq 3                    # from now on requests work normally
+scan
+expect ActiveMode 3
+expect MotorRun TRUE
+
+scenario power-up with the selector already at Local: Manual, pump off
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+set LocalSel TRUE
+scan
+expect ActiveMode 2
+expect MotorRun FALSE
+wait 500ms
+expect MotorRun FALSE
+
+scenario remote manual: select Manual, then start and stop from the HMI
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+expect ModeReq 0                 # the PLC has taken the request
+expect ActiveMode 2
+expect RejectCode 0
+expect MotorRun FALSE            # choosing Manual starts nothing
+set MotorCmd 1
+scan
+expect MotorCmd 0
+expect MotorRun TRUE
+expect RejectCode 0
+wait 1s
+expect MotorRun TRUE
+set MotorCmd 2
+scan
+expect MotorCmd 0
+expect MotorRun FALSE
+expect ActiveMode 2
+wait 500ms
+expect MotorRun FALSE
+
+scenario start is refused outside Manual (code 4)
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set MotorCmd 1                   # in Off
+scan
+expect MotorCmd 0
+expect RejectCode 4
+expect MotorRun FALSE
+set ModeReq 3                    # Auto, no demand yet
+scan
+expect ActiveMode 3
+expect RejectCode 0
+set MotorCmd 1                   # in Auto
+scan
+expect RejectCode 4
+expect MotorRun FALSE
+expect ActiveMode 3
+set RunPermit FALSE              # code 4 is checked before code 5
+set ModeReq 1
+scan
+set MotorCmd 1
+scan
+expect RejectCode 4
+
+scenario start is refused without the run permissive or with the local Stop held (code 5)
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set RunPermit FALSE              # low-low level
+set MotorCmd 1
+scan
+expect MotorCmd 0
+expect RejectCode 5
+expect MotorRun FALSE
+set RunPermit TRUE               # the refused Start is not remembered
+wait 500ms
+expect MotorRun FALSE
+set LocalStopPB_NC FALSE         # someone holds the local Stop
+set MotorCmd 1
+scan
+expect RejectCode 5
+expect MotorRun FALSE
+set LocalStopPB_NC TRUE
+wait 500ms
+expect MotorRun FALSE
+set MotorCmd 1
+scan
+expect RejectCode 0
+expect MotorRun TRUE
+
+scenario undefined request values are refused (code 2) and change nothing
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set ModeReq 7
+scan
+expect ModeReq 0
+expect RejectCode 2
+expect ActiveMode 2
+set ModeReq -1
+scan
+expect RejectCode 2
+expect ActiveMode 2
+set MotorCmd 9
+scan
+expect MotorCmd 0
+expect RejectCode 2
+expect MotorRun FALSE
+set MotorCmd -3
+scan
+expect RejectCode 2
+expect MotorRun FALSE
+
+scenario Auto is refused when the auto controller is not available (code 3)
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable FALSE          # LT-201 has failed
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect ModeReq 0
+expect RejectCode 3
+expect ActiveMode 1              # unchanged
+expect MotorRun FALSE
+set ModeReq 2
+scan
+set ModeReq 3
+scan
+expect RejectCode 3
+expect ActiveMode 2
+expect MotorRun FALSE
+
+scenario Auto is refused while the local Stop is held (code 3)
+set LocalStopPB_NC FALSE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect RejectCode 3
+expect ActiveMode 1
+set LocalStopPB_NC TRUE
+wait 500ms
+expect MotorRun FALSE
+expect ActiveMode 1
+
+scenario in Auto the pump follows the demand and the run permissive
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 3
+scan
+expect ActiveMode 3
+expect MotorRun FALSE            # no demand yet
+set AutoDemand TRUE
+scan
+expect MotorRun TRUE
+set AutoDemand FALSE
+scan
+expect MotorRun FALSE
+set AutoDemand TRUE
+scan
+expect MotorRun TRUE
+set RunPermit FALSE              # low-low level
+scan
+expect MotorRun FALSE
+expect ActiveMode 3              # still in Auto
+wait 1s
+expect MotorRun FALSE
+set RunPermit TRUE               # level recovers: Auto runs the pump again
+scan
+expect MotorRun TRUE
+
+scenario Auto can be selected while the run permissive is missing
+set LocalStopPB_NC TRUE
+set RunPermit FALSE              # low-low level: refuses a Start, but not Auto
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect RejectCode 0
+expect ActiveMode 3
+expect MotorRun FALSE
+wait 500ms
+expect MotorRun FALSE
+set RunPermit TRUE               # level recovers: Auto runs the pump
+scan
+expect MotorRun TRUE
+expect ActiveMode 3
+
+scenario bumpless Manual to Auto: a running pump keeps running when Auto wants it
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set MotorCmd 1
+scan
+expect MotorRun TRUE
+set AutoDemand TRUE
+set ModeReq 3
+scan
+expect ActiveMode 3
+expect MotorRun TRUE             # not even one scan off
+wait 500ms
+expect MotorRun TRUE
+set AutoDemand FALSE             # Auto is really in charge now
+scan
+expect MotorRun FALSE
+
+scenario Manual to Auto without demand: the running pump stops
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set MotorCmd 1
+scan
+expect MotorRun TRUE
+set ModeReq 3                    # AutoDemand is FALSE
+scan
+expect ActiveMode 3
+expect MotorRun FALSE
+
+scenario Off to Auto with demand starts the pump
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+wait 500ms
+expect MotorRun FALSE            # Off: the demand is ignored
+set ModeReq 3
+scan
+expect ActiveMode 3
+expect MotorRun TRUE
+
+scenario bumpless Auto to Manual: the pump keeps its state and the demand no longer matters
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun TRUE
+set ModeReq 2
+scan
+expect ActiveMode 2
+expect MotorRun TRUE             # running stays running
+set AutoDemand FALSE
+wait 500ms
+expect MotorRun TRUE             # the operator is in charge now
+set MotorCmd 2
+scan
+expect MotorRun FALSE
+set AutoDemand TRUE
+wait 500ms
+expect MotorRun FALSE
+
+scenario bumpless Auto to Manual: a stopped pump stays stopped
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun FALSE
+set ModeReq 2
+scan
+expect ActiveMode 2
+expect MotorRun FALSE
+set AutoDemand TRUE
+wait 500ms
+expect MotorRun FALSE
+
+scenario Off stops the pump from Manual and from Auto
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set MotorCmd 1
+scan
+expect MotorRun TRUE
+set ModeReq 1
+scan
+expect ActiveMode 1
+expect MotorRun FALSE
+set AutoDemand TRUE
+set ModeReq 3
+scan
+expect MotorRun TRUE
+set ModeReq 1
+scan
+expect ActiveMode 1
+expect MotorRun FALSE
+wait 1s
+expect MotorRun FALSE
+
+scenario requesting the active mode is accepted and changes nothing
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set MotorCmd 1
+scan
+set ModeReq 2
+scan
+expect RejectCode 0
+expect ActiveMode 2
+expect MotorRun TRUE
+set AutoDemand TRUE
+set ModeReq 3
+scan
+set ModeReq 3
+scan
+expect RejectCode 0
+expect ActiveMode 3
+expect MotorRun TRUE
+
+scenario an HMI Stop in Auto stops the pump and hands it to Manual
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun TRUE
+set MotorCmd 2
+scan
+expect MotorCmd 0
+expect MotorRun FALSE
+expect ActiveMode 2
+expect RejectCode 0
+wait 1s
+expect MotorRun FALSE            # the demand cannot restart it
+
+scenario an HMI Stop in Auto hands over to Manual even while the pump is stopped
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 3
+scan
+expect ActiveMode 3
+expect MotorRun FALSE            # no demand at the moment
+set MotorCmd 2
+scan
+expect ActiveMode 2
+expect RejectCode 0
+set AutoDemand TRUE              # a later demand cannot start it
+wait 500ms
+expect MotorRun FALSE
+expect ActiveMode 2
+
+scenario an HMI Stop in Off is accepted and does nothing
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set MotorCmd 2
+scan
+expect RejectCode 0
+expect ActiveMode 1
+expect MotorRun FALSE
+
+scenario Local: field control in Manual; HMI requests refused except Stop (code 1)
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set LocalSel TRUE                # key switch at the pump to Local
+scan
+expect ActiveMode 2
+expect MotorRun FALSE
+set ModeReq 3
+scan
+expect ModeReq 0
+expect RejectCode 1
+expect ActiveMode 2
+set MotorCmd 1
+scan
+expect MotorCmd 0
+expect RejectCode 1
+expect MotorRun FALSE
+set ModeReq 9                    # in Local, code 1 comes before code 2
+scan
+expect RejectCode 1
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun TRUE
+wait 1s
+expect MotorRun TRUE
+set LocalStopPB_NC FALSE         # local Stop
+scan
+expect MotorRun FALSE
+set LocalStopPB_NC TRUE
+wait 500ms
+expect MotorRun FALSE
+expect ActiveMode 2
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun TRUE
+set MotorCmd 2                   # a Stop from the control room is still obeyed
+scan
+expect MotorCmd 0
+expect MotorRun FALSE
+expect RejectCode 0
+
+scenario Local: every other HMI request is refused with code 1, even Off and Manual
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set LocalSel TRUE
+scan
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun TRUE
+set ModeReq 1                    # Off from the control room: refused in Local
+scan
+expect ModeReq 0
+expect RejectCode 1
+expect ActiveMode 2
+expect MotorRun TRUE
+set MotorCmd 2                   # (an accepted Stop clears the reject code)
+scan
+expect RejectCode 0
+expect MotorRun FALSE
+set ModeReq 2                    # even the mode that is already active
+scan
+expect RejectCode 1
+expect ActiveMode 2
+set MotorCmd 2
+scan
+expect RejectCode 0
+set MotorCmd 9                   # an undefined command in Local: code 1, not 2
+scan
+expect MotorCmd 0
+expect RejectCode 1
+expect MotorRun FALSE
+
+scenario Local: the run permissive still applies to the local Start
+set LocalStopPB_NC TRUE
+set RunPermit FALSE
+set AutoAvailable TRUE
+set LocalSel TRUE
+scan
+set LocalStartPB TRUE
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun FALSE
+set LocalStartPB TRUE
+set RunPermit TRUE
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun TRUE
+set RunPermit FALSE
+scan
+expect MotorRun FALSE
+set RunPermit TRUE
+wait 500ms
+expect MotorRun FALSE            # Manual: no restart when the permissive returns
+
+scenario Remote: the local Start button is ignored
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set LocalStartPB TRUE            # in Off
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun FALSE
+set ModeReq 2
+scan
+set LocalStartPB TRUE            # in Manual
+scan
+set LocalStartPB FALSE
+scan
+expect MotorRun FALSE
+wait 500ms
+expect MotorRun FALSE
+
+scenario bumpless Remote to Local and back while the pump runs
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun TRUE
+set LocalSel TRUE                # take local control of a running pump
+scan
+expect ActiveMode 2
+expect MotorRun TRUE
+set AutoDemand FALSE
+wait 500ms
+expect MotorRun TRUE             # Auto no longer in charge
+set LocalSel FALSE               # hand back to the control room
+scan
+expect ActiveMode 2              # stays Manual: Auto must be chosen again
+expect MotorRun TRUE
+wait 500ms
+expect MotorRun TRUE
+set MotorCmd 2
+scan
+expect MotorRun FALSE
+
+scenario bumpless Remote to Local and back while the pump is stopped
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun FALSE
+set LocalSel TRUE
+scan
+expect ActiveMode 2
+set AutoDemand TRUE
+wait 500ms
+expect MotorRun FALSE
+set LocalSel FALSE
+scan
+expect ActiveMode 2
+wait 500ms
+expect MotorRun FALSE
+
+scenario local Stop in Remote Auto stops the pump and hands it to Manual
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun TRUE
+set LocalStopPB_NC FALSE
+scan
+expect MotorRun FALSE
+expect ActiveMode 2
+set LocalStopPB_NC TRUE          # releasing the button must not restart the pump
+wait 1s
+expect MotorRun FALSE
+expect ActiveMode 2
+
+scenario local Stop in Remote Auto hands over to Manual even while the pump is stopped
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 3
+scan
+expect ActiveMode 3
+expect MotorRun FALSE            # no demand at the moment
+set LocalStopPB_NC FALSE
+scan
+expect ActiveMode 2
+set LocalStopPB_NC TRUE
+set AutoDemand TRUE              # a later demand cannot start it
+wait 500ms
+expect MotorRun FALSE
+expect ActiveMode 2
+
+scenario local Stop in Remote Manual stops the pump
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set MotorCmd 1
+scan
+expect MotorRun TRUE
+set LocalStopPB_NC FALSE
+scan
+expect MotorRun FALSE
+set LocalStopPB_NC TRUE
+wait 500ms
+expect MotorRun FALSE
+expect ActiveMode 2
+
+scenario mode shedding: loss of AutoAvailable drops Auto to Manual, pump keeps its state
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun TRUE
+set AutoAvailable FALSE          # LT-201 fails while the pump runs
+scan
+expect ActiveMode 2
+expect MotorRun TRUE
+set AutoAvailable TRUE           # recovery does not put it back in Auto
+wait 500ms
+expect ActiveMode 2
+expect MotorRun TRUE
+
+scenario mode shedding with the pump stopped: it stays stopped
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 3
+scan
+expect MotorRun FALSE
+set AutoAvailable FALSE
+scan
+expect ActiveMode 2
+set AutoDemand TRUE
+wait 500ms
+expect MotorRun FALSE
+
+scenario Manual: loss of the run permissive stops the pump, no restart when it returns
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2
+scan
+set MotorCmd 1
+scan
+expect MotorRun TRUE
+set RunPermit FALSE
+scan
+expect MotorRun FALSE
+set RunPermit TRUE
+wait 1s
+expect MotorRun FALSE
+expect ActiveMode 2
+
+scenario the reject code stays until the next request; an accepted request clears it
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable FALSE
+scan
+set ModeReq 3
+scan
+expect RejectCode 3
+wait 500ms
+expect RejectCode 3
+set ModeReq 2
+scan
+expect RejectCode 0
+
+scenario mode request and command in the same scan: mode first
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+scan
+set ModeReq 2                    # Manual...
+set MotorCmd 1                   # ...and Start, written together from Off
+scan
+expect ActiveMode 2
+expect MotorRun TRUE
+expect RejectCode 0
+set MotorCmd 2
+scan
+set AutoAvailable FALSE
+set ModeReq 3                    # refused (code 3)...
+set MotorCmd 1                   # ...but the Start in Manual is accepted
+scan
+expect ActiveMode 2
+expect MotorRun TRUE
+expect RejectCode 3              # the first refusal is reported
+
+scenario outside writes into the PLC-to-HMI registers do not stick
+set LocalStopPB_NC TRUE
+set RunPermit TRUE
+set AutoAvailable TRUE
+set AutoDemand TRUE
+scan
+set ActiveMode 3                 # writing the status register is not a mode request
+set RejectCode 5
+scan
+expect ActiveMode 1
+expect RejectCode 0
+wait 500ms
+expect MotorRun FALSE

@@ -1,0 +1,190 @@
+# Lab 07-4 acceptance tests: accumulating run-hours meter.
+# Checks that time is counted only while running, kept across stops
+# (including part-seconds), accurate to better than 0.1 % over an hour,
+# split correctly into Hours and Minutes, reset properly, and that the
+# service reminder works. A run of N seconds may legitimately read N-1
+# (the PLC only sees the input change at a scan), so most checks allow 1 s.
+# Interface: Running, ResetPB, ServiceDue, TotalSeconds, Hours, Minutes,
+# ServiceHours (default 1000).
+
+scenario everything reads zero at power-up and nothing counts while stopped
+scan
+expect TotalSeconds 0
+expect Hours 0
+expect Minutes 0
+expect ServiceDue FALSE
+wait 10s
+expect TotalSeconds 0
+expect Hours 0
+expect Minutes 0
+
+scenario counts seconds while running
+set Running TRUE
+wait 10s
+expect TotalSeconds >= 9
+expect TotalSeconds <= 10
+wait 5s
+expect TotalSeconds >= 14
+expect TotalSeconds <= 15
+expect Hours 0
+expect Minutes 0
+
+scenario Minutes counts whole minutes only (no rounding up)
+set Running TRUE
+wait 1m50s
+expect TotalSeconds >= 109
+expect TotalSeconds <= 110
+expect Hours 0
+expect Minutes 1               # 1 min 50 s is still in minute 1
+wait 15s                       # 2 min 5 s
+expect Minutes 2
+
+scenario holds its value while stopped
+set Running TRUE
+wait 5500ms
+set Running FALSE
+scan
+expect TotalSeconds >= 5
+expect TotalSeconds <= 6
+wait 30s
+expect TotalSeconds >= 5
+expect TotalSeconds <= 6
+
+scenario continues from where it stopped
+set Running TRUE
+wait 20s
+set Running FALSE
+wait 10s
+set Running TRUE
+wait 20s
+expect TotalSeconds >= 38
+expect TotalSeconds <= 40
+
+scenario part-seconds are kept across stops (ten runs of 0.7 s make about 7 s)
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+set Running TRUE
+wait 700ms
+set Running FALSE
+wait 500ms
+expect TotalSeconds >= 6
+expect TotalSeconds <= 8
+
+scenario hours and minutes, and better than 0.1 % accuracy over an hour
+set Running TRUE
+wait 59m30s
+expect Hours 0
+expect Minutes 59
+expect TotalSeconds >= 3566
+expect TotalSeconds <= 3570
+wait 1m                        # 1 h 0 min 30 s of running
+expect Hours 1
+expect Minutes 0
+wait 1m                        # 1 h 1 min 30 s = 3690 s
+expect Hours 1
+expect Minutes 1
+expect TotalSeconds >= 3686    # 0.1 % of 3690 s is 3.7 s
+expect TotalSeconds <= 3691
+set Running FALSE
+wait 5m
+expect Hours 1
+expect Minutes 1
+expect TotalSeconds >= 3686
+expect TotalSeconds <= 3691
+
+scenario reset while running clears the meter, then counting resumes from zero
+set Running TRUE
+wait 20s
+expect TotalSeconds >= 19
+set ResetPB TRUE
+scan
+expect TotalSeconds 0
+wait 2s                        # held at zero while the button is pressed
+expect TotalSeconds 0
+expect Hours 0
+expect Minutes 0
+set ResetPB FALSE
+wait 3s
+expect TotalSeconds >= 2
+expect TotalSeconds <= 3
+
+scenario reset while stopped clears the meter and it stays at zero
+set Running TRUE
+wait 70s
+set Running FALSE
+scan
+expect Minutes 1
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+scan
+expect TotalSeconds 0
+expect Minutes 0
+wait 10s
+expect TotalSeconds 0
+
+scenario reset also clears any part-second
+set Running TRUE
+wait 800ms
+set Running FALSE
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+set Running TRUE
+wait 500ms                     # 0.8 s + 0.5 s would make 1 s if the 0.8 s survived
+set Running FALSE
+wait 200ms
+expect TotalSeconds 0
+
+scenario service reminder comes on at the service interval and survives a stop
+set ServiceHours 1
+set Running TRUE
+wait 59m
+expect ServiceDue FALSE
+wait 2m
+expect ServiceDue TRUE
+set Running FALSE
+wait 1m
+expect ServiceDue TRUE
+set ResetPB TRUE               # service done: reset the meter
+scan
+set ResetPB FALSE
+scan
+expect ServiceDue FALSE
+expect Hours 0

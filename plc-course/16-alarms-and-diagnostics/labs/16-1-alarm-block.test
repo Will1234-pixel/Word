@@ -1,0 +1,316 @@
+# Lab 16-1 acceptance tests: FB_Alarm.
+# Three instances, set up by the program, sharing AckPB and ResetPB:
+#   TempAlm   condition TempHigh   on-delay 3 s   non-latching
+#   VibAlm    condition VibHigh    on-delay 1 s   latching
+#   DoorAlm   condition DoorOpen   on-delay 0 s   non-latching
+# Horn = any alarm unacknowledged. The tests write the conditions directly.
+# Timing checks sit at 90 % and 110 % of each delay. A button "press" is
+# TRUE for one scan and then FALSE again.
+
+scenario everything is normal at power-up and stays normal
+scan
+expect TempAlm.Active FALSE
+expect TempAlm.Unacked FALSE
+expect TempAlm.State Normal
+expect VibAlm.State Normal
+expect DoorAlm.State Normal
+expect Horn FALSE
+wait 5s
+expect TempAlm.State Normal
+expect VibAlm.State Normal
+expect DoorAlm.State Normal
+expect TempAlm.Count 0
+expect Horn FALSE
+
+scenario the condition must last the whole on-delay before the alarm activates
+set TempHigh TRUE
+wait 2700ms
+expect TempAlm.Active FALSE
+expect TempAlm.Unacked FALSE
+expect TempAlm.State Normal
+expect Horn FALSE
+wait 600ms
+expect TempAlm.Active TRUE
+expect TempAlm.Unacked TRUE
+expect TempAlm.State ActiveUnack
+expect TempAlm.Count 1
+expect Horn TRUE
+expect VibAlm.State Normal         # the other instances are not affected
+expect DoorAlm.State Normal
+
+scenario a gap in the condition restarts the on-delay, and a fleeting condition is never counted
+set TempHigh TRUE
+wait 2s
+set TempHigh FALSE                 # drops out briefly
+wait 100ms
+set TempHigh TRUE
+wait 2s                            # 4 s in total, but only 2 s in one go
+expect TempAlm.Active FALSE
+wait 700ms                         # 2.7 s since it came back
+expect TempAlm.Active FALSE
+expect TempAlm.Count 0
+wait 600ms                         # 3.3 s
+expect TempAlm.Active TRUE
+expect TempAlm.Count 1
+
+scenario with a zero on-delay the alarm activates within a scan or two
+set DoorOpen TRUE
+wait 50ms
+expect DoorAlm.Active TRUE
+expect DoorAlm.Unacked TRUE
+expect DoorAlm.State ActiveUnack
+expect Horn TRUE
+
+scenario the latching alarm has its own one-second delay
+set VibHigh TRUE
+wait 900ms
+expect VibAlm.Active FALSE
+expect VibAlm.State Normal
+wait 300ms
+expect VibAlm.Active TRUE
+expect VibAlm.State ActiveUnack
+expect Horn TRUE
+
+scenario acknowledge silences the horn, and the alarm stays active while the condition lasts
+set DoorOpen TRUE
+wait 50ms
+set AckPB TRUE                     # press ...
+scan
+set AckPB FALSE                    # ... and release
+wait 50ms
+expect DoorAlm.Active TRUE
+expect DoorAlm.Unacked FALSE
+expect DoorAlm.State ActiveAcked
+expect Horn FALSE
+wait 2s
+expect DoorAlm.State ActiveAcked
+set DoorOpen FALSE                 # the condition clears: straight back to normal
+wait 50ms
+expect DoorAlm.Active FALSE
+expect DoorAlm.Unacked FALSE
+expect DoorAlm.State Normal
+expect DoorAlm.Count 1
+
+scenario an alarm that clears before anyone acknowledges it stays unacknowledged
+set TempHigh TRUE
+wait 3300ms
+expect TempAlm.State ActiveUnack
+set TempHigh FALSE
+wait 50ms
+expect TempAlm.Active FALSE
+expect TempAlm.Unacked TRUE
+expect TempAlm.State RtnUnack
+expect Horn TRUE
+wait 5s
+expect TempAlm.State RtnUnack      # it never clears by itself
+expect Horn TRUE
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 50ms
+expect TempAlm.State Normal
+expect TempAlm.Unacked FALSE
+expect Horn FALSE
+
+scenario acknowledge acts on the press only: an early or held press acknowledges nothing new
+set AckPB TRUE                     # pressed while no alarm is present
+wait 200ms
+set AckPB FALSE
+wait 200ms
+set DoorOpen TRUE
+wait 50ms
+expect DoorAlm.Unacked TRUE        # the earlier press did not pre-acknowledge it
+set AckPB TRUE                     # pressed, and now held down (jammed)
+wait 200ms
+expect DoorAlm.Unacked FALSE
+expect DoorAlm.State ActiveAcked
+set TempHigh TRUE                  # a new alarm arrives while Ack is still held
+wait 3300ms
+expect TempAlm.Active TRUE
+expect TempAlm.Unacked TRUE
+expect TempAlm.State ActiveUnack
+expect Horn TRUE
+set AckPB FALSE
+wait 100ms
+expect TempAlm.Unacked TRUE        # releasing the button does not acknowledge either
+set AckPB TRUE                     # a new press does
+wait 50ms
+expect TempAlm.Unacked FALSE
+expect TempAlm.State ActiveAcked
+expect Horn FALSE
+
+scenario a returned, unacknowledged alarm that comes back is a new activation
+set DoorOpen TRUE
+wait 50ms
+set DoorOpen FALSE
+wait 50ms
+expect DoorAlm.State RtnUnack
+set DoorOpen TRUE
+wait 50ms
+expect DoorAlm.Active TRUE
+expect DoorAlm.State ActiveUnack
+expect DoorAlm.Count 2
+
+scenario an acknowledged alarm that clears and comes back must be acknowledged again
+set DoorOpen TRUE
+wait 50ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 50ms
+expect DoorAlm.State ActiveAcked
+set DoorOpen FALSE
+wait 50ms
+expect DoorAlm.State Normal
+wait 1s
+set DoorOpen TRUE
+wait 50ms
+expect DoorAlm.Active TRUE
+expect DoorAlm.Unacked TRUE
+expect DoorAlm.State ActiveUnack
+expect DoorAlm.Count 2
+expect Horn TRUE
+
+scenario the count records activations, not scans
+set DoorOpen TRUE
+wait 1s
+expect DoorAlm.Count 1
+set DoorOpen FALSE
+wait 500ms
+set DoorOpen TRUE
+wait 500ms
+set DoorOpen FALSE
+wait 500ms
+set DoorOpen TRUE
+wait 500ms
+expect DoorAlm.Count 3
+expect TempAlm.Count 0
+expect VibAlm.Count 0
+
+scenario a latching alarm stays active after its condition clears
+set VibHigh TRUE
+wait 1200ms
+expect VibAlm.State ActiveUnack
+set VibHigh FALSE
+wait 2s
+expect VibAlm.Active TRUE
+expect VibAlm.Unacked TRUE
+expect VibAlm.State ActiveUnack
+expect Horn TRUE
+
+scenario a latching alarm resets only after it has been acknowledged
+set VibHigh TRUE
+wait 1200ms
+set VibHigh FALSE
+wait 100ms
+set ResetPB TRUE                   # reset before acknowledge: refused
+scan
+set ResetPB FALSE
+wait 100ms
+expect VibAlm.Active TRUE
+expect VibAlm.Unacked TRUE
+expect VibAlm.State ActiveUnack
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+expect VibAlm.Active TRUE          # acknowledged, but still latched
+expect VibAlm.Unacked FALSE
+expect VibAlm.State LatchedRtn
+expect Horn FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect VibAlm.Active FALSE
+expect VibAlm.Unacked FALSE
+expect VibAlm.State Normal
+expect VibAlm.Count 1
+
+scenario reset is refused while the latching alarm's condition is still present
+set VibHigh TRUE
+wait 1200ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 50ms
+expect VibAlm.State ActiveAcked
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 1s
+expect VibAlm.Active TRUE
+expect VibAlm.State ActiveAcked
+set VibHigh FALSE
+wait 100ms
+expect VibAlm.State LatchedRtn     # the earlier press did not count
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect VibAlm.State Normal
+
+scenario a jammed reset button cannot reset an alarm whose condition clears later
+set VibHigh TRUE
+wait 1200ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 50ms
+set ResetPB TRUE                   # held down from here on
+wait 200ms
+set VibHigh FALSE
+wait 1s
+expect VibAlm.Active TRUE
+expect VibAlm.State LatchedRtn
+set ResetPB FALSE
+wait 100ms
+set ResetPB TRUE                   # a real press
+wait 50ms
+expect VibAlm.Active FALSE
+expect VibAlm.State Normal
+
+scenario a latched alarm whose condition returns is not a new activation
+set VibHigh TRUE
+wait 1200ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 50ms
+set VibHigh FALSE
+wait 100ms
+expect VibAlm.State LatchedRtn
+set VibHigh TRUE
+wait 1200ms
+expect VibAlm.Active TRUE
+expect VibAlm.Unacked FALSE
+expect VibAlm.State ActiveAcked
+expect VibAlm.Count 1
+expect Horn FALSE
+
+scenario reset does nothing to non-latching alarms and never acknowledges
+set DoorOpen TRUE
+set TempHigh TRUE
+wait 3300ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect DoorAlm.State ActiveUnack
+expect TempAlm.State ActiveUnack
+expect Horn TRUE
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 50ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect DoorAlm.Active TRUE
+expect DoorAlm.State ActiveAcked
+expect TempAlm.State ActiveAcked
+set DoorOpen FALSE
+wait 50ms
+expect DoorAlm.State Normal
+expect TempAlm.State ActiveAcked

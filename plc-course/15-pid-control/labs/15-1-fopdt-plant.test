@@ -1,0 +1,150 @@
+# Lab 15-1 acceptance tests: FB_FOPDT first-order-plus-dead-time plant simulator.
+#
+# The tests drive the given test bench (program PlantLab) and read its outputs:
+#   PV      from Plant,     called every scan     with Ts = T#10ms (the task interval)
+#   SlowPV  from SlowPlant, called every 10th scan with Ts = T#100ms
+# Both must show the same response in real time, which proves that the model uses Ts
+# instead of assuming 10 ms.
+#
+# Reference numbers for a step of the input: after t seconds (t measured from the end of
+# the dead time) a first-order lag has covered the fraction 1 - e^(-t/Tau) of the change:
+#   0.5 Tau: 39.35 %   1 Tau: 63.21 %   3 Tau: 95.02 %   5 Tau: 99.33 %
+# Tolerances allow for either the exact (EXP) or the Euler discretisation, and for a
+# one-sample difference in where the delay line is read.
+
+scenario at power-up the model starts at steady state for its input
+set Gain 2.0
+set PV0 20.0
+set CV 30.0
+set DeadTime 3.0
+scan
+expect PV ~ 80.0 0.01              # PV0 + Gain * CV = 20 + 2 * 30
+expect SlowPV ~ 80.0 0.01
+wait 10s
+expect PV ~ 80.0 0.01              # nothing moves: no start-up transient
+expect SlowPV ~ 80.0 0.01
+
+scenario Init holds steady state and fills the dead-time delay line
+set Gain 2.0
+set PV0 20.0
+set Tau 10.0
+set DeadTime 3.0
+scan
+expect PV ~ 20.0 0.01
+set CV 30.0
+set Init TRUE
+wait 200ms
+expect PV ~ 80.0 0.01              # jumps straight to the new steady state
+expect SlowPV ~ 80.0 0.01
+set Init FALSE
+wait 2s
+expect PV ~ 80.0 0.05
+wait 3s                            # past the 3 s dead time: the delay line held 30 % too
+expect PV ~ 80.0 0.05
+expect SlowPV ~ 80.0 0.05
+
+scenario first-order step response without dead time (Tau = 10 s)
+set Gain 2.0
+set PV0 20.0
+set Tau 10.0
+set DeadTime 0.0
+scan
+expect PV ~ 20.0 0.01
+set CV 25.0                        # step: the final value is 20 + 2 * 25 = 70
+scan
+expect PV > 20.0                   # no dead time: PV starts to move at once
+expect PV < 21.0                   # ...but only a little: it is a lag, not a jump
+wait 5s                            # 0.5 Tau
+expect PV ~ 39.67 0.4
+expect SlowPV ~ 39.67 0.6
+wait 5s                            # 1 Tau: 63.2 % of the change
+expect PV ~ 51.61 0.4
+expect SlowPV ~ 51.61 0.6
+wait 20s                           # 3 Tau: 95 %
+expect PV ~ 67.51 0.3
+expect SlowPV ~ 67.51 0.4
+wait 20s                           # 5 Tau: 99.3 %
+expect PV ~ 69.66 0.2
+expect SlowPV ~ 69.66 0.2
+wait 30s                           # 8 Tau: settled, and never past the final value
+expect PV ~ 70.0 0.05
+expect PV <= 70.0
+expect SlowPV ~ 70.0 0.05
+
+scenario dead time: PV does not move until the dead time has passed
+set Gain 2.0
+set PV0 20.0
+set Tau 10.0
+set DeadTime 3.0
+scan
+set CV 25.0
+wait 2900ms
+expect PV ~ 20.0 0.001             # still exactly where it was
+expect SlowPV ~ 20.0 0.001
+wait 400ms                         # 3.3 s: now responding
+expect PV > 20.5
+expect SlowPV > 20.1
+wait 9700ms                        # 13 s = DeadTime + Tau: 63.2 % of the change
+expect PV ~ 51.61 0.4
+expect SlowPV ~ 51.61 0.8
+
+scenario Tau = 0 gives a pure dead time: PV copies the input 1 s later
+set Gain 1.0
+set PV0 0.0
+set Tau 0.0
+set DeadTime 1.0
+scan
+set CV 40.0
+wait 950ms
+expect PV ~ 0.0 0.001
+expect SlowPV ~ 0.0 0.001
+wait 100ms                         # 1.05 s
+expect PV ~ 40.0 0.001
+wait 100ms                         # 1.15 s (the slow instance may be up to one call later)
+expect SlowPV ~ 40.0 0.001
+
+scenario negative process gain (a cooling process): PV falls when CV rises
+set Gain -0.5
+set PV0 80.0
+set Tau 10.0
+scan
+expect PV ~ 80.0 0.01
+set CV 40.0                        # final value 80 - 0.5 * 40 = 60
+wait 10s
+expect PV ~ 67.36 0.4              # 63.2 % of the -20 change
+expect SlowPV ~ 67.36 0.6
+wait 70s
+expect PV ~ 60.0 0.05
+expect SlowPV ~ 60.0 0.05
+
+scenario Load adds to CV and goes through the same dynamics
+set Gain 2.0
+set PV0 20.0
+set Tau 10.0
+set CV 30.0
+set Load -10.0                     # e.g. a heat loss worth 10 % of heater power
+scan
+expect PV ~ 60.0 0.01              # 20 + 2 * (30 - 10)
+set Load 0.0                       # the load disappears: PV rises to 80, with a lag
+wait 10s
+expect PV ~ 72.64 0.4              # 60 + 63.2 % of 20
+wait 70s
+expect PV ~ 80.0 0.05
+expect SlowPV ~ 80.0 0.05
+
+scenario a dead time longer than the delay line is limited to its 2000 samples
+set Gain 1.0
+set PV0 0.0
+set Tau 0.0
+set DeadTime 50.0                  # 5000 samples at 10 ms: more than the 2000 the line holds
+scan
+set CV 10.0
+wait 19500ms
+expect PV ~ 0.0 0.001              # Plant: limited to about 20 s
+wait 1s
+expect PV ~ 10.0 0.001
+expect SlowPV ~ 0.0 0.001          # SlowPlant: 50 s is only 500 samples at 100 ms, so it fits
+wait 29s                           # 49.5 s
+expect SlowPV ~ 0.0 0.001
+wait 1s                            # 50.5 s
+expect SlowPV ~ 10.0 0.001

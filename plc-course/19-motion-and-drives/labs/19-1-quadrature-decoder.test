@@ -1,0 +1,231 @@
+# Lab 19-1 acceptance tests: x4 quadrature decoder built from scanned inputs.
+# Tests: no count or error at power-up (whatever state A/B are in), every edge of A and B
+# counts (x4), forward = A leads B counts up, reverse counts down past zero, direction
+# changes, vibration across one edge does not accumulate counts, illegal transitions
+# (both channels changing between two scans) set a latched error without counting and the
+# decoder carries on from the new state, and Reset zeroes everything while it is held.
+#
+# The encoder is moved slowly: every A/B state is held for 30 ms (three 10 ms scans), so a
+# correct scanned decoder sees every state. Only interface variables are used.
+#
+# Forward sequence (A leads B):  AB = 00 -> 10 -> 11 -> 01 -> 00
+# Reverse sequence (B leads A):  AB = 00 -> 01 -> 11 -> 10 -> 00
+
+scenario power-up: zero count, no direction and no error
+scan
+expect Position 0
+expect Direction 0
+expect EncError FALSE
+wait 500ms
+expect Position 0
+expect Direction 0
+expect EncError FALSE
+
+scenario power-up with A and B both on neither counts nor flags an error
+set EncA TRUE
+set EncB TRUE
+scan
+expect Position 0
+expect EncError FALSE
+wait 300ms
+expect Position 0
+expect EncError FALSE
+set EncA FALSE                 # 11 -> 01: one step forward from where it really was
+wait 30ms
+expect Position 1
+expect Direction 1
+expect EncError FALSE
+
+scenario power-up with only A on does not count
+set EncA TRUE
+scan
+expect Position 0
+expect EncError FALSE
+wait 300ms
+expect Position 0
+set EncB TRUE                  # 10 -> 11: forward
+wait 30ms
+expect Position 1
+expect EncError FALSE
+
+scenario every edge of A and B counts forward (x4 decoding)
+scan
+wait 30ms
+set EncA TRUE                  # 00 -> 10
+wait 30ms
+expect Position 1
+expect Direction 1
+set EncB TRUE                  # 10 -> 11
+wait 30ms
+expect Position 2
+set EncA FALSE                 # 11 -> 01
+wait 30ms
+expect Position 3
+set EncB FALSE                 # 01 -> 00
+wait 30ms
+expect Position 4
+expect Direction 1
+set EncA TRUE                  # second cycle
+wait 30ms
+set EncB TRUE
+wait 30ms
+set EncA FALSE
+wait 30ms
+set EncB FALSE
+wait 30ms
+expect Position 8
+expect Direction 1
+expect EncError FALSE
+wait 500ms
+expect Position 8              # standing still: no drift
+
+scenario reverse (B leads A) counts down through zero
+scan
+wait 30ms
+set EncB TRUE                  # 00 -> 01
+wait 30ms
+expect Position -1
+expect Direction -1
+set EncA TRUE                  # 01 -> 11
+wait 30ms
+expect Position -2
+set EncB FALSE                 # 11 -> 10
+wait 30ms
+expect Position -3
+set EncA FALSE                 # 10 -> 00
+wait 30ms
+expect Position -4
+expect Direction -1
+expect EncError FALSE
+
+scenario a change of direction in the middle of a cycle
+scan
+wait 30ms
+set EncA TRUE                  # forward: 00 -> 10 -> 11 -> 01 -> 00 -> 10 -> 11
+wait 30ms
+set EncB TRUE
+wait 30ms
+set EncA FALSE
+wait 30ms
+set EncB FALSE
+wait 30ms
+set EncA TRUE
+wait 30ms
+set EncB TRUE
+wait 30ms
+expect Position 6
+expect Direction 1
+set EncB FALSE                 # reverse: 11 -> 10
+wait 30ms
+expect Position 5
+expect Direction -1
+set EncA FALSE                 # 10 -> 00
+wait 30ms
+set EncB TRUE                  # 00 -> 01
+wait 30ms
+expect Position 3
+expect Direction -1
+set EncB FALSE                 # forward again: 01 -> 00
+wait 30ms
+expect Position 4
+expect Direction 1
+expect EncError FALSE
+
+scenario vibration across one edge of A does not accumulate counts
+scan
+wait 30ms
+set EncA TRUE
+wait 30ms
+expect Position 1
+set EncA FALSE
+wait 30ms
+expect Position 0
+set EncA TRUE
+wait 30ms
+set EncA FALSE
+wait 30ms
+set EncA TRUE
+wait 30ms
+set EncA FALSE
+wait 30ms
+set EncA TRUE
+wait 30ms
+set EncA FALSE
+wait 30ms
+expect Position 0
+expect EncError FALSE
+
+scenario both channels changing in one scan: error latched, no count, decoding continues
+scan
+wait 30ms
+set EncA TRUE                  # 00 -> 10 -> 11: position 2
+wait 30ms
+set EncB TRUE
+wait 30ms
+expect Position 2
+expect EncError FALSE
+set EncA FALSE                 # 11 -> 00 in one scan: illegal
+set EncB FALSE
+wait 30ms
+expect EncError TRUE
+expect Position 2              # direction unknown, so no count
+set EncA TRUE                  # 00 -> 10: a normal forward step from the NEW state
+wait 30ms
+expect Position 3
+expect Direction 1
+expect EncError TRUE           # still latched
+set EncB TRUE                  # 10 -> 11
+wait 30ms
+expect Position 4
+wait 1s
+expect EncError TRUE           # stays latched until Reset
+
+scenario the other illegal diagonal (10 -> 01) is detected too
+scan
+wait 30ms
+set EncA TRUE                  # 00 -> 10: position 1
+wait 30ms
+expect Position 1
+set EncA FALSE                 # 10 -> 01 in one scan: illegal
+set EncB TRUE
+wait 30ms
+expect EncError TRUE
+expect Position 1
+set EncB FALSE                 # 01 -> 00: forward from the new state
+wait 30ms
+expect Position 2
+expect EncError TRUE
+
+scenario reset zeroes everything and holds while pressed, with no jump on release
+scan
+wait 30ms
+set EncA TRUE                  # 00 -> 10 -> 11: position 2
+wait 30ms
+set EncB TRUE
+wait 30ms
+set EncA FALSE                 # 11 -> 00: illegal, error latched
+set EncB FALSE
+wait 30ms
+expect EncError TRUE
+expect Position 2
+set ResetPB TRUE
+scan
+expect Position 0
+expect Direction 0
+expect EncError FALSE
+set EncA TRUE                  # the shaft moves while Reset is held: 00 -> 10 -> 11
+wait 30ms
+set EncB TRUE
+wait 30ms
+expect Position 0
+expect EncError FALSE
+set ResetPB FALSE              # release: count from here, no false count or error
+wait 100ms
+expect Position 0
+expect Direction 0
+expect EncError FALSE
+set EncA FALSE                 # 11 -> 01: forward
+wait 30ms
+expect Position 1
+expect Direction 1
+expect EncError FALSE

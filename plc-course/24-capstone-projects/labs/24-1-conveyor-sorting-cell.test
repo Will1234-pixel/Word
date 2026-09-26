@@ -1,0 +1,2387 @@
+# Capstone 24-1 acceptance tests (FAT): conveyor sorting cell SC-1.
+#
+# The test is the plant. It sets the sensors and the encoder count the way the
+# real cell would produce them, then checks the outputs and the HMI tags. Only
+# names from the interface tables in 24-1-conveyor-sorting-cell.md are used, so
+# any design that meets the specification passes.
+#
+# Plant model used by every scenario (see "Timing assumptions" in the brief):
+#   - Belt speed 500 mm/s: EncCount goes up 100 counts every 200 ms while the
+#     belt runs (1 count = 1 mm). The count is held still while the entry eye
+#     changes state, so the registration point is never ambiguous.
+#   - Parts are 100 mm long. A part blocks the entry eye while the belt moves it
+#     100 mm, and is registered where its trailing edge clears the eye. The
+#     scenarios register parts at counts such as 1000, so pusher A (500 mm) acts
+#     at 1500 and pusher B (1000 mm) at 2000.
+#   - Metal/height sensors are TRUE from the moment the part blocks the entry
+#     eye until one scan after it clears it (except where a scenario says
+#     otherwise).
+#   - A pusher leaves home 0 ms and reaches its extended switch 100 ms after the
+#     solenoid is energised, and is back home 100 ms after it is released. The
+#     part passes its lane delivery eye 100 ms later, blocking it for 100 ms.
+#   - Pass/fail windows: a timed action is checked shortly before (about 90 %)
+#     and shortly after (about 110 %) its preset; "at once" means within 30 ms
+#     (three 10 ms scans); a flashing lamp must change state at least every 1.1 s.
+#
+# Every scenario starts from a freshly powered-up PLC with a healthy panel
+# (Stop and e-stop released, overload healthy), the selector in AUTO and both
+# pushers home, unless it says otherwise.
+#
+# State codes (HMI.Sts.State): 1 STOPPED, 2 STARTING, 3 RUNNING, 4 FAULTED, 5 MANUAL.
+# Scenario names start with the milestone (M1-M7) that makes them pass, and each
+# scenario lists the requirements (FS-01 to FS-35 in the brief) that it checks.
+
+scenario M1 power-up: all outputs off, nothing starts by itself, Ready in Auto
+# Requirements: FS-01, FS-02, FS-04, FS-33
+# Start is already held when the PLC powers up, and an HMI Start command
+# is waiting from before the restart. Neither may start the cell (FS-01, FS-02).
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set StartPB TRUE   # Start button held (or stuck) at power-up
+set HMI.Cmd.Start TRUE   # stale HMI command written before the restart
+scan
+expect HMI.Cmd.Start FALSE   # discarded and cleared on the first scan
+expect ConveyorRun FALSE
+expect Horn FALSE
+expect PusherA_Sol FALSE
+expect PusherB_Sol FALSE
+expect GreenLamp FALSE
+expect AmberLamp FALSE
+expect RedLamp FALSE
+wait 4s
+expect ConveyorRun FALSE
+expect Horn FALSE
+expect HMI.Sts.State 1
+set StartPB FALSE
+wait 100ms
+expect HMI.Sts.Ready TRUE   # Auto, healthy, pushers home
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+expect HMI.Alm.Unacked FALSE
+expect HMI.Sts.PartsInTransit 0
+expect HMI.Sts.CountMetal 0
+expect HMI.Sts.CountPlastic 0
+expect HMI.Sts.CountOversize 0
+expect HMI.Sts.CountLaneA 0
+expect HMI.Sts.CountLaneB 0
+expect HMI.Sts.CountReject 0
+
+scenario M1 start-up warning: horn for 3 s with the belt stopped, then run
+# Requirements: FS-05, FS-06, FS-32
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms
+expect ConveyorRun FALSE
+expect HMI.Sts.State 2   # STARTING
+expect GreenLamp FALSE
+wait 2700ms   # 90 % of the warning time
+expect Horn TRUE
+expect ConveyorRun FALSE
+wait 600ms   # 110 %
+expect ConveyorRun TRUE
+expect Horn FALSE
+expect GreenLamp TRUE
+expect HMI.Sts.State 3   # RUNNING
+wait 5s
+expect ConveyorRun TRUE   # an empty belt runs without any alarm
+expect RedLamp FALSE
+expect HMI.Alm.Unacked FALSE
+
+scenario M1 Stop stops the belt at once; a restart needs Start and a new warning
+# Requirements: FS-06, FS-07
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+set StopPB_NC FALSE   # operator presses Stop
+until ConveyorRun FALSE within 30ms
+expect GreenLamp FALSE
+expect HMI.Sts.State 1
+set StopPB_NC TRUE   # ...and releases it
+wait 1s
+expect ConveyorRun FALSE   # no restart without a new Start
+expect Horn FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms   # every start gets the full warning
+expect ConveyorRun FALSE
+wait 2700ms
+expect ConveyorRun FALSE
+until ConveyorRun TRUE within 600ms
+
+scenario M1 Stop, or leaving Auto, during the warning cancels the start
+# Requirements: FS-07
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Horn TRUE
+set StopPB_NC FALSE
+until Horn FALSE within 30ms
+set StopPB_NC TRUE
+wait 4s
+expect ConveyorRun FALSE
+expect HMI.Sts.State 1
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Horn TRUE
+set ModeAuto FALSE   # selector to OFF
+until Horn FALSE within 30ms
+wait 4s
+expect ConveyorRun FALSE
+expect HMI.Sts.State 1
+
+scenario M1 Start is refused when not Ready, and is not remembered
+# Requirements: FS-03, FS-04, FS-05, FS-07
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+# Stop held: Stop wins over Start
+set StopPB_NC FALSE
+wait 100ms
+expect HMI.Sts.Ready FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 100ms
+set StopPB_NC TRUE
+wait 4s
+expect Horn FALSE
+expect ConveyorRun FALSE   # the refused Start was not stored
+# selector in OFF
+set ModeAuto FALSE
+wait 100ms
+expect HMI.Sts.Ready FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 4s
+expect Horn FALSE
+expect ConveyorRun FALSE
+# both selector contacts made (a wiring fault) counts as OFF
+set ModeAuto TRUE
+set ModeManual TRUE
+wait 100ms
+expect HMI.Sts.Ready FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 4s
+expect ConveyorRun FALSE
+expect Horn FALSE
+set ModeManual FALSE
+wait 100ms
+expect HMI.Sts.Ready TRUE
+expect HMI.Sts.State 1
+
+scenario M1 HMI Start and Stop commands are acted on once and cleared by the PLC
+# Requirements: FS-02, FS-05, FS-07
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set HMI.Cmd.Start TRUE
+scan
+expect HMI.Cmd.Start FALSE   # the PLC has taken the command
+until Horn TRUE within 30ms
+until ConveyorRun TRUE within 3500ms
+set HMI.Cmd.Stop TRUE
+scan
+expect HMI.Cmd.Stop FALSE
+until ConveyorRun FALSE within 30ms
+wait 1s
+expect ConveyorRun FALSE
+expect Horn FALSE
+expect HMI.Sts.State 1
+
+scenario M1 selector to OFF while running stops the belt; back to AUTO needs a new Start
+# Requirements: FS-03, FS-07
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+set ModeAuto FALSE
+until ConveyorRun FALSE within 30ms
+expect HMI.Sts.State 1
+wait 500ms
+set ModeAuto TRUE
+wait 2s
+expect ConveyorRun FALSE
+expect Horn FALSE
+expect HMI.Sts.Ready TRUE
+
+scenario M1 the warning time comes from HMI.Cfg and can never be set below 2 s
+# Requirements: FS-06, FS-35
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set HMI.Cfg.StartWarnTime T#5s   # engineer lengthens the warning
+wait 100ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms
+wait 4500ms
+expect ConveyorRun FALSE   # 4.5 s: still warning
+wait 1s
+expect ConveyorRun TRUE   # 5.5 s: running
+set StopPB_NC FALSE
+wait 100ms
+set StopPB_NC TRUE
+set HMI.Cfg.StartWarnTime T#0s   # a typo: no warning at all
+wait 100ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms   # the warning still sounds
+wait 1800ms
+expect Horn TRUE
+expect ConveyorRun FALSE   # 1.8 s: still warning (2 s minimum)
+wait 500ms
+expect ConveyorRun TRUE   # 2.3 s: running
+
+scenario M2 Manual: Jog is hold-to-run with no horn; Start and Jog do nothing in the wrong mode
+# Requirements: FS-09
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+# Jog in AUTO does nothing
+set JogPB TRUE
+wait 500ms
+expect ConveyorRun FALSE
+set JogPB FALSE
+set ModeAuto FALSE
+set ModeManual TRUE   # selector to MAN
+wait 100ms
+expect HMI.Sts.State 5   # MANUAL
+expect HMI.Sts.Ready FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 4s
+expect ConveyorRun FALSE   # Start is not used in Manual
+expect Horn FALSE
+set JogPB TRUE
+until ConveyorRun TRUE within 30ms
+expect Horn FALSE   # hold-to-run: no start-up warning
+wait 2s
+expect ConveyorRun TRUE
+set JogPB FALSE
+until ConveyorRun FALSE within 30ms
+# Stop blocks jogging
+set StopPB_NC FALSE
+set JogPB TRUE
+wait 300ms
+expect ConveyorRun FALSE
+set JogPB FALSE
+set StopPB_NC TRUE
+# back to AUTO: STOPPED, and a Start is needed
+set ModeManual FALSE
+set ModeAuto TRUE
+wait 100ms
+expect HMI.Sts.State 1
+expect ConveyorRun FALSE
+
+scenario M2 manual pusher strokes from the HMI; refused outside Manual
+# Requirements: FS-10, FS-18
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set HMI.Cmd.CyclePusherA TRUE   # in AUTO: must be refused
+scan
+expect HMI.Cmd.CyclePusherA FALSE   # cleared even though refused
+wait 300ms
+expect PusherA_Sol FALSE
+set ModeAuto FALSE
+set ModeManual TRUE   # selector to MAN
+wait 100ms
+set HMI.Cmd.CyclePusherA TRUE
+until PusherA_Sol TRUE within 50ms
+expect HMI.Cmd.CyclePusherA FALSE
+expect PusherB_Sol FALSE
+expect ConveyorRun FALSE
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 300ms
+expect PusherA_Sol FALSE   # one stroke only
+set HMI.Cmd.CyclePusherB TRUE
+until PusherB_Sol TRUE within 50ms
+expect PusherA_Sol FALSE
+set PusherB_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherB_Sol TRUE   # still energised until the extended switch is made
+set PusherB_ExtLS TRUE   # fully extended
+until PusherB_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherB_ExtLS FALSE
+wait 100ms
+set PusherB_RetLS TRUE   # back home
+wait 1500ms
+expect PusherB_Sol FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Sts.State 5
+
+scenario M2 pusher A does not extend: fault after 1 s; reset only once it is home
+# Requirements: FS-19, FS-20, FS-28, FS-31
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set ModeAuto FALSE
+set ModeManual TRUE   # selector to MAN
+wait 100ms
+set HMI.Cmd.CyclePusherA TRUE
+until PusherA_Sol TRUE within 50ms
+set PusherA_RetLS FALSE   # cylinder moves a little, then sticks: no extended switch
+wait 800ms
+expect PusherA_Sol TRUE   # 0.8 s: still trying
+expect HMI.Alm.PusherA FALSE
+wait 400ms
+expect HMI.Alm.PusherA TRUE   # 1.2 s: pusher fault
+expect PusherA_Sol FALSE   # solenoid released on the fault
+expect HMI.Sts.State 4
+expect HMI.Alm.Unacked TRUE
+set ResetPB TRUE   # reset while the pusher is still out
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.PusherA TRUE   # refused: not home
+expect HMI.Sts.State 4
+set PusherA_RetLS TRUE   # the spring has pulled it home
+wait 200ms
+expect HMI.Alm.PusherA TRUE   # still latched until reset
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.PusherA FALSE
+expect HMI.Sts.State 5   # back to MANUAL (selector is in MAN)
+expect PusherA_Sol FALSE
+
+scenario M2 pusher B does not retract: fault 1 s after the solenoid is released
+# Requirements: FS-19
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set ModeAuto FALSE
+set ModeManual TRUE   # selector to MAN
+wait 100ms
+set HMI.Cmd.CyclePusherB TRUE
+until PusherB_Sol TRUE within 50ms
+set PusherB_RetLS FALSE
+wait 100ms
+set PusherB_ExtLS TRUE
+until PusherB_Sol FALSE within 50ms
+set PusherB_ExtLS FALSE   # starts back, but never reaches home
+wait 800ms
+expect HMI.Alm.PusherB FALSE   # 0.8 s after release
+wait 400ms
+expect HMI.Alm.PusherB TRUE   # 1.2 s after release
+expect HMI.Sts.State 4
+expect PusherB_Sol FALSE
+expect HMI.Alm.PusherA FALSE
+
+scenario M2 a pusher that leaves home by itself: not Ready at once, fault after 1 s
+# Requirements: FS-04, FS-18, FS-19
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+expect HMI.Sts.Ready TRUE
+set PusherB_RetLS FALSE   # pusher B drifts out (air leak, sticky valve)
+wait 30ms
+expect HMI.Sts.Ready FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 700ms
+expect Horn FALSE   # Start refused
+expect HMI.Alm.PusherB FALSE   # 0.8 s: no fault yet
+wait 400ms
+expect HMI.Alm.PusherB TRUE   # 1.2 s: fault
+expect HMI.Sts.State 4
+set PusherB_RetLS TRUE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Sts.State 1
+# a stuck switch: both of pusher A's switches made at once is not 'home'
+set PusherA_ExtLS TRUE
+wait 30ms
+expect HMI.Sts.Ready FALSE
+wait 800ms
+expect HMI.Alm.PusherA FALSE
+wait 400ms
+expect HMI.Alm.PusherA TRUE
+
+scenario M3 metal part: pushed into lane A at exactly 500 mm, counted when delivered
+# Requirements: FS-12, FS-13, FS-15, FS-17, FS-18, FS-21, FS-22
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+until HMI.Sts.PartsInTransit 1 within 50ms
+expect HMI.Sts.CountMetal 1
+expect HMI.Sts.CountPlastic 0
+expect HMI.Sts.CountOversize 0
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1490
+wait 180ms
+wait 50ms
+expect PusherA_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 1500
+until PusherA_Sol TRUE within 50ms   # at the gate: push
+expect PusherB_Sol FALSE
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+until HMI.Sts.CountLaneA 1 within 50ms
+until HMI.Sts.PartsInTransit 0 within 50ms
+# the belt runs on: nothing else may fire
+set EncCount 1600
+wait 200ms
+set EncCount 1700
+wait 200ms
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 2000
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2100
+wait 200ms
+expect PusherB_Sol FALSE
+expect PusherA_Sol FALSE
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2600
+wait 200ms
+set EncCount 2700
+wait 200ms
+wait 3s
+expect HMI.Alm.Jam FALSE
+expect HMI.Sts.State 3
+expect HMI.Sts.CountReject 0
+expect HMI.Sts.CountLaneB 0
+
+scenario M3 plastic part: pusher A lets it pass, pusher B pushes it at 1000 mm
+# Requirements: FS-12, FS-15, FS-21, FS-22
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+until HMI.Sts.CountPlastic 1 within 50ms
+expect HMI.Sts.CountMetal 0
+# past gate A
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1600
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1700
+wait 200ms
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 1990
+wait 180ms
+wait 50ms
+expect PusherB_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 2000
+until PusherB_Sol TRUE within 50ms   # at the gate: push
+expect PusherA_Sol FALSE
+set PusherB_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherB_Sol TRUE   # still energised until the extended switch is made
+set PusherB_ExtLS TRUE   # fully extended
+until PusherB_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherB_ExtLS FALSE
+wait 100ms
+set PusherB_RetLS TRUE   # back home
+wait 100ms
+set LaneB_PE TRUE   # the part slides past the lane B delivery eye
+wait 100ms
+set LaneB_PE FALSE
+scan
+until HMI.Sts.CountLaneB 1 within 50ms
+until HMI.Sts.PartsInTransit 0 within 50ms
+expect HMI.Sts.CountLaneA 0
+expect HMI.Alm.Jam FALSE
+
+scenario M3 tall part: no pusher fires; it drops into the reject bin
+# Requirements: FS-12, FS-15, FS-21, FS-22
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (tall) reaches the entry station
+set TallPE TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set TallPE FALSE
+until HMI.Sts.CountOversize 1 within 50ms
+expect HMI.Sts.CountMetal 0
+expect HMI.Sts.CountPlastic 0
+# past both gates
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1600
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1700
+wait 200ms
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 2000
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2100
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+expect HMI.Sts.PartsInTransit 1
+set EncCount 2550
+wait 100ms
+set RejectPE TRUE   # the part drops past the reject chute eye
+wait 100ms
+set RejectPE FALSE
+scan
+until HMI.Sts.CountReject 1 within 50ms
+until HMI.Sts.PartsInTransit 0 within 50ms
+wait 3s
+expect HMI.Alm.Jam FALSE
+expect HMI.Sts.State 3
+
+scenario M3 a tall metal part is rejected; a metal reading only mid-part still counts as metal
+# Requirements: FS-12
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (tallmetal) reaches the entry station
+set MetalPX TRUE
+set TallPE TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set TallPE FALSE
+until HMI.Sts.CountOversize 1 within 50ms
+expect HMI.Sts.CountMetal 0   # height wins over metal
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+# P2 (metal) reaches the entry station
+set EntryPE TRUE
+set EncCount 1350
+wait 100ms
+set MetalPX TRUE   # the inductive sensor sees it only in the middle
+wait 40ms
+set MetalPX FALSE
+set EncCount 1400
+wait 60ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1400
+scan
+until HMI.Sts.CountMetal 1 within 50ms
+expect HMI.Sts.CountPlastic 0
+expect HMI.Sts.PartsInTransit 2
+# P1 (tall metal) passes gate A: no push
+set EncCount 1500
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1600
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1700
+wait 200ms
+set EncCount 1800
+wait 200ms
+set EncCount 1890
+wait 180ms
+wait 50ms
+expect PusherA_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 1900
+until PusherA_Sol TRUE within 50ms   # at the gate: push
+# P2 is pushed into lane A
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+# P1 passes gate B
+set EncCount 2000
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2100
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2550
+wait 100ms
+set RejectPE TRUE   # the part drops past the reject chute eye
+wait 100ms
+set RejectPE FALSE
+scan
+until HMI.Sts.PartsInTransit 0 within 50ms
+expect HMI.Sts.CountLaneA 1
+expect HMI.Sts.CountReject 1
+expect HMI.Alm.Jam FALSE
+
+scenario M4 production run: five mixed parts on the belt at once, all sorted correctly
+# Requirements: FS-14, FS-15, FS-17, FS-21, FS-22, FS-26
+# Parts every 400 mm: P1 metal, P2 plastic, P3 tall, P4 metal, P5 plastic.
+# Up to three parts are on the belt at the same time.
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+# P2 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 1350
+wait 100ms
+set EncCount 1400
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1400
+scan
+set EncCount 1490
+wait 180ms
+set EncCount 1507
+until PusherA_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+# P1 into lane A
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+set EncCount 1607
+wait 200ms
+set EncCount 1700
+wait 186ms
+# P3 (tall) reaches the entry station
+set TallPE TRUE
+set EntryPE TRUE
+set EncCount 1750
+wait 100ms
+set EncCount 1800
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1800
+scan
+set TallPE FALSE
+until HMI.Sts.PartsInTransit 2 within 50ms   # P2 and P3
+set EncCount 1900
+wait 200ms
+wait 100ms
+expect PusherA_Sol FALSE   # P2 (plastic) at gate A: no push
+set EncCount 2000
+wait 200ms
+set EncCount 2100
+wait 200ms
+# P4 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 2150
+wait 100ms
+set EncCount 2200
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 2200
+scan
+set MetalPX FALSE
+set EncCount 2300
+wait 200ms
+wait 100ms
+expect PusherA_Sol FALSE   # P3 (tall) at gate A: no push
+set EncCount 2390
+wait 180ms
+set EncCount 2407
+until PusherB_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+expect PusherA_Sol FALSE
+# P2 into lane B
+set PusherB_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherB_Sol TRUE   # still energised until the extended switch is made
+set PusherB_ExtLS TRUE   # fully extended
+until PusherB_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherB_ExtLS FALSE
+wait 100ms
+set PusherB_RetLS TRUE   # back home
+wait 100ms
+set LaneB_PE TRUE   # the part slides past the lane B delivery eye
+wait 100ms
+set LaneB_PE FALSE
+scan
+set EncCount 2500
+wait 186ms
+# P5 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 2550
+wait 100ms
+set EncCount 2600
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 2600
+scan
+set EncCount 2690
+wait 180ms
+set EncCount 2707
+until PusherA_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+expect PusherB_Sol FALSE
+# P4 into lane A
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+set EncCount 2800
+wait 186ms
+wait 100ms
+expect PusherB_Sol FALSE   # P3 (tall) at gate B: no push
+set EncCount 2900
+wait 200ms
+set EncCount 3000
+wait 200ms
+set EncCount 3100
+wait 200ms
+wait 100ms
+expect PusherA_Sol FALSE   # P5 (plastic) at gate A: no push
+set EncCount 3200
+wait 200ms
+set EncCount 3300
+wait 200ms
+set EncCount 3350
+wait 100ms
+set RejectPE TRUE   # the part drops past the reject chute eye
+wait 100ms
+set RejectPE FALSE
+scan
+set EncCount 3450
+wait 200ms
+set EncCount 3550
+wait 200ms
+set EncCount 3590
+wait 80ms
+set EncCount 3607
+until PusherB_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+# P5 into lane B
+set PusherB_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherB_Sol TRUE   # still energised until the extended switch is made
+set PusherB_ExtLS TRUE   # fully extended
+until PusherB_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherB_ExtLS FALSE
+wait 100ms
+set PusherB_RetLS TRUE   # back home
+wait 100ms
+set LaneB_PE TRUE   # the part slides past the lane B delivery eye
+wait 100ms
+set LaneB_PE FALSE
+scan
+until HMI.Sts.PartsInTransit 0 within 50ms
+expect HMI.Sts.CountMetal 2
+expect HMI.Sts.CountPlastic 2
+expect HMI.Sts.CountOversize 1
+expect HMI.Sts.CountLaneA 2
+expect HMI.Sts.CountLaneB 2
+expect HMI.Sts.CountReject 1
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+expect HMI.Sts.State 3
+expect ConveyorRun TRUE
+expect RedLamp FALSE
+
+scenario M4 the encoder count wraps from 65535 to 0 without upsetting the tracking
+# Requirements: FS-14
+# P1 (metal) registers at 65300, so pusher A acts at 65800 = 264 after the wrap.
+# P2 (plastic) registers at 65500, so pusher B acts at 66500 = 964.
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 65000
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+set EncCount 65100
+wait 200ms
+set EncCount 65200
+wait 200ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 65250
+wait 100ms
+set EncCount 65300
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 65300
+scan
+set MetalPX FALSE
+set EncCount 65400
+wait 200ms
+# P2 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 65450
+wait 100ms
+set EncCount 65500
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 65500
+scan
+set EncCount 64
+wait 200ms
+set EncCount 164
+wait 200ms
+set EncCount 254
+wait 180ms
+wait 50ms
+expect PusherA_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 264
+until PusherA_Sol TRUE within 50ms   # at the gate: push
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+set EncCount 364
+wait 200ms
+set EncCount 464
+wait 200ms
+set EncCount 564
+wait 200ms
+set EncCount 664
+wait 200ms
+set EncCount 764
+wait 200ms
+set EncCount 864
+wait 200ms
+set EncCount 954
+wait 180ms
+wait 50ms
+expect PusherB_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 964
+until PusherB_Sol TRUE within 50ms   # at the gate: push
+set PusherB_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherB_Sol TRUE   # still energised until the extended switch is made
+set PusherB_ExtLS TRUE   # fully extended
+until PusherB_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherB_ExtLS FALSE
+wait 100ms
+set PusherB_RetLS TRUE   # back home
+wait 100ms
+set LaneB_PE TRUE   # the part slides past the lane B delivery eye
+wait 100ms
+set LaneB_PE FALSE
+scan
+until HMI.Sts.PartsInTransit 0 within 50ms
+expect HMI.Sts.CountLaneA 1
+expect HMI.Sts.CountLaneB 1
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+
+scenario M4 lane A full: metal parts go to reject, amber lamp on, the belt keeps running
+# Requirements: FS-15, FS-23, FS-26
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# a part sliding past the lane-full eye blocks it for a moment: not full
+set LaneA_FullPE TRUE
+wait 800ms
+expect HMI.Sts.LaneAFull FALSE
+expect AmberLamp FALSE
+set LaneA_FullPE FALSE
+wait 1500ms
+# the lane backs up to the eye
+set LaneA_FullPE TRUE
+wait 800ms
+expect HMI.Sts.LaneAFull FALSE   # 0.8 s
+wait 400ms
+expect HMI.Sts.LaneAFull TRUE   # 1.2 s
+expect AmberLamp TRUE
+expect HMI.Sts.LaneBFull FALSE
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+# lane A is full: no push
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1600
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1700
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 2000
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2100
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2550
+wait 100ms
+set RejectPE TRUE   # the part drops past the reject chute eye
+wait 100ms
+set RejectPE FALSE
+scan
+until HMI.Sts.CountReject 1 within 50ms
+expect HMI.Sts.CountMetal 1
+expect HMI.Sts.CountLaneA 0
+until HMI.Sts.PartsInTransit 0 within 50ms
+expect ConveyorRun TRUE   # a full lane is a warning, not a stop
+expect HMI.Sts.State 3
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+expect RedLamp FALSE
+# the lane is emptied
+set LaneA_FullPE FALSE
+until HMI.Sts.LaneAFull FALSE within 1500ms
+expect AmberLamp FALSE
+set EncCount 2650
+wait 200ms
+set EncCount 2750
+wait 200ms
+set EncCount 2850
+wait 200ms
+set EncCount 2900
+wait 100ms
+# P2 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 2950
+wait 100ms
+set EncCount 3000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 3000
+scan
+set MetalPX FALSE
+set EncCount 3100
+wait 200ms
+set EncCount 3200
+wait 200ms
+set EncCount 3300
+wait 200ms
+set EncCount 3400
+wait 200ms
+set EncCount 3490
+wait 180ms
+wait 50ms
+expect PusherA_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 3500
+until PusherA_Sol TRUE within 50ms   # at the gate: push
+# sorting into lane A resumes
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+until HMI.Sts.CountLaneA 1 within 50ms
+expect HMI.Sts.CountReject 1
+
+scenario M4 lane B full: decided at the gate, so a lane that fills up after registration still counts
+# Requirements: FS-15, FS-23
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set LaneB_FullPE TRUE   # lane B backs up while P1 is on its way
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+set EncCount 1600
+wait 200ms
+set EncCount 1700
+wait 200ms
+expect HMI.Sts.LaneBFull TRUE   # full 1.4 s later, before P1 reaches gate B
+expect AmberLamp TRUE
+# P1 at gate B: the lane is full now, so no push
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 2000
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2100
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2550
+wait 100ms
+set RejectPE TRUE   # the part drops past the reject chute eye
+wait 100ms
+set RejectPE FALSE
+scan
+until HMI.Sts.CountReject 1 within 50ms
+expect HMI.Sts.CountPlastic 1
+expect HMI.Sts.CountLaneB 0
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+expect HMI.Sts.State 3
+
+scenario M4 gate distances come from HMI.Cfg (commissioning adjustment)
+# Requirements: FS-15, FS-35
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+set HMI.Cfg.DistA 620
+set HMI.Cfg.DistB 1150
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+set EncCount 1600
+wait 200ms
+set EncCount 1610
+wait 20ms
+wait 50ms
+expect PusherA_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 1620
+until PusherA_Sol TRUE within 50ms   # at the gate: push
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+set EncCount 1720
+wait 200ms
+set EncCount 1820
+wait 200ms
+set EncCount 1900
+wait 160ms
+# P2 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 1950
+wait 100ms
+set EncCount 2000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 2000
+scan
+set EncCount 2100
+wait 200ms
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2600
+wait 200ms
+set EncCount 2700
+wait 200ms
+wait 50ms
+expect PusherB_Sol FALSE
+set EncCount 2800
+wait 200ms
+set EncCount 2900
+wait 200ms
+set EncCount 3000
+wait 200ms
+set EncCount 3100
+wait 200ms
+set EncCount 3140
+wait 80ms
+wait 50ms
+expect PusherB_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 3150
+until PusherB_Sol TRUE within 50ms   # at the gate: push
+set PusherB_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherB_Sol TRUE   # still energised until the extended switch is made
+set PusherB_ExtLS TRUE   # fully extended
+until PusherB_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherB_ExtLS FALSE
+wait 100ms
+set PusherB_RetLS TRUE   # back home
+wait 100ms
+set LaneB_PE TRUE   # the part slides past the lane B delivery eye
+wait 100ms
+set LaneB_PE FALSE
+scan
+until HMI.Sts.PartsInTransit 0 within 50ms
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+
+scenario M5 entry jam: entry eye blocked for 2 s while running (not while stopped)
+# Requirements: FS-13, FS-25, FS-30, FS-31
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set EntryPE TRUE   # a part sits at the entry while the cell is stopped
+wait 5s
+expect HMI.Alm.EntryJam FALSE   # stopped: not a jam
+expect HMI.Sts.State 1
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms   # the warning time does not count
+wait 1800ms
+expect ConveyorRun TRUE   # 1.8 s of running
+expect HMI.Alm.EntryJam FALSE
+wait 400ms
+expect HMI.Alm.EntryJam TRUE   # 2.2 s: jam
+expect ConveyorRun FALSE
+expect HMI.Sts.State 4
+set ResetPB TRUE   # reset with the part still there
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.EntryJam TRUE   # refused: the eye is still blocked
+set EntryPE FALSE   # operator removes the part
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Sts.State 1
+expect ConveyorRun FALSE
+expect HMI.Sts.CountMetal 0   # the removed part was never registered
+expect HMI.Sts.CountPlastic 0
+
+scenario M5 jam: a metal part pushed but never seen in lane A trips the cell 3 s after registration
+# Requirements: FS-11, FS-26, FS-28, FS-31
+# The part registers at t0. Pusher A fires 1.0 s later, but the part never
+# reaches the lane A delivery eye (stuck in the chute).
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1490
+wait 180ms
+set EncCount 1507
+until PusherA_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+# the belt keeps running
+set EncCount 1607
+wait 200ms
+set EncCount 1707
+wait 200ms
+set EncCount 1807
+wait 200ms
+set EncCount 1900
+wait 186ms
+wait 714ms   # about 2.7 s after registration
+expect HMI.Alm.Jam FALSE
+expect ConveyorRun TRUE
+wait 600ms   # about 3.3 s
+expect HMI.Alm.Jam TRUE
+expect ConveyorRun FALSE
+expect HMI.Sts.State 4
+until HMI.Sts.PartsInTransit 0 within 50ms   # a fault stop forgets the tracking
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.Jam FALSE
+expect HMI.Sts.State 1
+expect ConveyorRun FALSE   # reset never starts the belt
+
+scenario M5 jam: a reject part that never reaches the reject bin trips after 5 s, not before
+# Requirements: FS-26
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (tall) reaches the entry station
+set TallPE TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set TallPE FALSE
+# the part should drop off the end at about 2500
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+set EncCount 1600
+wait 200ms
+set EncCount 1700
+wait 200ms
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 2000
+wait 200ms
+set EncCount 2100
+wait 200ms
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2600
+wait 200ms
+set EncCount 2700
+wait 200ms
+set EncCount 2800
+wait 200ms
+set EncCount 2900
+wait 200ms
+set EncCount 3000
+wait 200ms
+set EncCount 3100
+wait 200ms
+set EncCount 3200
+wait 200ms
+set EncCount 3300
+wait 200ms
+wait 100ms   # about 4.7 s after registration
+expect HMI.Alm.Jam FALSE
+expect ConveyorRun TRUE
+wait 600ms   # about 5.3 s
+expect HMI.Alm.Jam TRUE
+expect ConveyorRun FALSE
+expect HMI.Sts.State 4
+
+scenario M6 pusher A fails to extend while sorting: the cell stops and needs a reset and a Start
+# Requirements: FS-19, FS-28, FS-31
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1490
+wait 180ms
+set EncCount 1507
+until PusherA_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+set PusherA_RetLS FALSE   # the cylinder never reaches its extended switch
+wait 800ms
+expect PusherA_Sol TRUE
+expect ConveyorRun TRUE
+expect HMI.Alm.PusherA FALSE
+wait 400ms
+expect HMI.Alm.PusherA TRUE
+expect PusherA_Sol FALSE
+expect ConveyorRun FALSE
+expect HMI.Sts.State 4
+expect HMI.Alm.Unacked TRUE
+until HMI.Sts.PartsInTransit 0 within 50ms
+set PusherA_RetLS TRUE   # the spring retracts it
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.PusherA FALSE
+expect HMI.Sts.State 1
+wait 1s
+expect ConveyorRun FALSE   # reset never starts the belt
+set StartPB TRUE
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms
+until ConveyorRun TRUE within 3500ms
+
+scenario M6 e-stop while running: everything stops at once; release and reset before a new start
+# Requirements: FS-11, FS-27, FS-28, FS-30, FS-31
+# The part on the belt was tracked. After an e-stop the tracking is forgotten,
+# so after the restart it is not pushed and ends up in the reject bin.
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EStop_NC FALSE   # EMERGENCY STOP pressed
+until ConveyorRun FALSE within 30ms
+expect Horn FALSE
+expect PusherA_Sol FALSE
+expect PusherB_Sol FALSE
+expect HMI.Alm.EStop TRUE
+expect HMI.Sts.State 4
+until HMI.Sts.PartsInTransit 0 within 50ms
+set ResetPB TRUE   # reset while the e-stop is still pressed
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.EStop TRUE   # refused
+set EStop_NC TRUE   # e-stop released
+wait 1s
+expect HMI.Alm.EStop TRUE   # releasing the e-stop does not clear the alarm
+expect HMI.Sts.State 4
+expect ConveyorRun FALSE
+expect HMI.Sts.Ready FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.EStop FALSE
+expect HMI.Sts.State 1
+wait 1s
+expect ConveyorRun FALSE   # reset alone never starts the belt
+set StartPB TRUE
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms
+until ConveyorRun TRUE within 3500ms
+# the untracked part passes both gates
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1600
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1700
+wait 200ms
+set EncCount 1800
+wait 200ms
+set EncCount 1900
+wait 200ms
+set EncCount 2000
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2100
+wait 200ms
+expect PusherB_Sol FALSE
+set EncCount 2200
+wait 200ms
+set EncCount 2300
+wait 200ms
+set EncCount 2400
+wait 200ms
+set EncCount 2500
+wait 200ms
+set EncCount 2550
+wait 100ms
+set RejectPE TRUE   # the part drops past the reject chute eye
+wait 100ms
+set RejectPE FALSE
+scan
+until HMI.Sts.CountReject 1 within 50ms
+expect HMI.Sts.CountLaneA 0
+expect HMI.Sts.CountMetal 1   # counted when it was classified
+wait 6s
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+expect HMI.Sts.State 3
+
+scenario M6 e-stop during the start-up warning silences the horn and nothing starts
+# Requirements: FS-28
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Horn TRUE
+set EStop_NC FALSE
+until Horn FALSE within 30ms
+expect HMI.Sts.State 4
+wait 200ms
+set EStop_NC TRUE
+wait 4s
+expect ConveyorRun FALSE
+expect Horn FALSE
+expect HMI.Sts.State 4
+
+scenario M6 e-stop during a pusher stroke releases the solenoid at once
+# Requirements: FS-19, FS-28
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1490
+wait 180ms
+set EncCount 1507
+until PusherA_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+set PusherA_RetLS FALSE
+wait 50ms
+set EStop_NC FALSE
+until PusherA_Sol FALSE within 30ms
+expect ConveyorRun FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # the spring returns it home within the timeout
+wait 1500ms
+expect HMI.Alm.PusherA FALSE   # a pusher that got home in time has no fault
+expect HMI.Alm.EStop TRUE
+
+scenario M6 motor overload stops the cell; reset is refused until the overload relay is reset
+# Requirements: FS-02, FS-27, FS-30
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+set MotorOL_NC FALSE   # overload relay trips
+until ConveyorRun FALSE within 30ms
+expect HMI.Alm.MotorOverload TRUE
+expect HMI.Sts.State 4
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.MotorOverload TRUE   # refused: relay still tripped
+set MotorOL_NC TRUE   # electrician resets the relay
+wait 500ms
+expect HMI.Alm.MotorOverload TRUE   # latched until reset
+expect HMI.Sts.State 4
+set HMI.Cmd.Reset TRUE   # reset from the HMI this time
+scan
+expect HMI.Cmd.Reset FALSE
+until HMI.Alm.MotorOverload FALSE within 50ms
+until HMI.Sts.State 1 within 50ms
+wait 1s
+expect ConveyorRun FALSE
+
+scenario M6 alarm acknowledgement: red flashes until acknowledged, steady until reset
+# Requirements: FS-29, FS-30, FS-32
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+expect RedLamp FALSE
+set MotorOL_NC FALSE
+wait 100ms
+expect HMI.Alm.MotorOverload TRUE
+expect HMI.Alm.Unacked TRUE
+# flashing: the lamp must change state at least every 1.1 s
+until RedLamp TRUE within 1100ms
+until RedLamp FALSE within 1100ms
+until RedLamp TRUE within 1100ms
+set MotorOL_NC TRUE   # relay reset: the cause has gone, the alarm stays until Reset
+wait 200ms
+expect HMI.Alm.MotorOverload TRUE
+expect HMI.Alm.Unacked TRUE
+set HMI.Cmd.Ack TRUE
+scan
+expect HMI.Cmd.Ack FALSE
+wait 50ms
+expect HMI.Alm.Unacked FALSE
+# acknowledged but still active: steady
+expect RedLamp TRUE
+wait 300ms
+expect RedLamp TRUE
+wait 300ms
+expect RedLamp TRUE
+wait 300ms
+expect RedLamp TRUE
+wait 300ms
+expect RedLamp TRUE
+expect HMI.Alm.MotorOverload TRUE   # Ack does not reset
+expect HMI.Sts.State 4
+# a second alarm is new, so it flashes again
+set EStop_NC FALSE
+wait 100ms
+expect HMI.Alm.Unacked TRUE
+until RedLamp TRUE within 1100ms
+until RedLamp FALSE within 1100ms
+until RedLamp TRUE within 1100ms
+set EStop_NC TRUE
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.Unacked FALSE
+expect HMI.Sts.State 1
+expect RedLamp FALSE
+wait 300ms
+expect RedLamp FALSE
+wait 300ms
+expect RedLamp FALSE
+wait 300ms
+expect RedLamp FALSE
+wait 300ms
+expect RedLamp FALSE
+
+scenario M6 Reset acts on the press: a held (or stuck) Reset button does not clear a new fault
+# Requirements: FS-30
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+set ResetPB TRUE   # Reset held down
+wait 200ms
+set MotorOL_NC FALSE   # overload trips...
+wait 200ms
+set MotorOL_NC TRUE   # ...and is reset at the relay
+wait 1s
+expect HMI.Alm.MotorOverload TRUE   # the held button does not reset it
+expect HMI.Sts.State 4
+set ResetPB FALSE
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Sts.State 1
+
+scenario M6 a reset never restarts the cell, even with Start held or commanded during the fault
+# Requirements: FS-05, FS-31
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+set MotorOL_NC FALSE
+until ConveyorRun FALSE within 30ms
+set MotorOL_NC TRUE
+set StartPB TRUE   # operator holds Start
+wait 200ms
+set HMI.Cmd.Start TRUE   # and presses Start on the HMI while faulted
+scan
+expect HMI.Cmd.Start FALSE   # cleared, and forgotten
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 200ms
+expect HMI.Sts.State 1
+wait 4s
+expect Horn FALSE
+expect ConveyorRun FALSE
+set StartPB FALSE
+wait 200ms
+set StartPB TRUE   # a fresh press starts the cell
+scan
+set StartPB FALSE
+until Horn TRUE within 30ms
+until ConveyorRun TRUE within 3500ms
+
+scenario M7 stop and restart with a part on the belt: tracking kept, jam clock paused
+# Requirements: FS-08, FS-26
+# 10 s stopped plus a 3 s warning is far longer than the 3 s jam time for
+# lane A. Only conveyor running time counts, so there is no jam.
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set StopPB_NC FALSE
+until ConveyorRun FALSE within 30ms
+set StopPB_NC TRUE
+wait 10s
+expect HMI.Alm.Jam FALSE
+expect HMI.Sts.State 1
+expect HMI.Sts.PartsInTransit 1   # still tracked
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+set EncCount 1400
+wait 200ms
+set EncCount 1490
+wait 180ms
+wait 50ms
+expect PusherA_Sol FALSE   # 10 mm short of the gate: not yet
+set EncCount 1500
+until PusherA_Sol TRUE within 50ms   # at the gate: push
+# pushed at the right place after the restart
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+until HMI.Sts.CountLaneA 1 within 50ms
+until HMI.Sts.PartsInTransit 0 within 50ms
+wait 3s
+expect HMI.Alm.Jam FALSE
+expect HMI.Sts.State 3
+
+scenario M7 a normal Stop during a pusher stroke lets the stroke finish
+# Requirements: FS-08
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1490
+wait 180ms
+set EncCount 1507
+until PusherA_Sol TRUE within 50ms   # the count jumps past the gate between scans: push
+set StopPB_NC FALSE   # Stop pressed mid-stroke
+until ConveyorRun FALSE within 30ms
+expect PusherA_Sol TRUE   # the stroke is not cut short
+set StopPB_NC TRUE
+set PusherA_RetLS FALSE   # cylinder leaves home
+wait 100ms
+expect PusherA_Sol TRUE   # still energised until the extended switch is made
+set PusherA_ExtLS TRUE   # fully extended
+until PusherA_Sol FALSE within 50ms   # stroke complete: solenoid released
+set PusherA_ExtLS FALSE
+wait 100ms
+set PusherA_RetLS TRUE   # back home
+wait 100ms
+set LaneA_PE TRUE   # the part slides past the lane A delivery eye
+wait 100ms
+set LaneA_PE FALSE
+scan
+until HMI.Sts.CountLaneA 1 within 50ms
+until HMI.Sts.PartsInTransit 0 within 50ms
+wait 2s
+expect HMI.Alm.EStop FALSE
+expect HMI.Alm.MotorOverload FALSE
+expect HMI.Alm.EntryJam FALSE
+expect HMI.Alm.Jam FALSE
+expect HMI.Alm.PusherA FALSE
+expect HMI.Alm.PusherB FALSE
+expect HMI.Alm.TrackOverflow FALSE
+expect HMI.Sts.State 1
+
+scenario M7 Manual forgets the tracking; parts are neither pushed nor registered in Manual
+# Requirements: FS-09, FS-11, FS-13
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+set MetalPX FALSE
+until HMI.Sts.PartsInTransit 1 within 50ms
+set ModeAuto FALSE
+set ModeManual TRUE   # selector to MAN
+wait 100ms
+expect ConveyorRun FALSE
+expect HMI.Sts.State 5
+until HMI.Sts.PartsInTransit 0 within 50ms
+set JogPB TRUE   # jog the belt
+wait 100ms
+set EncCount 1100
+wait 200ms
+set EncCount 1200
+wait 200ms
+set EncCount 1300
+wait 200ms
+set EncCount 1400
+wait 200ms
+set EncCount 1500
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1600
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1700
+wait 200ms
+expect PusherA_Sol FALSE
+set EncCount 1800
+wait 200ms
+# P2 (metal) reaches the entry station
+set MetalPX TRUE
+set EntryPE TRUE
+set EncCount 1850
+wait 100ms
+set EncCount 1900
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1900
+scan
+set MetalPX FALSE
+wait 100ms
+expect HMI.Sts.CountMetal 1   # not registered in Manual
+expect HMI.Sts.PartsInTransit 0
+set JogPB FALSE
+until ConveyorRun FALSE within 30ms
+expect HMI.Alm.Jam FALSE
+
+scenario M7 HMI: counters cleared on command; status tags cannot be written from the HMI
+# Requirements: FS-21, FS-22, FS-24, FS-33
+set StopPB_NC TRUE
+set EStop_NC TRUE
+set MotorOL_NC TRUE
+set ModeAuto TRUE
+set PusherA_RetLS TRUE
+set PusherB_RetLS TRUE
+set EncCount 900
+wait 100ms
+# start the cell: press Start, 3 s warning, belt runs
+set StartPB TRUE
+scan
+set StartPB FALSE
+until ConveyorRun TRUE within 3500ms
+# P1 (plastic) reaches the entry station
+set EntryPE TRUE
+set EncCount 950
+wait 100ms
+set EncCount 1000
+wait 100ms
+set EntryPE FALSE   # trailing edge clears the eye: registered at 1000
+scan
+until HMI.Sts.CountPlastic 1 within 50ms
+# delivery eyes count every part that arrives, tracked or not, in every state
+set StopPB_NC FALSE
+until ConveyorRun FALSE within 30ms
+set StopPB_NC TRUE
+set LaneA_PE TRUE
+wait 100ms
+set LaneA_PE FALSE
+wait 100ms
+set LaneB_PE TRUE
+wait 100ms
+set LaneB_PE FALSE
+wait 100ms
+set RejectPE TRUE
+wait 100ms
+set RejectPE FALSE
+wait 100ms
+expect HMI.Sts.CountLaneA 1
+expect HMI.Sts.CountLaneB 1
+expect HMI.Sts.CountReject 1
+expect HMI.Sts.PartsInTransit 1   # FS-22: a lane eye only confirms a part that was pushed
+# stray HMI writes into status tags are overwritten on the next scan
+set HMI.Sts.State 3
+set HMI.Sts.CountLaneA 99
+set HMI.Sts.Ready FALSE
+set HMI.Alm.Jam TRUE
+wait 50ms
+expect HMI.Sts.State 1
+expect HMI.Sts.CountLaneA 1
+expect HMI.Sts.Ready TRUE
+expect HMI.Alm.Jam FALSE
+expect ConveyorRun FALSE
+set HMI.Cmd.ClearCounts TRUE
+scan
+expect HMI.Cmd.ClearCounts FALSE
+wait 50ms
+expect HMI.Sts.CountMetal 0
+expect HMI.Sts.CountPlastic 0
+expect HMI.Sts.CountOversize 0
+expect HMI.Sts.CountLaneA 0
+expect HMI.Sts.CountLaneB 0
+expect HMI.Sts.CountReject 0
+expect HMI.Sts.PartsInTransit 1   # clearing counters does not clear the tracking
+
