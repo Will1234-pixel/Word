@@ -224,7 +224,10 @@ language, with notes such as "CODESYS/TIA also allow…".
 | OOP: `METHOD`, `PROPERTY`, `INTERFACE`, `EXTENDS`, `IMPLEMENTS`, `THIS`, `SUPER` | Plain FBs; show OOP in lesson text only, marked "CODESYS/TwinCAT syntax, not testable here" |
 | `VAR_GLOBAL` inside a PROGRAM | `VAR_GLOBAL` in the CONFIGURATION, `VAR_EXTERNAL` in the POU |
 | Empty body or bare `;` statement | At least one real statement |
-| A variable with the same name as a POU, type, configuration, resource or task (the OpenPLC `-p` flag makes these clash) | Unique names |
+| A variable with the same name as a POU, type, configuration, resource or task (the OpenPLC `-p` flag makes these clash). That includes standard functions and FBs (`Limit`, `Max`, `Sel`, `Move`, `Ton` …) and type keywords (`Dt`, `Date`, `Step`) | Unique, descriptive names |
+| A POU/type/task name that matches a variable or parameter name used anywhere, **including inside the standard library** (`M`, `P`, `Q`, `IN`, `PT`, `ET`, `CLK`, `CU`, `CV`, `PV` …) | Descriptive POU names (`FB_Pump`, `PumpStation`), never one or two letters |
+| An array as a FUNCTION `VAR_INPUT` (compiles, but the C build fails) | Pass arrays to a FUNCTION_BLOCK input (named array type), or as `VAR_IN_OUT` |
+| `MUL_TIME`, `DIV_TIME` function names | Write `T * n` and `T / n` (TIME times/divided by a number works) |
 
 Supported and verified: `IF/ELSIF/CASE` with ranges, `FOR ... BY`, `WHILE`, `REPEAT`, `EXIT`,
 `CONTINUE`, `RETURN`, `VAR_TEMP`, `VAR RETAIN`, `VAR CONSTANT`, `VAR_IN_OUT`, functions, FB
@@ -232,7 +235,8 @@ calls with `=>` output binding, calling an FB after setting inputs as fields (`T
 structs (including arrays inside structs), arrays of structs, multi-dimensional arrays, array
 and struct initialisers (`[1, 2, 3(0)]`, `(A := 5, B := TRUE)`), plain enums with `E_X#Value`,
 subranges `INT(0..100)`, `SHL/SHR/ROL/ROR`, `AND/OR/XOR/NOT` on `WORD`, `LIMIT/SEL/MUX/MAX/MIN`,
-`MOD`, `**`, `EXPT`, `SQRT`, `LN`, `SIN` …, TIME arithmetic and comparisons, `DT/TOD/DATE`
+`MOD`, `**`, `EXPT`, `SQRT`, `LN`, `SIN` …, TIME arithmetic (`T1 + T2`, `T1 - T2`, `T * n`,
+`ADD_TIME`, `SUB_TIME`) and comparisons, `DT/TOD/DATE`
 literals, `REF_TO`/`REF()`/`^`, string functions (`CONCAT`, `LEN`, `LEFT`, `FIND`,
 `INT_TO_STRING`), textual **SFC** (`INITIAL_STEP`, `STEP`, `TRANSITION FROM … TO … := …`,
 `ACTION`) and **IL**.
@@ -248,6 +252,13 @@ Behaviour notes:
   to the even neighbour (2.5 → 2, 3.5 → 4, −2.5 → −2). Other platforms may round halves
   differently, so labs must not depend on ties. `TRUNC` truncates toward zero
   (`TRUNC(-2.7) = -2`).
+- **TIME conversions use seconds in MATIEC and OpenPLC:** `TIME_TO_DINT(T#2500ms)` = 2
+  (whole seconds, truncated), `TIME_TO_REAL(T#2500ms)` = 2.5, `DINT_TO_TIME(1500)` = 1500 s.
+  CODESYS and most other tools use **milliseconds**. Avoid these conversions in lab logic
+  where you can: compare TIME values directly, or keep elapsed time as TIME. If you must
+  convert, say so in a comment and in the lesson.
+- `plctest` supplies a fix for an upstream MATIEC code-generation bug in `TIME + TIME` and
+  `TIME - TIME`. OpenPLC's own compiler is not affected.
 - `plctest` gives located inputs the value 0/FALSE at the start of every scenario, so the test
   must set NC inputs TRUE.
 - The first scan in `plctest` runs at t = one task interval (10 ms).

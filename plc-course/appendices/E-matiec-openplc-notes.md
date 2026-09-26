@@ -77,6 +77,8 @@ The lab files avoid all of them.
 | Object orientation: `METHOD`, `PROPERTY`, `INTERFACE`, `EXTENDS`, `IMPLEMENTS`, `THIS`, `SUPER` | Plain function blocks | CODESYS and TwinCAT (see Module 21) |
 | `VAR_GLOBAL` inside a `PROGRAM` | `VAR_GLOBAL` in the `CONFIGURATION`, `VAR_EXTERNAL` in the POU | Global variable lists (CODESYS), global DBs (TIA), controller tags (Logix) |
 | An empty program body, or a bare `;` statement | At least one real statement. That is why starters contain placeholder assignments | Empty bodies are allowed elsewhere |
+| An array as a FUNCTION `VAR_INPUT` (it compiles, then the C build fails) | Pass the array to a FUNCTION_BLOCK input (use a named array type), or as `VAR_IN_OUT` | Allowed |
+| `MUL_TIME` / `DIV_TIME` function names | `T * n`, `T / n` | Named functions available in some tools |
 
 Accepted, and verified in this course: `IF/ELSIF/CASE` (with lists and ranges), `FOR … BY`,
 `WHILE`, `REPEAT`, `EXIT`, `CONTINUE`, `RETURN`, `VAR_TEMP`, `VAR RETAIN`, `VAR CONSTANT`,
@@ -129,6 +131,24 @@ form. Upstream MATIEC's library (used by `plctest`) instead uses
 document their own behaviour. Treat the first scan after a restart as special, and don't let a
 falling-edge detector trigger anything important unless you have checked it on your platform.
 
+**TIME conversions are in seconds.** In MATIEC and the OpenPLC Runtime:
+
+| Expression | MATIEC / OpenPLC | CODESYS (and most other tools) |
+|---|---|---|
+| `TIME_TO_DINT(T#2500ms)` | 2 (whole seconds) | 2500 (milliseconds) |
+| `TIME_TO_REAL(T#2500ms)` | 2.5 | 2500.0 |
+| `DINT_TO_TIME(1500)` | T#1500s (25 minutes) | T#1.5s |
+
+This is a classic source of bugs when code is moved between platforms: a timeout that was
+1.5 seconds becomes 25 minutes. Compare TIME values directly (`Elapsed >= T#5s`), keep
+elapsed times as TIME, and only convert where you must, with a comment that says which unit
+you expect.
+
+**TIME arithmetic in upstream MATIEC.** The current upstream code generator emits the wrong
+C function name for `T1 + T2` and `T1 - T2`, so the C build fails. OpenPLC's fork generates
+the right name, and `plctest` maps the wrong one for you, so you can write TIME arithmetic
+normally.
+
 **Integer overflow.** Arithmetic wraps around silently (`INT` 32767 + 1 = −32768) because the
 generated C uses fixed-size integers. Some PLCs set a status flag or fault instead. Size your
 variables so overflow cannot happen (Modules 03 and 09).
@@ -149,6 +169,9 @@ variable called `M`, which then collided with the program name. The fix is to gi
 type, configuration, resource and task a name that is not used for any variable. The course
 naming conventions (`FB_…`, `ST_…`, `E_…`, descriptive program names, `Config0`, `Res0`,
 `MainTask`, `Inst0`) keep you clear of this.
+
+The same happens with names of standard functions and FBs (`Limit`, `Max`, `Sel`, `Ton`),
+type keywords (`Dt`, `Date`) and SFC keywords (`Step`) used as variables.
 
 ## E.5 Reading MATIEC error messages
 

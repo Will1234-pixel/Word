@@ -697,7 +697,12 @@ def run_one(matiec, st_file, test_file, keep=False, quiet=False):
                                if os.path.basename(c) not in ("POUS.c", "plctest_main.c")]
         exe = os.path.join(work, "plc.bin")
         cc = os.environ.get("CC", "gcc")
-        cmd = [cc, "-std=gnu11", "-w", "-O0", "-I", MATIEC_LIB_C, "-I", work, "-o", exe] + sources + ["-lm"]
+        # Upstream MATIEC's code generator currently emits "_____time_add" (etc.) for
+        # TIME arithmetic such as T1 + T2; the library function is "__time_add".
+        # OpenPLC's fork generates the right name, so map the wrong one here.
+        fixes = ["-D_____time_%s=__time_%s" % (op, op) for op in ("add", "sub", "mul", "div")]
+        cmd = ([cc, "-std=gnu11", "-w", "-O0", "-I", MATIEC_LIB_C, "-I", work, "-o", exe] + fixes
+               + sources + ["-lm"])
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
             raise PlcTestError("C build of the test harness failed:\n" + proc.stderr[-4000:])
