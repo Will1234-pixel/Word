@@ -69,7 +69,7 @@ One or two paragraphs: what this module covers and why it matters on a real plan
 
 ## <Concept sections>
 Teach the ideas in a logical order. Use tables, ASCII timing/ladder diagrams and Mermaid
-diagrams (GitHub renders ```mermaid). Every major idea gets a worked example.
+diagrams (GitHub renders Mermaid code blocks). Every major idea gets a worked example.
 
 ## Worked examples
 Complete, realistic examples: ladder (ASCII) and/or ST, with an explanation of how the logic
