@@ -97,10 +97,14 @@ PROGRAM DrumFiller
   TotalKg := INT_TO_DINT(DrumCount) * INT_TO_DINT(DrumNominal_kg);
 
   (* ---- 5. Momentary HMI commands are cleared by the PLC.
-     FIX 1: this happens AFTER the logic that reads them. The HMI writes between
-     scans, so clearing them at the top of the program (as the starter did)
-     wiped every command before the logic could see it. Clearing them every scan,
-     accepted or not, means a refused command is never remembered. *)
+     FIX 1: this happens AFTER the logic that reads them. On OpenPLC (and in
+     plctest) the HMI writes between scans, so clearing them at the top of the
+     program (as the starter did) wiped every command before the logic could
+     see it. Clearing them every scan, accepted or not, means a refused command
+     is never remembered. On a controller whose communications can write a tag
+     part-way through a scan, the more robust pattern is to copy each command
+     into an internal bit and clear it in the next statement, at the top, and
+     then use only the copy. *)
   HmiStartCmd := FALSE;
   HmiResetCountCmd := FALSE;
 

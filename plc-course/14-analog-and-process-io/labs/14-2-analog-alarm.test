@@ -142,8 +142,32 @@ scenario a noisy level around the limit does not chatter
 set Level 50.0
 set Pressure 5.0
 scan
-# noise: +/- 0.5 % around the H limit, 250 ms each way, for 4 s. The level is
-# above the limit for more than 3 s in total, but never for 3 s in one go.
+# noise: +/- 0.5 % around the H limit, 250 ms each way, for 7 s. The level is
+# above the limit for 3.5 s in total, but never for more than 250 ms in one go.
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
 set Level 80.5
 wait 250ms
 set Level 79.5

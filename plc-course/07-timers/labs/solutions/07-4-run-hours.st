@@ -12,9 +12,8 @@
    millisecond count that overflows after about 24.8 days, and a pump can run
    for years. A DINT of seconds lasts about 68 years.
 
-   MATIEC note: infix + and - on TIME values do not build in this toolchain,
-   so ADD_TIME and SUB_TIME are used. In CODESYS or TIA Portal you would write
-   Fraction + (Stopwatch.ET - LastET). *)
+   The TIME arithmetic below (+ and - on TIME values) is standard IEC 61131-3.
+   Older code may write the same with ADD_TIME(a, b) and SUB_TIME(a, b). *)
 
 PROGRAM RunHours
   VAR (* I/O *)
@@ -47,14 +46,14 @@ PROGRAM RunHours
         while the stopwatch is running. When the motor stops (or the stopwatch
         restarts) ET falls back to zero and nothing is added. *)
   IF Stopwatch.ET > LastET THEN
-    Fraction := ADD_TIME(Fraction, SUB_TIME(Stopwatch.ET, LastET));
+    Fraction := Fraction + (Stopwatch.ET - LastET);
   END_IF;
   LastET := Stopwatch.ET;
 
   (* 3. Carry whole seconds into the counter. *)
   IF Fraction >= T#1s THEN
     TotalSeconds := TotalSeconds + 1;
-    Fraction := SUB_TIME(Fraction, T#1s);
+    Fraction := Fraction - T#1s;
   END_IF;
 
   (* 4. Reset: clears the total AND the part-second, and holds both at zero

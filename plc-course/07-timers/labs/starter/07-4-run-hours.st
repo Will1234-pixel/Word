@@ -4,9 +4,8 @@
    then run:
      python3 tools/plctest.py 07-timers/labs/starter/07-4-run-hours.st
 
-   MATIEC note: infix + and - on TIME values do not build in this toolchain.
-   Use ADD_TIME(a, b) and SUB_TIME(a, b) instead; comparisons such as
-   MyTime >= T#1s work normally. *)
+   TIME values can be added, subtracted and compared as usual
+   (Elapsed := Elapsed + Step; IF Elapsed >= T#1s THEN ...). *)
 
 PROGRAM RunHours
   VAR (* I/O *)

@@ -51,9 +51,9 @@ By the end of this project you will be able to:
 ## 1. The story
 
 A small contract manufacturer blends water-based cleaning products for supermarket own
-brands. Its mixing vessel T-201 has been run by hand: an operator opens the water valve, watches a sight
-glass, adds surfactant concentrate from a drum pump, opens the steam valve "a couple of turns",
-and writes the batch sheet at the end of the shift. Last year the vessel overflowed twice, and
+brands. Its mixing vessel T-201 has been run by hand: an operator opens the water valve,
+watches a sight glass, adds surfactant concentrate from a drum pump, opens the steam valve
+"a couple of turns", and writes the batch sheet at the end of the shift. Last year the vessel overflowed twice, and
 a customer audit found batch records that could not be trusted.
 
 The vessel has now been fitted with actuated valves, two flow meters, a level transmitter,
@@ -191,7 +191,7 @@ read `Sim.` anything in your own logic.
 | Ingredients | Arrive at 20 °C and cool the contents as they mix in |
 | Transmitters | NE43 behaviour: the signal saturates at 3.8 and 20.5 mA; the card clips at −4864 and 32511 counts |
 | LSHH-201 | Opens at 1800 L (90 %), closes again at 1780 L |
-| Power | `PowerOK` FALSE closes every valve and stops both motors |
+| Power | `PowerOK` FALSE closes every valve, including the steam valve, and stops both motors |
 | Integration | Fixed 10 ms steps, independent of your task interval |
 
 These numbers make the dynamics realistic in shape but faster than a real vessel of this size,
@@ -532,7 +532,8 @@ Otherwise `HeatValveRaw` = 0.
 bumpless transfer: when a loop goes from manual to automatic, the output continues smoothly
 from the manual value. That is right when an operator switches a running loop to automatic. At
 the start of a heat-up it is wrong. The "manual value" is 0 %, so a bumpless start makes the
-output creep up at the integral rate, and the batch takes more than twice as long to heat. At
+output creep up at the integral rate. With the default tuning, recipe 1 then takes about
+9 minutes to heat instead of about 3. At
 the start of the heat phase, clear the integral part instead (a *cold start*). The output then
 begins at Kc × error, which saturates at 100 %, the full-steam heat-up you want. The
 conditional-integration anti-windup of Module 15 then brings the temperature in without a big
@@ -584,9 +585,9 @@ elapsed time while the condition is true.
 
 **Worked example.** Recipe 1 has MixTime 60 s and HoldTime 90 s. The heat phase ends at 58 °C,
 inside the band, so both timers start together. With no upset the phase lasts 90 s. Suppose
-that 10 s into the phase a cold addition drops the temperature to 50 °C, and it is back above
-58 °C 45 s later. The mix timer reaches 60 s at 60 s. The hold timer has 10 s at 55 s, and
-still needs another 80 s after that, so the phase ends at about 135 s.
+that 10 s into the phase a cold addition drops the temperature to 50 °C, and the loop brings
+it back above 58 °C 60 s later. The mix timer reaches 60 s at 60 s. The hold timer has 10 s at
+70 s, and still needs another 80 s after that, so the phase ends at about 150 s.
 
 ### 7.7 Draining
 
@@ -735,7 +736,7 @@ flowchart TB
 ```
 
 **Layering.** The state machine (section 5) decides **what** should happen: which phase,
-running or held. It never writes an output. The equipment section (6) decides **how**: it turns
+running or held. It never writes a physical output. The equipment section (6) decides **how**: it turns
 "Running in ChargeA" into "open XV-201 until 396 L", and it applies the interlocks. Section 7
 writes each physical output in **exactly one place**. When the question is "why is XV-201 shut?",
 there is one line to read.
@@ -855,15 +856,18 @@ bitwise logic ([Module 09](../09-math-and-data-handling/), section 5):
 
 `Cycle.DeltaT` is the time since the previous scan, measured with a free-running TON, the same
 technique `FB_PlantSim` uses. You could use the task interval instead, but measuring it keeps
-the timers right if someone changes the task. Two MATIEC details: write `ADD_TIME` and
-`SUB_TIME` rather than `+` and `-` on TIME values, and don't name a variable `Dt` or `DT`,
-because `DT` is the DATE_AND_TIME type.
+the timers right if someone changes the task. `ADD_TIME(MixAcc, Cycle.DeltaT)` is the
+standard function form of `MixAcc + Cycle.DeltaT`; either works (see
+[Appendix E](../appendices/E-matiec-openplc-notes.md) for a note on upstream MATIEC). One
+naming trap: don't call the variable `Dt`, because `DT` is the DATE_AND_TIME type and names are
+not case-sensitive.
 
 ## 9. Milestones
 
 Build the project in this order. Each milestone has its own group of scenarios in the test
 (their names start with M1…M8), so you can see your progress. Scenarios for later milestones
-fail until you get there, and that is expected.
+fail until you get there, and that is expected. A few earlier scenarios also run a batch to
+the end (M3 "skips charge B", for example), so they pass only once the later phases work.
 
 | Milestone | Build | Suggested time |
 |---|---|---|
@@ -971,7 +975,7 @@ Below 65 means some parts need more work before the project is complete.
 - **Reset that restarts equipment.** Resetting an agitator fault while Held must not start the
   agitator. Only Restart does that.
 - **Restart that bounces.** Going Held → Restarting → Holding when the fault is still there
-  briefly energises equipment and floods the event log. Refuse the command instead.
+  can briefly energise equipment, and it clutters the event log. Refuse the command instead.
 - **Live recipe values.** Reading `Recipes[RecipeNo]` during the batch lets an HMI edit, or a
   new selection, change a batch half way through.
 - **Batch time from power-up**, or only while Running. It is Start to Complete, time held
@@ -1001,9 +1005,9 @@ Below 65 means some parts need more work before the project is complete.
 - **Recipes.** HMI and SCADA packages have recipe managers that download a recipe into a PLC
   data block or UDT array like `Recipes[]`. Keep the PLC in charge of validation: never trust a
   downloaded value without range checks.
-- **CODESYS and TwinCAT** users can use `TIME` arithmetic with `+` and `-`, enumerations with
-  explicit values, and edition-3 object orientation (methods for Hold, Restart and Abort on a
-  phase function block). The structure of this project carries over unchanged.
+- **CODESYS and TwinCAT** users can use enumerations with explicit values, and edition-3
+  object orientation, for example methods for Hold, Restart and Abort on a phase function
+  block. The structure of this project carries over unchanged.
 
 ## 14. Extension ideas
 

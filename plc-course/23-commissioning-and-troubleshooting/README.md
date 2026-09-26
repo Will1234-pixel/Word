@@ -259,14 +259,16 @@ ideas are the same:
 
 Rules that keep you out of trouble:
 
-- **Never connect a milliammeter in parallel** with anything in the loop. A current meter is
-  almost a short circuit: across the transmitter it removes the transmitter from the loop,
-  and across the burden resistor it steals the current the PLC should be reading.
+- **Never connect a milliammeter in parallel** with anything in the loop, except test
+  terminals or a test diode designed for it (below). A current meter is almost a short
+  circuit: across the transmitter it removes the transmitter from the loop, and across the
+  burden resistor it steals the current the PLC should be reading.
 - **Source mode is for a loop with no other supply.** In a loop that the card already powers,
   use simulate mode.
 - Many loops have **test terminals**, sometimes with a diode across them, so that a meter can
-  be connected without breaking the loop. A clamp-on milliamp meter also reads without
-  breaking the loop.
+  be connected without breaking the loop: the meter's low resistance takes the whole loop
+  current away from the diode, and the loop keeps working when the meter is removed. A
+  clamp-on milliamp meter also reads without breaking the loop.
 - In a **hazardous area**, use only test equipment certified for that area and follow the
   permit. An ordinary calibrator is not certified for use in the zone: taking it in, or
   connecting it to an intrinsically safe loop there, can create an ignition risk.
@@ -294,9 +296,9 @@ a real pressure or level to it, or use its HART loop-test mode:
 
 | Pattern | Likely cause |
 |---|---|
-| Same error at every point | Zero (offset) error: wrong minimum in the scaling, or a transmitter zero shift |
+| Same error at every point | Zero (offset) error: a constant offset or bias added in the scaling, or a transmitter zero shift |
 | Error grows in proportion to the reading | Span error: wrong maximum in the scaling, or a transmitter ranged differently from the PLC (0–6 m against 0–5 m) |
-| Large error at 0 %, zero at 100 % | Input configured for 0–20 mA with a 4–20 mA signal |
+| Large error at 0 %, shrinking to zero at 100 % | Input configured for 0–20 mA with a 4–20 mA signal, or a wrong minimum (low range value) in the scaling, which pivots the line about the 100 % point |
 | Correct up to a point, then flat | Loop voltage budget exceeded (worked example 3), or a signal saturating at the top of its range |
 
 ## 23.4 Function, sequence, C&E and performance tests
@@ -474,7 +476,8 @@ A full download, a change to the hardware configuration or a firmware update nor
 the CPU into STOP. In STOP, outputs go to their configured STOP or fault state: usually
 de-energised, and on some modules a hold-last-value or substitute value that you can
 configure. The plant trips, or stays wherever it was. After the download, the CPU starts with
-new initial values for non-retentive data, and sequences restart from their start-up state.
+new initial values for non-retentive data, so a sequence whose step is not retained goes back
+to its first step, while retained data may keep values that no longer fit the new program.
 Plan a download like a planned shutdown: the plant in a safe state, operations informed and
 agreed, and a rollback plan (the backup you took) ready.
 
@@ -637,10 +640,12 @@ the lesson. Field faults come first because they are the most common.
 sorter occasionally diverts the wrong item. *Evidence:* the photo-eye's own LED flickers as
 cartons pass instead of switching cleanly; the fault is worse on one product size. *Cause:*
 vibration has turned the bracket so the beam only just catches the edge of the reflector, or
-an inductive proximity switch has been knocked back towards its sensing limit (and for most
-inductive sensors the rated sensing distance is shorter for non-ferrous targets such as
-aluminium). *Fix:* realign, lock and mark the bracket, check the sensing margin. *Lesson:* use the sensor's LED as a test
-point, and mount sensors so they cannot drift.
+an inductive proximity switch has been knocked back towards its sensing limit. (The rated
+sensing distance of an inductive sensor is specified for a mild-steel target; for most
+sensors the real distance to a non-ferrous target such as aluminium is much shorter, so a
+switch that was marginal on a steel bracket fails first on an aluminium part.) *Fix:*
+realign, lock and mark the bracket, check the sensing margin. *Lesson:* use the sensor's LED
+as a test point, and mount sensors so they cannot drift.
 
 **Blown fuse.** *Symptom:* several unrelated inputs all go FALSE at once, or a whole group of
 outputs stops working. *Evidence:* every LED on one card group is off; the fused terminal's
@@ -767,9 +772,15 @@ END_IF;
 PE_Old := CartonPE;
 ```
 
-Another is an HMI command bit that the PLC clears *before* the logic that reads it.
-The HMI writes between scans, so a clear at the top of the program wipes every command before
-the logic can see it.
+Another is an HMI command bit that the PLC clears *before* the logic that reads it. On many
+controllers (OpenPLC, and `plctest`) the HMI's write lands between scans, so a clear at the
+top of the program wipes every command before the logic below can see it. On controllers
+where communication can update a tag part-way through a scan, such as Rockwell Logix, the
+command works only when the write happens to land between the clear and the logic, which
+turns the bug into an intermittent one. The robust pattern is to copy the command into an
+internal bit and clear it in two adjacent statements, then use only the copy; the smallest
+fix is to clear the command at the end of the program, after the logic that reads it
+(Lab 23-2).
 
 **Double coils.** An output written in two places: the last write in the scan wins. The
 symptom is typically "it works in manual but not in auto", or the reverse. The cross-reference
@@ -801,8 +812,8 @@ inside an `IF` and, while the condition is FALSE, the timer is frozen: it neithe
 resets. Worked example 4 goes through it scan by scan.
 
 **Integer overflow.** An `INT` holds −32768 to 32767. In MATIEC and many PLCs, adding one to
-32767 gives −32768: the value wraps around silently. Some PLCs set a status flag or raise a
-fault instead (Modules 03 and 09). The subtle version is converting **too late**:
+32767 gives −32768: the value wraps around silently. Some PLCs also set an overflow status
+flag, and some can raise a fault (Modules 03 and 09). The subtle version is converting **too late**:
 
 ```iecst
 (* WRONG: RunMinutes * 60 is calculated as an INT. It overflows at 547 minutes
@@ -919,7 +930,7 @@ the operator stops the pump to clear the strainer. At t = 66 s the pump is resta
 ```text
  time (s)     0       6                              66
               |       |                              |
- PumpRun    """"""""""\______________________________/""""""""""""
+ PumpRun    """"""""""\______________________________/\___________  trips at once
  NoFlow     __/"""""""""""""""""""""""""""""""""""""""""""""""""""
  timer call?  yes     no: frozen, IN = TRUE,         yes: IN TRUE,
               timing  ET stays at 6 s                66 s since start
@@ -1001,8 +1012,10 @@ END_FUNCTION_BLOCK
 
 Two details matter. The length is recorded from `HeldET`, the elapsed time saved on the
 previous scan, because on the scan where the dropout ends the timer's `IN` goes FALSE and its
-`ET` resets to zero. And the resolution is one scan: a 30 ms dropout on a 10 ms task can
-record as 20–30 ms, and a dropout shorter than one scan may not be seen at all. For faster
+`ET` resets to zero. And the resolution is one scan: the recorded length is the time from the
+first to the last scan that saw the signal missing, so it reads short by up to one scan. In
+`plctest`, a 30 ms dropout on a 10 ms task (seen by three scans) records as 20 ms, and on a
+real PLC a dropout shorter than one scan may not be seen at all. For faster
 events you need an input with a latching or high-speed function, or an SOE module
 (Module 16). Remove the capture logic, or leave it documented, when the fault is fixed.
 
@@ -1240,10 +1253,11 @@ and has run for a month. Then three reports arrived:
    them or not. A command that could not be accepted is forgotten, not remembered for later.
 7. `HmiResetCountCmd` sets `DrumCount` to 0.
 8. `TotalKg` is correct for every count an `INT` can hold.
-9. On the first scan after **every** PLC start the station is in `Idle` with the valve closed,
-   even if the memory says `Filling` or `Done`, because on some platforms every value survives a
-   power cut. Use start-up code, not just the declarations. `DrumCount` keeps its retained
-   value. A drum interrupted by a power cut is never resumed or counted automatically.
+9. After **every** PLC start the station starts in `Idle` with the valve closed, even if the
+   memory says `Filling` or `Done`, because on some platforms every value survives a power
+   cut. Use start-up code that runs on the first scan, not just the declarations. `DrumCount`
+   keeps its retained value. A drum interrupted by a power cut is never resumed or counted
+   automatically: only a new Start begins a fill.
 
 **Steps:** as in Lab 23-1, with `23-2-subtle-faults`. The test file's header lists the raw
 counts it uses, which is handy for your own `print` experiments.
@@ -1254,7 +1268,9 @@ counts it uses, which is handy for your own `print` experiments.
 Report 1: when does the HMI write its bit, and where in the scan is it cleared? Report 2: what
 type is `DrumCount * DrumNominal_kg`, and when does the conversion happen? Report 3: which
 block is `FillStep` declared in, and what runs on the first scan? Remember that the
-start-up code must come *before* the logic that drives the valve.
+start-up code must come *before* the sequence and the logic that drives the valve: if the
+sequence runs first with a stale `Filling` step and a lost tare, it can count a drum that
+nobody filled.
 </details>
 
 ### Lab 23-3: I/O simulation layer
@@ -1361,11 +1377,12 @@ clear `Enable` if not permitted; detect the start of simulation by remembering l
 <details>
 <summary>Answers</summary>
 
-1. A FAT proves the control system against its specification before it ships: hardware,
-   software functions, HMI, alarms and sequences, using simulated I/O. It is the cheapest place
-   to find software faults. A SAT proves the installed system on site (transport damage,
-   power, earthing, communications), which a FAT can't. Neither proves the field wiring, the
-   real devices or the real process behaviour: that is for the I/O checkout, loop checks and
+1. With simulated I/O, a FAT can exercise the whole control system against its
+   specification, including every abnormal path, trip, alarm and restart, many of which
+   are impossible or unsafe to create on a real plant; it is also the cheapest place to find
+   software faults. A SAT proves the installed system on site (transport damage, power,
+   earthing, communications), which a FAT can't. Neither proves the field wiring, the real
+   devices or the real process behaviour: that is for the I/O checkout, loop checks and
    commissioning.
 2. 16.00 mA (4 + 16 × 0.75), 4.00 V across 250 Ω, raw 20736 (0.75 × 27648), and 3750 mm on
    the HMI.
@@ -1417,4 +1434,4 @@ clear `Enable` if not permitted; detect the start of simulation by remembering l
   retentive variables (CODESYS).
 
 ---
-Previous: [22 — Software Engineering](../22-software-engineering/) · Next: [24 — Capstone Projects](../24-capstone-projects/)
+Previous: [22 — Software Engineering for PLCs](../22-software-engineering/) · Next: [24 — Capstone Projects](../24-capstone-projects/)

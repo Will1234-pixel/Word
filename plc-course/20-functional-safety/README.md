@@ -751,25 +751,29 @@ bridged or broken), and a **discrepancy fault** is latched.
   reset is accepted. That proves neither contact is stuck.
 
 ```text
-   normal press: channel 2 opens 30 ms after channel 1 - within the 200 ms discrepancy time
+   one character = 10 ms; discrepancy time 200 ms
+
+   normal press: channel 2 opens 30 ms after channel 1
                  ______                                           ____________________
    Ch1                 |_________________________________________|
                  _________                                        ____________________
    Ch2                    |______________________________________|
                  ______                                                      _________
    Ok                  |____________________________________________________|
-                                                                  (released:  ^ reset
-                                                                   no restart)
+                                                                 ^          ^
+                                                          released          reset (no restart)
 
    welded channel 2: only channel 1 opens
-                 ______                   ____________________________________________
-   Ch1                 |_________________|
+                 ______                                 ______________________________
+   Ch1                 |_______________________________|
                  _____________________________________________________________________
    Ch2           (never opens)
                  ______
    Ok                  |______________________________________________________________
-                                  ________________________________________________
-   DiscFault     ________________|  (after 200 ms)   reset refused: Ch2 never opened
+                                            __________________________________________
+   DiscFault     __________________________|
+                                            200 ms after Ch1 opened: latched;
+                                            a reset is refused because Ch2 never opened
 ```
 
 [Worked example 3](#worked-example-3-a-two-channel-emergency-stop-input) implements this

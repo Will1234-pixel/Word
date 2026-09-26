@@ -14,7 +14,9 @@ FUNCTION_BLOCK FB_Motor
        - Start (TRUE) switches RunCmd on; RunCmd then holds itself on.
        - Stop, loss of InterlockOK, or a Fault switch RunCmd off. Stop wins
          over Start. The motor never restarts on its own: after a stop, an
-         interlock trip or a reset it needs a new Start.
+         interlock trip or a reset it needs a new Start. (Start is a level
+         input: a request still held TRUE by automatic logic counts as a new
+         Start, so that logic must drop it when a restart is not wanted.)
        - RunFb must agree with RunCmd. If they disagree for longer than
          FbTimeout (failed to start, lost feedback while running, or running
          without a command) Fault latches and RunCmd switches off.

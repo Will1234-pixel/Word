@@ -354,8 +354,8 @@ a measurement. With `PT := T#5s` the same 20 ms is 0.4 % and does not matter.
 
 Rules of thumb:
 
-- Keep presets well above the scan time. If the timing matters to within 10 %, make `PT`
-  at least ten times the task interval.
+- Keep presets well above the scan time. The error can be up to two scans, so if the timing
+  matters to within 10 %, make `PT` at least twenty times the task interval.
 - A preset shorter than the scan (`T#5ms` on a 10 ms task) is meaningless: the timer can only
   ever finish on a scan boundary.
 - A *cyclic* task (fixed interval) gives more regular timing than a free-running scan whose
@@ -396,9 +396,18 @@ Pump := RunDelay.Q;
 ```
 
 The same applies in Ladder. A timer on a rung skipped by a jump (`JMP`/`LBL`), or in a
-subroutine or section that is not executed this scan, is frozen in the same way. When you
+subroutine or section that is not executed this scan, is frozen in the same way. In IEC-style
+ladder and FBD editors such as CODESYS and OpenPLC, watch the box's optional `EN` input as
+well: if the rung condition is wired to `EN` instead of `IN`, a FALSE rung *skips the call*,
+exactly like the `IF` above. Wire the condition to `IN`. Rockwell's ladder timers have no such
+trap: a Logix `TON` on a FALSE rung is still executed, sees the FALSE rung and resets. When you
 genuinely want a timer to pause and resume, that is a *retentive* timer: say so explicitly
 ([section 6](#6-retentive-accumulating-timers)).
+
+> **Siemens detail.** On S7-1200/1500 the IEC timers also refresh `Q` and `ET` whenever your
+> program reads them, even if the timer is not called in that scan. `IN` is still only read
+> when the instruction is called, so the bug above is the same: a timer that is not called
+> never sees `IN` go FALSE.
 
 ### 5.3 Never share one instance
 
@@ -414,22 +423,23 @@ PumpB := Delay.Q;
 
 If pump A is requested and pump B is not, the first call sees `IN = TRUE` and starts timing,
 and the second call sees `IN = FALSE` and resets the timer. Next scan the first call sees a
-new rising edge and starts again. The timer never gets anywhere and pump A never starts.
-When both are requested, both pumps start together, which is also wrong. The ladder version
-is the same timer tag used on two rungs, the timer equivalent of the double-coil bug from
-Module 04. Declare one instance per job, named after the job: `PumpA_StartDelay`,
+new rising edge and starts again. The timer never gets anywhere, so while B is not
+requested pump A never starts. It starts only once pump B is requested as well, 5 s after
+B's request, and when B's request goes away the second call resets the shared timer and pump
+A stops too. (Running this in `plctest` shows exactly that.) The ladder version is the same
+timer tag used on two rungs, the timer equivalent of the double-coil bug from Module 04. Declare one instance per job, named after the job: `PumpA_StartDelay`,
 `PumpB_StartDelay`.
 
 ### 5.4 Resetting a timer
 
-IEC timers have no reset input. To reset a TON or TP, **call it with `IN = FALSE`** at least
+IEC timers have no reset input. To reset a TON, **call it with `IN = FALSE`** at least
 once. The usual way is to add the reset condition to `IN`:
 
 ```iecst
 StepTimer(IN := StepActive AND NOT ResetTimer, PT := T#30s);
 ```
 
-Two traps:
+Three traps:
 
 - Setting a variable FALSE and then TRUE again *before* the timer is called does nothing.
   The timer only sees the value of `IN` at the moment of each call.
@@ -437,19 +447,30 @@ Two traps:
   later call. A restart therefore costs at least one scan. (Calling the same instance twice in
   one scan, once with `IN := FALSE` and once with `IN := TRUE`, is possible but breaks the
   once-per-scan rule. If you ever do it, comment it clearly.)
+- **A running TP cannot be reset at all.** Once triggered, its pulse lasts the full `PT`
+  whatever `IN` does; `IN = FALSE` only re-arms it (and zeroes `ET`) after the pulse has ended.
+  If a pulse must be cut short, gate its output: `Horn := HornPulse.Q AND NOT Silence;`.
+  A TOF cannot be cut short by its `IN` either ([section 4.2](#42-tof-off-delay-timer)).
 
 Rockwell timers have a `RES` (reset) instruction and Siemens has a reset-timer instruction
 and the `R` input of `TONR`: see [Vendor notes](#vendor-notes).
 
 ### 5.5 Changing PT on the fly
 
-The timer reads `PT` on every call, so a preset written from an HMI takes effect at once:
+What happens when a preset written from an HMI changes while a timer is running depends on
+the platform:
 
-- **While timing:** a larger `PT` extends the delay. A `PT` smaller than the current `ET`
-  makes `Q` come on at the next call.
-- **After the timer is done:** behaviour varies between implementations. In MATIEC, a TON
-  that is done stays done (`Q` TRUE, `ET` at the old `PT`) even if `PT` is increased.
-  Don't rely on either behaviour: if a new preset must apply, restart the timer.
+- **MATIEC (`plctest`, OpenPLC), CODESYS and Rockwell Logix** compare the elapsed time with
+  the *current* preset on every call. While timing, a larger `PT` extends the delay, and a `PT`
+  smaller than the current `ET` makes `Q` come on at the next call.
+- **Siemens S7-1200/1500** IEC timers copy `PT` into their instance data only when `IN`
+  changes, so a new preset takes effect from the next start.
+- **After the timer is done** behaviour varies again. In MATIEC, a TON that is done stays done
+  (`Q` TRUE, `ET` at the old `PT`) even if `PT` is increased.
+
+Don't rely on any of these: if a new preset must apply, restart the timer, or only accept a
+new preset while the timer is idle. Two more points about presets:
+
 - **Zero and negative presets.** `PT := T#0s` makes the delay as short as the platform
   allows. In MATIEC a TON with `PT = 0` turns `Q` on at the call *after* `IN` rises, one scan
   late, and other platforms may turn it on at once. A negative `PT` (for example from a
@@ -538,13 +559,13 @@ FUNCTION_BLOCK FB_RTO
   IF R THEN
     Banked := T#0s;
   ELSIF NOT IN THEN
-    Banked := ADD_TIME(Banked, Segment.ET);
+    Banked := Banked + Segment.ET;
   END_IF;
 
   (* Time the current period against what is left of the preset. *)
-  Segment(IN := IN AND NOT R, PT := SUB_TIME(PT, Banked));
+  Segment(IN := IN AND NOT R, PT := PT - Banked);
 
-  ET := ADD_TIME(Banked, Segment.ET);
+  ET := Banked + Segment.ET;
   Q := (Q OR Segment.Q) AND NOT R;     (* done stays done until reset *)
 END_FUNCTION_BLOCK
 ```
@@ -559,11 +580,13 @@ How it works:
 - The segment's preset is whatever is left: `PT - Banked`. So `Segment.Q` comes on exactly
   when the total reaches `PT`, and `ET` never goes past `PT`.
 - `Q` is latched, so it stays TRUE when `IN` falls, like a Rockwell RTO's `.DN` bit.
-  (Taking `Q` from the TON rather than comparing `ET >= PT` also avoids a MATIEC quirk: a
-  TIME built with `ADD_TIME` can compare as unequal to an equal value.)
+  (Taking `Q` from the TON rather than comparing `ET >= PT` also avoids the MATIEC quirk from
+  [section 2.3](#23-arithmetic-and-comparisons): `Banked + Segment.ET` can compare as less
+  than an equal `PT`.)
 
-In CODESYS or TIA Portal you would write `Banked + Segment.ET` and `PT - Banked`. The FB is
-called like any timer: `HeaterHours(IN := HeaterOn, PT := T#10h, R := ResetPB);`.
+In older code you may see `ADD_TIME(Banked, Segment.ET)` and `SUB_TIME(PT, Banked)`, which
+mean the same. The FB is called like any timer:
+`HeaterHours(IN := HeaterOn, PT := T#10h, R := ResetPB);`.
 
 ### 6.2 Surviving a power cut
 
@@ -682,7 +705,7 @@ starts the cycle again:
 ```
 
 With an ON time of 1 s and an OFF time of 1.5 s, the lamp driven by `NOT OnTimer.Q`, and the
-whole oscillator switched on and off by an `Enable` signal:
+whole oscillator (timers and lamp) switched on and off by an `Enable` signal:
 
 ```text
               _____________________________
@@ -854,15 +877,27 @@ The timing is the point of this example:
   for heavy loads. Too short and the change to delta causes a current surge close to a
   direct-on-line start. Too long and the motor labours in star under load. That is why the
   labs make it adjustable.
-- **Dead time.** Star and delta closed together would short-circuit the supply through the
-  windings. The star contactor must have **opened and its arc cleared** before delta closes,
-  so there is a short dead time with both off. Dedicated star-delta timing relays use a dead
-  time of the order of tens of milliseconds. Too long a dead time lets the motor slow down and
+- **Dead time.** Star and delta closed together would short-circuit the supply: the delta
+  contactor connects the winding ends to the line phases, and the star contactor ties those
+  same ends together, so the phases are shorted through the two contactors. The star
+  contactor must have **opened and its arc cleared** before delta closes, so there is a short
+  dead time with both off. Dedicated star-delta timing relays use a changeover time of the
+  order of tens of milliseconds. Too long a dead time lets the motor slow down and
   increases the surge when delta closes. (Lab 07-1 uses 100 ms so the test can check it
   comfortably above the 10 ms scan.)
 - **Interlocks.** The PLC's software interlock (delta only when star is off) is the *second*
   line of defence. The first is hard-wired: each contactor's NC auxiliary contact in the
   other's coil circuit, and usually a mechanical interlock between the two contactors.
+
+The same dead-time idea protects a **reversing starter** (Module 04): after one direction
+drops out, wait a short time, or until the motor has stopped, before the other direction may
+start. A TON that runs while both contactors are off does it, and its `Q` becomes a start
+permissive for either direction:
+
+```iecst
+ChangeoverDelay(IN := NOT FwdK AND NOT RevK, PT := T#500ms);   (* both off for 0.5 s *)
+StartAllowed := ChangeoverDelay.Q;
+```
 
 On the electrical side, the thermal overload relay is normally placed in the winding circuit,
 where it carries the phase current (about 58 % of the line current), and is set accordingly.
@@ -872,15 +907,15 @@ Module 02 covers contactors and overload relays.
 
 On presses and similar machines, a **two-hand control device** keeps both of the operator's
 hands on the controls, away from the danger zone, while the hazardous motion takes place. The
-international standard is ISO 13851 (formerly EN 574). It defines types of increasing rigour.
-The timing rules you can express in logic are:
+international standard is ISO 13851 (formerly EN 574). It defines types I, II and III of
+increasing rigour. The timing rules you can express in logic are:
 
 - the output is given only while **both** buttons are held, and stops as soon as **either**
-  is released;
+  is released (all types);
 - a new cycle needs **both** buttons to be released first, so taping one button down and
-  cycling with the other hand does not work;
-- for the highest type (type III), the two buttons must be pressed **synchronously**, which
-  the standard defines as within **0.5 s** of each other.
+  cycling with the other hand does not work (types II and III);
+- for type III, the two buttons must also be pressed **synchronously**, which the standard
+  defines as within **0.5 s** of each other.
 
 ```text
               _____________       _______________     _______________
@@ -1069,7 +1104,8 @@ supervision (section 7.5), so that a conveyor that trips stops everything upstre
    *in* (TON) or on the way *out* (TOF)? Draw the timing diagram before you write the code.
 5. **Counting time with a self-resetting timer.** It runs slow by one or two scans per cycle.
    Fine for a lamp; wrong for totals and run hours.
-6. **Presets close to the scan time.** A 20 ms timer on a 10 ms scan has up to 50 % error.
+6. **Presets close to the scan time.** A 20 ms timer on a 10 ms scan can be out by 50 % or
+   more.
    Keep presets much longer than the scan, or use hardware timing.
 7. **Unlimited HMI presets.** An operator enters 0 or 99 hours. Clamp every adjustable preset
    with `LIMIT`, and decide what a change while timing should do.
@@ -1138,6 +1174,12 @@ Ladder also has coil forms of the timers (`-(TP)-`, `-(TON)-`, `-(TOF)-`, `-(TON
 instructions to reset a timer and to load a new preset. `TIME` is a signed 32-bit
 millisecond value. The S7-1500 also offers `LTIME` and matching timer versions.
 
+Two S7-1200/1500 details differ from the plain IEC model used in this module. A timer copies
+`PT` into its instance data only when `IN` changes, so a preset changed while it is running
+applies from the next start ([section 5.5](#55-changing-pt-on-the-fly)). And `Q` and `ET` are
+also refreshed whenever the program reads them, not only when the timer is called
+([section 5.2](#52-call-every-timer-once-per-scan-unconditionally)).
+
 **Legacy S5 timers.** S7-300/400 programs (and older code migrated to newer CPUs) often
 use the SIMATIC timers `S_PULSE`, `S_PEXT`, `S_ODT`, `S_ODTS` and `S_OFFDT`, addressed as
 `T0`, `T1`, and so on. They use the `S5TIME` format, a three-digit BCD value with a time base
@@ -1161,8 +1203,8 @@ others. OpenPLC Editor shows the same blocks in its LD and FBD libraries. There 
 retentive timer**, so build one. Points to remember, all verified with this course's
 toolchain:
 
-- Infix `+ - * /` on TIME values do not build; use `ADD_TIME`, `SUB_TIME`, `MULTIME` and
-  `DIVTIME`. Comparisons work.
+- TIME arithmetic works with `+ - * /` and with `ADD_TIME`, `SUB_TIME`, `MULTIME` and
+  `DIVTIME`. A sum can compare as less than an equal value (section 2.3).
 - `TIME_TO_DINT` returns **seconds**, not milliseconds.
 - A TON with `PT = T#0s` turns `Q` on one call after `IN` rises.
 - A TON that is done stays done if `PT` is later increased.
@@ -1218,7 +1260,8 @@ the delta contactor closes. Stop or an overload trip drops everything at once. R
 5. `StarK` and `DeltaK` are never on at the same time.
 6. Stop, or an overload trip, switches all three off at once, in any phase.
 7. Nothing restarts on its own: not when Stop is released, and not when the overload relay
-   is reset. A new start always begins with a full star period.
+   is reset. A new start always begins with a full star period, even when it comes only
+   moments after a stop.
 8. Start is ignored while Stop is pressed or the overload is tripped, and it is not
    remembered. Pressing Start again while running changes nothing.
 9. A new `StarTime` value applies from the next start.
@@ -1266,8 +1309,8 @@ customer wants short, bright flashes with longer gaps, adjustable from the HMI.
 Use the two-timer oscillator from [section 7.3](#73-oscillators-and-flashers) and add
 `Enable` to the first timer's `IN`, so that removing it resets both timers. Which timer
 output is FALSE during the ON phase? Remember to gate the lamp with `Enable` too.
-Alternatively, one timer with `PT` = on time + off time can drive the lamp by comparing its
-`ET` with `OnTime` (use `ADD_TIME` in `plctest`).
+Alternatively, one timer with `PT := OnTime + OffTime` can drive the lamp by comparing its
+`ET` with `OnTime`.
 </details>
 
 ### Lab 07-3: Motor with run-feedback monitoring
@@ -1313,7 +1356,8 @@ stateDiagram-v2
    `FailToStart` latches.
 3. **Feedback lost:** once `RunFbk` has been seen during the current run, if it is missing
    for `LossDelay` continuously while `MotorRun` is TRUE, `FbkLost` latches. Shorter
-   drop-outs are ignored.
+   drop-outs are ignored. A loss is always reported as `FbkLost`, never as `FailToStart`,
+   even when `LossDelay` is set longer than `StartTimeout`.
 4. Either fault switches `MotorRun` off and lights `FaultLamp`. Faults stay latched when the
    feedback returns and when `RunCmd` is removed.
 5. `ResetPB` clears the faults **only while `RunCmd` is FALSE**, so a reset can never restart
@@ -1321,8 +1365,8 @@ stateDiagram-v2
 6. Every start is supervised afresh: time from an earlier, interrupted start does not carry
    over, and after a normal stop the next start is supervised as a start (not as a loss of
    feedback).
-7. No fault is raised while the motor is not commanded, for example when the feedback is slow
-   to drop after a stop.
+7. No fault is raised while the motor is not commanded (`MotorRun` FALSE): for example when
+   the feedback is slow to drop after a stop, or comes and goes after a trip.
 
 <details>
 <summary>Hint (open only if stuck)</summary>
@@ -1370,8 +1414,9 @@ times a day, often for less than a minute.
    Declare the accumulated values `RETAIN` so a real PLC keeps them through a power cut.
    (`plctest` cannot test retention: every scenario starts from a fresh PLC.)
 
-In `plctest`, use `ADD_TIME` and `SUB_TIME` for TIME arithmetic (section 2.3). The long-run
-test simulates over an hour of running, which takes about a second.
+Measure time with a timer. Don't add a fixed amount per scan (`+ T#10ms` because the task is
+10 ms): on a real PLC the scan time varies, and that meter would drift. The long-run test
+simulates over an hour of running, which takes about a second.
 
 <details>
 <summary>Hint (open only if stuck)</summary>
@@ -1385,7 +1430,8 @@ well as the total.
 Another route is `FB_RTO` from [section 6.1](#61-iec-has-no-retentive-timer-so-build-one)
 with a one-minute preset, reset by its own `Q`, counting minutes in a DINT. You then need the
 seconds of the current minute from its `ET`, which means converting a TIME to a number:
-remember that `TIME_TO_DINT` gives seconds in MATIEC but milliseconds elsewhere.
+remember that `TIME_TO_DINT` gives seconds in MATIEC and OpenPLC but milliseconds in most
+other tools.
 </details>
 
 ### Lab 07-5: Two-hand control timing (optional)
@@ -1408,7 +1454,8 @@ timing exercise, not a safety design.
 
 1. `PressDown` is TRUE only while **both** buttons are held.
 2. The second button must be pressed within **500 ms** of the first, in either order.
-   If it comes later, there is no stroke.
+   If it comes later, there is no stroke. Each new attempt (after both buttons have been
+   released) gets its own 500 ms window, timed from its own first press.
 3. Releasing either button switches `PressDown` off at once.
 4. After any release, and after a missed window, **both** buttons must be released before a
    new stroke can start. Re-pressing just one button never restarts the stroke.

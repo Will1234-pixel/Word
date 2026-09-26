@@ -372,7 +372,8 @@ caller's variable changes. It is used:
 
 - to let an FB or function **update data that belongs to the caller**, such as a shared
   statistics record (Lab 11-3), a queue or a recipe;
-- to hand over **large structures or arrays without copying** them on every call;
+- to hand over **large structures or arrays without copying** them on every call, where the
+  compiler passes them by reference (see the next list);
 - to keep data **somewhere other than the instance**: in a retentive area, an HMI data block,
   or a structure several instances share.
 
@@ -776,15 +777,18 @@ The decisions behind it:
 - **Stop wins.** Stop, a lost interlock and a fault are all checked before Start.
 - **An interlock trip is a stop, not a pause.** When `InterlockOK` comes back, the motor stays
   off until someone gives a new Start. A motor that restarts by itself when a level switch
-  resets is a classic accident.
+  resets is a classic accident. One caution: `Start` is a level input, so a request that is
+  still held TRUE (typically from automatic logic) counts as a new Start the moment the
+  interlock returns or a fault is reset. The automatic logic must drop its request when it
+  should not restart (see 6.5 and worked example 7.1).
 - **Supervise both directions.** Command without feedback is a *failure to start*, or a *loss
   of feedback* while running (an overload trip, a contactor that drops out). Feedback without
   a command is an *uncommanded run*: welded contactor contacts, or someone running the motor
   from a local panel. One timer can watch for any disagreement between command and feedback.
   Because it restarts every time the two agree, only a disagreement that lasts the whole
   `FbTimeout` counts.
-- **Latch the fault** and switch off the command. Reset clears the latch but does not start
-  the motor. If the cause is still there, the fault comes straight back.
+- **Latch the fault** and switch off the command. Reset clears the latch but does not itself
+  start the motor. If the cause is still there, the fault comes straight back.
 - **Parameters per instance.** A contactor auxiliary contact proves in milliseconds. An airflow
   switch in a duct needs a few seconds. Same FB, different `FbTimeout`. The same allowance also
   covers the stop: after a stop the feedback must drop out within `FbTimeout`. A fan or pump that
@@ -1607,7 +1611,8 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
    input that is left out takes its declared initial value (or the type's default). This is why
    you should assign every FB input on every call.
 3. `VAR_IN_OUT`. (i) The FB must update the caller's recipe, and changes to a `VAR_INPUT` copy
-   are lost. (ii) A 200-element array is not copied on every call. It must be connected to a
+   are lost. (ii) Where the compiler passes it by reference, as most do for arrays, the
+   200-element array is not copied on every call (MATIEC is an exception: it copies in and back). It must be connected to a
    *variable* because the FB writes back through it, and an expression has no storage to write
    to. MATIEC reports "Assignment to an expression or a literal value is not allowed".
 4. In Manual the `TON` is not called, so it keeps its last state. It never sees `Filling` go
