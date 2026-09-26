@@ -37,7 +37,7 @@
 # scenario lists the requirements (FS-01 to FS-35 in the brief) that it checks.
 
 scenario M1 power-up: all outputs off, nothing starts by itself, Ready in Auto
-# Requirements: FS-01, FS-02, FS-04, FS-33
+# Requirements: FS-01, FS-02, FS-04, FS-33, FS-34
 # Start is already held when the PLC powers up, and an HMI Start command
 # is waiting from before the restart. Neither may start the cell (FS-01, FS-02).
 set StopPB_NC TRUE
@@ -81,7 +81,7 @@ expect HMI.Sts.CountLaneB 0
 expect HMI.Sts.CountReject 0
 
 scenario M1 start-up warning: horn for 3 s with the belt stopped, then run
-# Requirements: FS-05, FS-06, FS-32
+# Requirements: FS-05, FS-06, FS-32, FS-34
 set StopPB_NC TRUE
 set EStop_NC TRUE
 set MotorOL_NC TRUE
@@ -231,6 +231,17 @@ wait 100ms
 set HMI.Cmd.Start TRUE
 scan
 expect HMI.Cmd.Start FALSE   # the PLC has taken the command
+until Horn TRUE within 30ms
+wait 1s
+set HMI.Cmd.Stop TRUE   # HMI Stop during the warning cancels the start
+scan
+expect HMI.Cmd.Stop FALSE
+until Horn FALSE within 30ms
+wait 3s
+expect ConveyorRun FALSE
+expect HMI.Sts.State 1
+set HMI.Cmd.Start TRUE
+scan
 until Horn TRUE within 30ms
 until ConveyorRun TRUE within 3500ms
 set HMI.Cmd.Stop TRUE

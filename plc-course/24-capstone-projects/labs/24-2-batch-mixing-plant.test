@@ -194,6 +194,18 @@ expect Hmi.RejectCode 3
 wait 2s
 expect Hmi.State Idle
 expect InletAValve FALSE
+# The checks run in the order of the brief's table; the first that fails is reported.
+set Hmi.RecipeNo 5                          # recipe 5 is empty: invalid (code 2), not out of range
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2                     # the recipe is checked before the level
+set Hmi.RecipeNo 1
+set Sim.HHWireBreak TRUE                    # an alarm as well as a vessel that is not empty
+scan 2
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 3                     # the level is checked before the alarms
+set Sim.HHWireBreak FALSE
 set Sim.VolumeL 10.0                        # 0.5 %: empty enough
 wait 5s
 set Hmi.CmdStart TRUE
@@ -211,6 +223,11 @@ set Hmi.RecipeNo 1
 set Hmi.CmdStart TRUE
 scan
 expect Hmi.RejectCode 4
+set Hmi.CmdReset TRUE                       # Reset while the signal is still bad ...
+scan
+expect Hmi.AlmActive 16#0080                # ... clears nothing, not even for one scan
+wait 1s
+expect Hmi.AlmActive 16#0080
 set Sim.TtForce FALSE                       # wire repaired ...
 wait 3s
 expect Hmi.AlmActive 16#0080                # ... but the fault stays latched
@@ -360,6 +377,8 @@ expect Sim.VolumeL <= 215.0
 until AgitatorRunning TRUE within 3s
 until Hmi.Phase = PhaseDrain within 5m
 expect AgitatorRun TRUE
+until Sim.VolumeL <= 180.0 within 2m
+expect AgitatorRun TRUE                     # 9 %: the hysteresis keeps it running down to 8 %
 until Sim.VolumeL <= 140.0 within 2m
 expect AgitatorRun FALSE                    # stopped below 8 % while draining
 until Hmi.State = Complete within 2m
@@ -404,6 +423,40 @@ wait 65s
 expect Hmi.Phase PhaseMix                   # 75 s in, but not 60 s at temperature
 until Hmi.Phase = PhaseDrain within 2m
 expect Hmi.TempC ~ 60.0 2.0                 # the loop recovered
+
+scenario M4 the hold timer does not count above the band either
+set EStopOK_NC TRUE
+scan
+set Recipes[1].MixTime T#20s
+set Recipes[1].HoldTime T#30s
+set Hmi.RecipeNo 1
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 10m
+wait 10s
+set Sim.TempC 66.0                          # process upset: 6 degC above the setpoint
+wait 40s
+expect Hmi.Phase PhaseMix                   # 50 s in, but only about 10 s inside the band
+until Hmi.Phase = PhaseDrain within 4m      # there is no cooling: heat loss brings it back
+expect Hmi.TempC ~ 60.0 2.0
+
+scenario M4 no steam unless the jacket is covered (HeatMinLevel)
+set EStopOK_NC TRUE
+scan
+set Recipes[3].TempSP 40.0                  # 300 L = 15 %, heated to 40 degC
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseHeat within 3m
+until Sim.HeatValvePct > 50.0 within 30s
+set Sim.VolumeL 220.0                       # a leak: 11 %, below HeatMinLevel (12 %)
+until HeatValveRaw = 0 within 3s            # allows a level filter of up to 1 s
+wait 10s
+expect HeatValveRaw 0
+expect AgitatorRun TRUE                     # still above AgitStopLevel (8 %)
+set Sim.VolumeL 300.0                       # level restored
+until Sim.HeatValvePct > 50.0 within 10s
+until Hmi.Phase = PhaseMix within 4m
 
 scenario M4 the mix time is a minimum agitation time
 set EStopOK_NC TRUE
@@ -604,6 +657,7 @@ expect PumpRun FALSE
 expect OutletValve TRUE
 wait 1500ms
 expect OutletValve TRUE
+expect Hmi.State Holding                    # not Held until the valve has been told to shut
 until OutletValve FALSE within 2s
 until Hmi.State = Held within 5s
 expect Hmi.Phase PhaseDrain
@@ -617,7 +671,7 @@ until Hmi.State = Complete within 2m
 expect Sim.VolumeL <= 5.0
 expect Sim.DeadheadS < 0.05
 
-scenario M6 abort: everything stops, the batch cannot resume; then empty the vessel
+scenario M6 abort from Held: everything stops, the batch cannot resume; then empty the vessel
 set EStopOK_NC TRUE
 scan
 set Hmi.RecipeNo 1
@@ -625,6 +679,9 @@ set Hmi.CmdStart TRUE
 scan
 until Hmi.Phase = PhaseHeat within 4m
 wait 20s
+set Hmi.CmdHold TRUE
+scan
+until Hmi.State = Held within 5s
 expect AgitatorRun TRUE
 set Hmi.CmdAbort TRUE
 scan
@@ -650,6 +707,22 @@ set Hmi.CmdStart TRUE
 scan
 expect Hmi.RejectCode 3                     # 450 L still in the vessel
 expect Hmi.State Idle
+set Sim.LtForce TRUE
+set Sim.LtForcemA 0.0                       # LT-201 fails: nothing could see the vessel empty
+until Hmi.AlmActive = 16#0100 within 4s
+set Hmi.CmdDrain TRUE
+scan
+expect Hmi.CmdDrain FALSE
+expect Hmi.State Idle                       # Drain is refused while an alarm is active
+wait 3s
+expect Hmi.State Idle
+expect OutletValve FALSE
+expect PumpRun FALSE
+set Sim.LtForce FALSE                       # repaired and reset
+wait 1s
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
 set Hmi.CmdDrain TRUE
 scan
 expect Hmi.CmdDrain FALSE
@@ -665,6 +738,61 @@ expect OutletValve FALSE
 set Hmi.CmdStart TRUE
 scan
 expect Hmi.RejectCode 0
+
+scenario M6 abort while draining: the pump stops, the valve shuts after it; Abort beats Hold
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseDrain within 5m
+until PumpRunning TRUE within 5s
+wait 5s
+set Hmi.CmdHold TRUE                        # Hold and Abort in the same scan:
+set Hmi.CmdAbort TRUE                       # Abort wins
+scan
+expect Hmi.CmdHold FALSE
+expect Hmi.CmdAbort FALSE
+expect Hmi.State Aborting
+expect PumpRun FALSE
+expect OutletValve TRUE                     # the valve lags the pump, as in every stop
+wait 1500ms
+expect OutletValve TRUE
+expect Hmi.State Aborting                   # not Aborted while equipment is still stopping
+until OutletValve FALSE within 2s
+until Hmi.State = Aborted within 2s
+expect AgitatorRun FALSE
+expect Sim.DeadheadS < 0.05
+set Hmi.CmdRestart TRUE                     # an aborted batch cannot be restarted
+scan
+wait 3s
+expect Hmi.State Aborted
+expect PumpRun FALSE
+expect OutletValve FALSE
+
+scenario M6 e-stop while held: the batch is aborted, not left held
+set EStopOK_NC TRUE
+scan
+set Hmi.RecipeNo 3
+set Hmi.CmdStart TRUE
+scan
+until Hmi.Phase = PhaseMix within 5m
+set Hmi.CmdHold TRUE
+scan
+until Hmi.State = Held within 5s
+expect AgitatorRun TRUE
+set EStopOK_NC FALSE                        # e-stop pressed
+scan
+expect AgitatorRun FALSE
+scan
+expect Hmi.State Aborted
+set EStopOK_NC TRUE                         # released and the safety relay reset
+wait 3s
+set Hmi.CmdRestart TRUE                     # would continue a held batch: refused
+scan
+wait 3s
+expect Hmi.State Aborted
+expect AgitatorRun FALSE
 
 scenario M6 e-stop: every output off at once, batch aborted, no restart on release
 set EStopOK_NC TRUE
@@ -793,9 +921,18 @@ until Hmi.AlmActive = 16#0004 within 6s
 until Hmi.State = Held within 5s
 expect InletAValve FALSE
 expect Hmi.Phase PhaseChargeA
+wait 3s
+expect Hmi.AlmActive 16#0004                # latched, although the held phase no longer sees it
+set Hmi.CmdRestart TRUE                     # refused until the fault is reset
+scan
+expect Hmi.State Held
 set Hmi.CmdReset TRUE
 scan
 expect Hmi.AlmActive 0
+expect Hmi.State Held                       # a reset does not restart the batch
+wait 2s
+expect Hmi.State Held
+expect InletAValve FALSE
 set Sim.FlowFactorA 1.0                     # supply restored
 set Hmi.CmdRestart TRUE
 scan
@@ -835,9 +972,14 @@ expect Hmi.Phase PhaseHeat
 until Hmi.AlmActive = 16#0010 within 20s
 until Hmi.State = Held within 5s
 expect HeatValveRaw 0
+wait 3s
+expect Hmi.AlmActive 16#0010                # latched until Reset
 set Hmi.CmdReset TRUE
 scan
 expect Hmi.AlmActive 0
+expect Hmi.State Held                       # a reset does not restart the batch
+wait 2s
+expect HeatValveRaw 0
 set Sim.HeatFail FALSE
 set Hmi.CmdRestart TRUE
 scan
@@ -934,6 +1076,15 @@ set Sim.LtForcemA 22.0                      # failed upscale
 until Hmi.AlmActive = 16#0100 within 3500ms
 until Hmi.State = Held within 5s
 expect InletAValve FALSE
+set Sim.LtForce FALSE                       # signal good again ...
+wait 3s
+expect Hmi.AlmActive 16#0100                # ... but the fault stays latched until Reset
+set Hmi.CmdReset TRUE
+scan
+expect Hmi.AlmActive 0
+set Hmi.CmdRestart TRUE
+scan
+until InletAValve TRUE within 2s            # the charge continues
 
 scenario M7 high temperature: steam off, batch held, 2 degC deadband
 set EStopOK_NC TRUE
@@ -1047,15 +1198,15 @@ expect Hmi.AlmActive 0
 expect Hmi.AlmUnack 0
 set Hmi.CmdReset TRUE
 scan
+# The empty vessel is rinsed with cold water before the next batch, so the
+# report's MaxTemp must come from this batch alone, not from the last one.
+set Sim.TempC 20.0
+wait 20s
+set Sim.MaxTempC 0.0
 set Hmi.RecipeNo 2
 set Hmi.CmdStart TRUE
 scan
 expect Hmi.RejectCode 0
-# TT-203 still reads the hot, empty vessel at this Start, and that reading
-# is part of this batch. The overshoot is judged on the true temperature
-# of the new contents instead.
-until Hmi.Phase = PhaseChargeB within 3m
-set Sim.MaxTempC 0.0
 until Hmi.State = Complete within 15m
 expect Report.BatchCount 2
 expect Report.RecipeNo 2
@@ -1063,6 +1214,7 @@ expect Report.RecipeName 'Degreaser'
 expect Report.ActualA ~ 250.0 1.25
 expect Report.ActualB ~ 120.0 0.45
 expect Report.MaxTemp >= 44.0
+expect Report.MaxTemp <= 48.0               # this batch's maximum, reset at Start
 expect Report.BatchTime >= T#380s           # this batch only, not both
 expect Report.BatchTime <= T#660s
 expect Sim.MaxTempC <= 48.0

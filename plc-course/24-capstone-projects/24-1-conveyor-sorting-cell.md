@@ -669,7 +669,7 @@ around these numbers. If you change a default in `ST_CellCfg`, the FAT will fail
 | Classification sensors | TRUE from the moment the part blocks `EntryPE` until one scan after it clears it, except in one scenario where `MetalPX` is TRUE only for a moment in the middle | FS-12 |
 | Gate positions | Registration count + 500 (A) and + 1000 (B). Some scenarios move the count exactly onto the gate, others jump 7 mm past it in one scan | FS-15 |
 | Pusher stroke | Retracted switch opens as soon as the solenoid is on; extended switch made 100 ms later; after release, extended switch opens at once and retracted switch made 100 ms later. One scenario extends slowly (0.6 s), one has a stuck retracted switch | FS-18, FS-19 |
-| Delivery | The lane eye is blocked for 100 ms, starting 100 ms after the pusher is home. The reject eye is blocked for 100 ms at about count registration + 1550. One scenario has a sticky chute: two lane A parts reach the eye 1 to 2 s late, with `JamTimeA` raised to 5 s | FS-21, FS-22 |
+| Delivery | The lane eye is blocked for 100 ms, starting 100 ms after the pusher is home. The reject eye is blocked for 100 ms at about count registration + 1550. One scenario has a sticky chute: two lane A parts reach the eye about 1.5 to 2.5 s late, with `JamTimeA` raised to 5 s | FS-21, FS-22 |
 | Part spacing | 400 mm between registrations in the production scenario | Up to three parts on the belt at once |
 | While a pusher strokes | The FAT usually holds the belt count still for about 0.4 s (the stroke and the delivery). With the default jam times, the tightest part in the FAT (a reject part in the production run) is delivered at about 4.3 s of its 5 s | FS-26 |
 | Belt slip | One scenario freezes `EncCount` while `ConveyorRun` is on | FS-26 |
@@ -889,9 +889,11 @@ so a fault always wins.
 - **Classification memory:** `IF EntryPE THEN SawMetal := SawMetal OR MetalPX; ... END_IF;`
   and clear the memories on the falling edge after using them.
 - **Falling edges at power-up:** `F_TRIG` can give a pulse on its very first call when its
-  input is FALSE. The standard's reference implementation does, and so does the `plctest`
-  toolchain. Gating registration with "state is RUNNING" makes that harmless. Never let a
-  first-scan edge trigger anything that matters ([Appendix E](../appendices/E-matiec-openplc-notes.md)).
+  input is FALSE. The standard's reference implementation does, and so does the MATIEC
+  library that `plctest` uses (`Q := NOT CLK AND NOT M`, with `M` starting FALSE); other
+  implementations may not. Gating registration with "state is RUNNING" makes it harmless
+  either way. Never let a first-scan edge trigger anything that matters
+  ([Appendix E](../appendices/E-matiec-openplc-notes.md), section E.3).
 - **Names MATIEC rejects:** `Step` (a keyword of the SFC language), `Dt` (the `DT` data type)
   and `Limit` (the `LIMIT` function) all look like good variable names and all fail with
   confusing errors. So does any variable named after a function or FB (`Max`, `Ton` …), and
@@ -921,7 +923,7 @@ Write your design notes as you go (see the rubric). They are much harder to writ
 
 ## 10. Running the acceptance test (FAT)
 
-The test has 40 scenarios and 622 checks. It simulates about five and a half minutes of cell
+The test has 40 scenarios and 629 checks. It simulates about five and a half minutes of cell
 operation in a second or two.
 
 Run these from the `plc-course` folder:
@@ -950,6 +952,7 @@ than by your internals:
 |---|---|
 | Start-up warning | Horn on and belt off 2.7 s after Start; belt on and horn off at 3.3 s |
 | Stops (Stop, e-stop, overload, selector, fault) | Belt (and horn, solenoids) off within 30 ms |
+| Registration | Counted and tracked within 50 ms of the falling edge while RUNNING; a part that passes the entry eye while the cell is stopped, or in Manual, is not registered |
 | Pusher position | Not fired 10 mm before the gate; fired within 50 ms of the count reaching the gate, or jumping past it |
 | Pusher stroke | Solenoid still on 100 ms after firing, and while both switches are made; off within 50 ms of the extended switch |
 | Pusher supervision | No alarm at 0.8 s; alarm by 1.2 s. Each movement is timed on its own: a 0.6 s extend followed by a failed retract must not alarm until about 1 s after the release |
@@ -1020,8 +1023,8 @@ to) against this table.
    it is full: stop, or keep going and send an alarm?
 10. **Safety redesign (paper exercise).** Draw the real emergency-stop circuit with a safety
     relay, a safety-rated dump valve for the pushers and a guard around the gates. Decide the
-    stop category (IEC 60204-1: 0, 1 or 2) for each stop, and list what changes in the PLC
-    program (Module 20).
+    stop category (IEC 60204-1: 0, 1 or 2) for each stop, remembering that an emergency stop
+    must be category 0 or 1, and list what changes in the PLC program (Module 20).
 11. **Unit tests per FB.** Write separate `.test` files that exercise `FB_Pusher` and
     `FB_Tracker` on their own through a small test program (Module 22).
 12. **Other languages.** Redraw `FB_Pusher` as an SFC (Module 13), or the cell's start/stop
@@ -1086,9 +1089,10 @@ global data block that the HMI accesses symbolically. `FB_Pusher` becomes an FB 
 `TON` as a multi-instance in its static data. Recent TIA Portal versions also accept an
 `Array` of an FB type as a multi-instance (check what your CPU family and version support),
 which MATIEC does not. The S7-1200 CPUs have built-in high-speed counters that you configure
-in the device configuration, and the program reads the current count. Check the size and wrap behaviour of the value you read: the folding trick in section
-8.3 works for any counter width if you change the constants. Bit access in SCL is `Word.%X3`.
-The part table becomes an `Array[1..16] of "ST_TrackedPart"` in the FB's static area.
+in the device configuration, and the program reads the current count. Check the size and wrap
+behaviour of the value you read: the folding trick in section 8.3 works for any counter width
+if you change the constants. Bit access in SCL is `Word.%X3`. The part table becomes an
+`Array[1..16] of "ST_TrackedPart"` in the FB's static area.
 
 **Rockwell (Studio 5000 Logix Designer, CCW).** The HMI structures become user-defined
 data types (UDTs), and the pusher becomes an Add-On Instruction (AOI) with its own timer
@@ -1105,12 +1109,12 @@ module; Micro830 and Micro850 controllers have high-speed counter inputs built i
 can declare `aPusher : ARRAY[1..2] OF FB_Pusher;` and, with edition 3 features, give
 `FB_Pusher` methods such as `Fire()` and properties such as `Available` (CODESYS/TwinCAT
 syntax, not testable here). Encoder inputs often come from EtherCAT or other fieldbus
-counter terminals that deliver the count as a process-data word; the counter width (16 or 32
-bits) is set in the terminal's configuration.
+counter terminals that deliver the count as a process-data word; its width (often 16 or 32
+bits) depends on the terminal and how it is configured.
 
 **OpenPLC.** The same compiler family as `plctest`, so the files run unchanged. Two practical
-points. First, the OpenPLC Runtime's Modbus server exposes *located* variables, not
-structures: `%IX` as discrete inputs, `%QX` as coils, `%IW` as input registers, and `%QW`,
+points. First, the Modbus server of the OpenPLC Runtime (version 3) exposes *located*
+variables, not structures: `%IX` as discrete inputs, `%QX` as coils, `%IW` as input registers, and `%QW`,
 `%MW`, `%MD` and `%ML` as holding registers (there are no `%MX` memory bits). To connect a real
 HMI you would add an I/O-mapping section that unpacks the command bits from a `%MW` word the
 HMI writes into `HMI.Cmd`, and packs `HMI.Sts` and `HMI.Alm` into `%MW` words the HMI reads.
