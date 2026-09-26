@@ -1,0 +1,60 @@
+# Lab 00-1 acceptance tests: start/stop motor with seal-in.
+# Only the interface variables from the lab sheet are used, so any correct
+# solution passes. Each scenario starts from a freshly powered-up PLC.
+
+scenario motor is off at power-up
+set StopPB_NC TRUE             # a healthy NC stop button reads TRUE
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 1s
+expect Motor FALSE             # nothing starts on its own
+
+scenario start button starts the motor and the lamp follows
+set StopPB_NC TRUE
+set StartPB TRUE
+scan
+expect Motor TRUE
+expect RunLamp TRUE
+
+scenario motor keeps running after start is released (seal-in)
+set StopPB_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 2s
+expect Motor TRUE
+expect RunLamp TRUE
+
+scenario stop button stops the motor, and it stays stopped
+set StopPB_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+scan
+set StopPB_NC FALSE            # operator presses Stop
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+set StopPB_NC TRUE             # ...and releases it
+wait 1s
+expect Motor FALSE             # no restart without a new Start command
+
+scenario stop wins when both buttons are pressed
+set StopPB_NC FALSE
+set StartPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+
+scenario a broken stop-button wire stops the motor (fail-safe)
+set StopPB_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+scan
+expect Motor TRUE
+set StopPB_NC FALSE            # wire break: the input reads FALSE, same as pressing Stop
+scan
+expect Motor FALSE
