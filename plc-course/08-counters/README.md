@@ -446,8 +446,13 @@ VAR
   LifeCtr : CTU_DINT;   (* PV and CV are DINT *)
 END_VAR
 
-LifeCtr(CU := CyclePE, R := FALSE, PV := 1000000);
+LifeCtr(CU := CyclePE, R := FALSE, PV := 1000000);   (* Q: one million cycles reached *)
 ```
+
+On MATIEC this counter's `CV` stops at 1,000,000, because MATIEC stops counting at `PV`
+(section 6). That is fine for "tell me when a million cycles are reached", but not for a
+lifetime count that must go on. For that, use `ADD` (section 9) or a `PV` at the top of the
+type's range.
 
 Siemens lets you choose the type on the counter box itself. Rockwell Logix counters are always
 `DINT`. The older SLC 500 and MicroLogix counters are 16-bit. The CODESYS Standard library

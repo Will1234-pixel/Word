@@ -467,6 +467,13 @@ expect MotorRun TRUE
 set LocalStopPB_NC FALSE         # local Stop
 scan
 expect MotorRun FALSE
+set LocalStartPB TRUE            # Start and Stop held together: Stop wins
+scan
+expect MotorRun FALSE
+wait 500ms
+expect MotorRun FALSE
+set LocalStartPB FALSE
+scan
 set LocalStopPB_NC TRUE
 wait 500ms
 expect MotorRun FALSE
