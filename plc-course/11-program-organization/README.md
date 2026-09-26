@@ -471,6 +471,25 @@ about which way a default fails. In Lab 11-1, `FbTimeout` defaults to 2 s, which
 `InterlockOK` deliberately has **no** `TRUE` default. If someone forgets to connect the
 interlock, the motor must refuse to start, not run with no protection.
 
+OpenPLC's own build of MATIEC is stricter than the standard and `plctest` about structure
+initialisers. It rejects initialisers for arrays of structures, structure initialisers with
+array members, and some others, among them the all-zero constant
+`(Count := 0, ..., Mean := 0.0)` that Lab 11-3 needs
+([Appendix E](../appendices/E-matiec-openplc-notes.md); [Module 12](../12-data-structures/),
+section 3.2). There are two portable ways round it. If every member should start at its type's
+default, leave the initialiser out: `CLEARED_STATS : ST_Stats;` in a `VAR CONSTANT` is already
+all zeros. Otherwise declare the variable without an initialiser and set its values in a
+**first-scan block** at the very top of the program body, so they are in place before any
+logic reads them:
+
+```iecst
+IF NOT Initialised THEN            (* Initialised : BOOL, NOT retentive (Module 06, section 6) *)
+  Batch.FillVolume_L := 2500.0;
+  Batch.MixTime := T#5m;
+  Initialised := TRUE;
+END_IF;
+```
+
 ## 4. Configuration, resources and tasks
 
 ### 4.1 The IEC software model
@@ -1289,6 +1308,8 @@ instruction (section 4.5).
   writing to your own `VAR_INPUT` inside an FB (the copy trap), and calling an FB with its
   `VAR_IN_OUT` unconnected.
 - An FB's `VAR_IN_OUT` is implemented as copy-in/copy-back.
+- OpenPLC's own build of MATIEC rejects some structure initialisers that `plctest` accepts.
+  Leave them out or use a first-scan block (section 3.6).
 - All tasks of a resource run from one loop, with no pre-emption (4.3). `plctest` runs them
   the same way. When a configuration has several program instances, test paths need the
   instance name, as in `set CounterInst.BottlePE TRUE`.
@@ -1561,9 +1582,11 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
 - Test `Stats.Count = 0` *before* incrementing it, to know whether this is the first sample.
   Don't test `MinValue = 0.0` instead: an empty container weighs 0 g, and that is a real sample.
 - Clearing a whole structure: declare a `VAR CONSTANT` of type `ST_Stats` with every field
-  zero and assign it, `LineStats := CLEARED_STATS;`, or assign the fields one by one. Do the
-  clear *after* the two calls, so that a weight arriving in the same scan cannot leave the
-  record non-zero while the button is held.
+  zero and assign it, `LineStats := CLEARED_STATS;`, or assign the fields one by one. Every
+  member of `ST_Stats` starts at zero, so `CLEARED_STATS : ST_Stats;` needs no initialiser.
+  Leave it out: OpenPLC's compiler rejects the written-out one (section 3.6). Do the clear
+  *after* the two calls, so that a weight arriving in the same scan cannot leave the record
+  non-zero while the button is held.
 - Why `Sum` is `LREAL`: a `REAL` holds about 7 significant digits. After about 17,000 samples
   of 500 g the total passes 8.4 million, and from there a `REAL` can only change in whole
   grams, so every weight added is rounded to a whole gram. An `LREAL` keeps 15–16 digits

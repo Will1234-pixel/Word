@@ -212,6 +212,7 @@ expect ActiveNo 4
 expect Active.Name 'Trial batch'
 
 scenario temperature limits are inclusive, 20.0 to 85.0 degC
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 3
 set Recipes[3].Temp 85.0
 scan 2
@@ -231,6 +232,7 @@ scan 2
 expect SelectedOk FALSE
 
 scenario each dose must be 0.0 to 500.0 kg, and all three doses are checked
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 3
 set Recipes[3].Dose[1] 500.0
 scan 2
@@ -257,6 +259,7 @@ scan 2
 expect SelectedOk TRUE
 
 scenario the total must fit the vessel (at most 1000 kg) and not be zero
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 3
 set Recipes[3].Dose[1] 500.0
 set Recipes[3].Dose[2] 400.0
@@ -277,6 +280,7 @@ scan 2
 expect SelectedOk FALSE
 
 scenario mixing time must be 1 min to 2 h
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 2
 set Recipes[2].MixTime T#1m
 scan 2

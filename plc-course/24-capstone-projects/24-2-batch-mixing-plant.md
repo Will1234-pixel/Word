@@ -260,7 +260,12 @@ END_STRUCT;
 ```
 
 `Recipes : ARRAY[1..5] OF ST_Recipe` is declared `RETAIN`, so edits survive a power cycle.
-Three recipes are loaded as initial values, and recipes 4 and 5 are empty:
+Three default recipes are given, and recipes 4 and 5 are empty. The starter loads the
+defaults in a small block at the top of the program, guarded by a `RecipesLoaded` flag that
+is also `RETAIN`. So they are written once on a cold start and never overwrite recipes that
+an operator has edited. (An array-of-structures initialiser on the declaration would be the
+textbook IEC form, but OpenPLC's compiler rejects it; see
+[Appendix E](../appendices/E-matiec-openplc-notes.md).)
 
 | No. | Name | QtyA (L) | QtyB (L) | TempSP (°C) | MixTime | HoldTime |
 |---|---|---|---|---|---|---|
@@ -365,7 +370,8 @@ got and how long the batch took.
 
 ### 7.1 States and commands
 
-The batch follows a subset of the ISA-88 example state model: no Pause and no Stop.
+The batch uses a state model based on the ISA-88 example, without the Pausing/Paused and
+Stopping/Stopped states.
 
 ```mermaid
 stateDiagram-v2
@@ -393,9 +399,9 @@ batch straight to **Aborted** (section 7.9).
 |---|---|---|
 | **Idle** | Everything off | Start accepted → Running (phase ChargeA); Drain accepted → Running (phase Drain) |
 | **Running** | The active phase runs (sections 7.2–7.7) | Last phase done → Complete; Hold command or a hold cause → Holding; Abort → Aborting |
-| **Holding** | Inlets shut, steam off, P-204 stops and XV-204 shuts after `ValveLeadTime`; the agitator keeps running if it is running | Pump stopped and outlet valve shut → Held |
-| **Held** | As Holding; totals keep counting; phase timers are paused | Restart, only if no hold cause is active → Restarting |
-| **Restarting** | Nothing extra is needed in this plant | → Running, in the same phase |
+| **Holding** | Inlets shut, steam off, P-204 stops and XV-204 shuts after `ValveLeadTime`; the agitator keeps running if it is running | Pump stopped and outlet valve shut → Held; Abort → Aborting |
+| **Held** | As Holding; totals keep counting; phase timers are paused | Restart, only if no hold cause is active → Restarting; Abort → Aborting |
+| **Restarting** | Nothing extra is needed in this plant | → Running, in the same phase; Hold or a hold cause → Holding; Abort → Aborting |
 | **Aborting** | Inlets shut, steam off, agitator off, P-204 stops and XV-204 shuts after `ValveLeadTime` | All stopped → Aborted |
 | **Aborted** | Everything off; the batch cannot continue | Reset → Idle |
 | **Complete** | Everything off; the report is written | Reset → Idle |
@@ -433,7 +439,7 @@ flowchart LR
 | **ChargeB** | The same with XV-202 and `QtyB`. Skipped when `QtyB` = 0 | As charge A | As charge A → dosing fault B |
 | **Heat** | TIC-203 in automatic with SP = `TempSP` | TT-203 ≥ `TempSP − TempBand` | Phase has run for `MaxHeatTime` → heating timeout |
 | **Mix** | TIC-203 in automatic; agitation continues | Agitated for `MixTime` **and** at temperature for `HoldTime` (section 7.6) | — |
-| **Drain** | Steam off; XV-204 then P-204 (section 7.7) | Vessel empty, run-on done, P-204 stopped and XV-204 shut | P-204 feedback (section 7.4) |
+| **Drain** | Steam off; XV-204 then P-204 (section 7.7) | Vessel empty, run-on done, P-204 stopped and XV-204 told to shut | P-204 feedback (section 7.4) |
 
 The agitator (section 7.4) runs in every phase whenever the level allows it. Watchdog times
 count only while the batch is Running in that phase. A hold restarts them, so a batch that
@@ -503,8 +509,9 @@ below `Target − Preact`, so the charge continues with the remainder. A 400 L c
 - The agitator may run only with the impeller covered: start at a level of at least
   `AgitStartLevel` (10 %), stop below `AgitStopLevel` (8 %). The 2 % gap is hysteresis, so
   that ripples on the surface do not start and stop the motor.
-- It runs in Running and Restarting whenever the level allows it, from part way through charge
-  A until the vessel has drained below 8 %.
+- It runs in Running and Restarting whenever the level allows it: from the moment charging
+  brings the level up to 10 % (part way through charge A for every stock recipe) until the
+  vessel has drained below 8 %.
 - In Holding and Held it **keeps running if it is running**, so the product stays mixed and the
   jacket does not scorch a stagnant layer. It is **never started** in Holding or Held. A fault
   reset must not start equipment by itself. The agitator restarts when the operator restarts
@@ -540,9 +547,9 @@ bumpless transfer: when a loop goes from manual to automatic, the output continu
 from the manual value. That is right when an operator switches a running loop to automatic. At
 the start of a heat-up it is wrong. The "manual value" is 0 %, so a bumpless start makes the
 output creep up at the integral rate. With the default tuning, recipe 1 then takes about
-9 minutes to heat instead of about 3. At
-the start of the heat phase, clear the integral part instead (a *cold start*). The output then
-begins at Kc × error, which saturates at 100 %, the full-steam heat-up you want. The
+9 minutes to heat instead of about 3. At the start of the heat phase, clear the integral part
+instead (a *cold start*). The output then begins at Kc × error (8 %/°C × 40 °C = 320 %), which
+saturates at 100 %, the full-steam heat-up you want. The
 conditional-integration anti-windup of Module 15 then brings the temperature in without a big
 overshoot.
 
@@ -658,8 +665,9 @@ with it:
   agitator must not also raise an agitator fault. That is the alarm flood
   [Module 16](../16-alarms-and-diagnostics/) warns about.
 - When the e-stop is released and the relay reset, **nothing restarts**. The batch stays
-  Aborted until the operator resets it. Machinery safety standards require that resetting an
-  e-stop does not by itself restart the machine, and the PLC logic must respect that too.
+  Aborted until the operator resets it. The machinery safety standards (IEC 60204-1 and
+  ISO 13850) require that resetting an e-stop does not by itself restart the machine, and the
+  PLC logic must respect that too.
 
 ### 7.10 Emptying the vessel (the Drain command)
 

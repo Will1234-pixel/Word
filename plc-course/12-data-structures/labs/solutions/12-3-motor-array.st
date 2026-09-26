@@ -210,10 +210,10 @@ PROGRAM FeedPumps
      OpenPLC's compiler does not accept this initialiser (see Appendix E), so
      the value is set here, at the very top, before the pump logic first
      reads it. Pumps 1 to 3 keep the default from ST_MotorCfg. Initialised
-     is not RETAIN, so every restart starts again from these values, as the
-     initialiser would. (Cfg is retentive on a real plant; Initialised would
-     then have to be RETAIN too, or a warm restart would undo the engineer's
-     settings.) ---- *)
+     is not RETAIN, so the block runs again after every restart, just as the
+     initialiser would apply again. (Cfg is retentive on a real plant, and
+     then Initialised must be RETAIN too, or every warm restart would undo
+     the engineer's settings.) ---- *)
   IF NOT Initialised THEN
     Motors[4].Cfg.FbTimeoutMs := 5000;
     Initialised := TRUE;

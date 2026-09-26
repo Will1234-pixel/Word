@@ -537,16 +537,32 @@ PROGRAM SortingCell
     NewDest : E_Dest;
     Flash : BOOL;
 
-    StartEdge, ResetEdge : R_TRIG;
-    LaneAEdge, LaneBEdge, RejectEdge : R_TRIG;
+    (* FB instances are declared one per line: OpenPLC's compiler can crash on
+       'A, B : R_TRIG;' lists (see Appendix E). *)
+    StartEdge : R_TRIG;
+
+    ResetEdge : R_TRIG;
+    LaneAEdge : R_TRIG;
+    LaneBEdge : R_TRIG;
+    RejectEdge : R_TRIG;
     EntryFall   : F_TRIG;
     WarnTmr     : TON;
     EntryJamTmr : TON;
     FlashTmr    : TON;
-    LaneAFull, LaneBFull : FB_Debounce;
+    LaneAFull : FB_Debounce;
+    LaneBFull : FB_Debounce;
 
-    AlmEStop, AlmOverload, AlmEntryJam, AlmJam, AlmOverflow : FB_Alarm;
-    AlmPusherA, AlmPusherB : FB_Alarm;
+    AlmEStop : FB_Alarm;
+
+    AlmOverload : FB_Alarm;
+
+    AlmEntryJam : FB_Alarm;
+
+    AlmJam : FB_Alarm;
+
+    AlmOverflow : FB_Alarm;
+    AlmPusherA : FB_Alarm;
+    AlmPusherB : FB_Alarm;
 
     Tracker : FB_Tracker;
     PusherA : FB_Pusher;

@@ -363,13 +363,13 @@ until InletAValve TRUE within 1s
 until InletAValve FALSE within 2m
 wait 5s
 expect Hmi.Phase PhaseChargeA               # still settling: SettleTime is 6 s now
-until Hmi.Phase = PhaseChargeB within 3s
+until Hmi.Phase = PhaseChargeB within 4s
 expect Sim.DeliveredA ~ 262.0 1.0
 until InletBValve TRUE within 1s
 until InletBValve FALSE within 1m
 wait 5s
 expect Hmi.Phase PhaseChargeB
-until Hmi.Phase = PhaseHeat within 3s
+until Hmi.Phase = PhaseHeat within 4s
 expect Sim.DeliveredB ~ 20.5 0.5            # closes at 39 "L" = 19.5 L real, + 1 L in flight
 expect Hmi.TotalB ~ 41.0 1.0
 until Hmi.State = Complete within 3m

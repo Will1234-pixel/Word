@@ -671,13 +671,8 @@ PROGRAM BatchMixer
     HeatValveRaw    AT %QW0 : INT;     (* TV-203 steam valve, 0 = closed .. 27648 = fully open *)
   END_VAR
   VAR RETAIN (* recipes and configuration survive a power cycle *)
-    Recipes : ARRAY[1..5] OF ST_Recipe := [
-      (Name := 'Floor cleaner', QtyA := 400.0, QtyB := 50.0, TempSP := 60.0,
-       MixTime := T#60s, HoldTime := T#90s),
-      (Name := 'Degreaser', QtyA := 250.0, QtyB := 120.0, TempSP := 45.0,
-       MixTime := T#120s, HoldTime := T#30s),
-      (Name := 'Cold blend', QtyA := 260.0, QtyB := 40.0, TempSP := 20.0,
-       MixTime := T#30s, HoldTime := T#0s)];   (* recipes 4 and 5 are empty *)
+    Recipes : ARRAY[1..5] OF ST_Recipe;   (* default recipes are loaded in code, see section 0 *)
+    RecipesLoaded : BOOL;                 (* RETAIN too: defaults load only on a cold start *)
     Cfg : ST_BatchCfg;
   END_VAR
   VAR (* given *)
@@ -757,6 +752,27 @@ PROGRAM BatchMixer
     HOLD_MASK     : WORD := 16#01FF;  (* every alarm except the e-stop holds the batch *)
     NO_ALARMS     : WORD := 16#0000;
   END_VAR
+
+  (* ===== 0. DEFAULT RECIPES (given) =====================================
+     The IEC way is an initialiser on the declaration, for example
+       Recipes : ARRAY[1..5] OF ST_Recipe := [(Name := 'Floor cleaner', ...), ...];
+     but OpenPLC's compiler rejects initialisers for arrays of structures
+     (Appendix E), so the defaults are written here instead. RecipesLoaded is
+     RETAIN like the table, so this runs once on a cold start and never
+     overwrites recipes that an operator has edited and a power cycle kept. *)
+  IF NOT RecipesLoaded THEN
+    Recipes[1].Name := 'Floor cleaner';
+    Recipes[1].QtyA := 400.0;  Recipes[1].QtyB := 50.0;  Recipes[1].TempSP := 60.0;
+    Recipes[1].MixTime := T#60s;  Recipes[1].HoldTime := T#90s;
+    Recipes[2].Name := 'Degreaser';
+    Recipes[2].QtyA := 250.0;  Recipes[2].QtyB := 120.0;  Recipes[2].TempSP := 45.0;
+    Recipes[2].MixTime := T#120s;  Recipes[2].HoldTime := T#30s;
+    Recipes[3].Name := 'Cold blend';
+    Recipes[3].QtyA := 260.0;  Recipes[3].QtyB := 40.0;  Recipes[3].TempSP := 20.0;
+    Recipes[3].MixTime := T#30s;  Recipes[3].HoldTime := T#0s;
+    (* recipes 4 and 5 are left empty *)
+    RecipesLoaded := TRUE;
+  END_IF;
 
   (* ===== 1. PLANT SIMULATION (given - do not change) ====================
      The simulation plays the part of the field: it reads last scan's

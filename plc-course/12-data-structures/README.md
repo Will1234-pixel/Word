@@ -398,7 +398,31 @@ VAR
 END_VAR
 ```
 
-(All three forms are used in this module's labs and were checked with MATIEC.)
+All three forms are standard IEC 61131-3, and upstream MATIEC (the compiler `plctest` uses)
+accepts them. **OpenPLC's own build of MATIEC is stricter.** It rejects initialisers for arrays
+of structures, like `Motors` above, structure initialisers with array members, and some other
+structure initialisers. The error is `Initialization element identifier (…) is not declared in
+referenced structure/FB scope` ([Appendix E](../appendices/E-matiec-openplc-notes.md)). The
+portable alternative is a **first-scan block** at the very top of the program, which sets the
+values in code before anything else reads them. The labs in this module use one:
+
+```iecst
+VAR
+  Motors      : ARRAY[1..4] OF ST_MotorData;  (* FbTimeoutMs: type default 2000 *)
+  Initialised : BOOL;                         (* NOT retentive *)
+END_VAR
+
+IF NOT Initialised THEN                       (* first scan only: keep it at the top *)
+  Motors[4].Cfg.FbTimeoutMs := 5000;
+  Initialised := TRUE;
+END_IF;
+```
+
+This is the first-scan flag from
+[Module 06](../06-edges-and-one-shots/README.md#6-first-scan-flags). Because `Initialised` is
+not retentive, the block runs again after every restart that re-initialises the variables,
+just as the initialiser would apply again. If the data is `RETAIN`, make the flag `RETAIN` too,
+or every warm restart will overwrite the retained values.
 
 ### 3.3 Copying whole structures
 
@@ -424,7 +448,7 @@ IF Recipes[n].MixTime > T#2h THEN
 END_IF;
 
 (* RIGHT: check everything first, then copy once *)
-IF F_RecipeValuesOk(R := Recipes[n], Lim := RECIPE_LIMITS) THEN
+IF F_RecipeValuesOk(R := Recipes[n], Lim := RecipeLimits) THEN
   Active := Recipes[n];
 END_IF;
 ```
@@ -637,6 +661,10 @@ VAR
                                      (Cfg := (TagName := 'P-103')), (Cfg := (TagName := 'P-104'))];
 END_VAR
 ```
+
+OpenPLC's compiler rejects this initialiser for an array of structures (section 3.2). For
+OpenPLC, declare `Pumps : ARRAY[1..4] OF ST_Pump;` and set the four tag names in a first-scan
+block (`Pumps[1].Cfg.TagName := 'P-101';` and so on).
 
 Now a `FOR` loop can run the logic for every pump, total their run hours, find the available
 pump with the fewest hours (Module 10, Worked example 1), or count how many are running. The
@@ -1534,13 +1562,19 @@ Everything this module's labs use was checked with MATIEC. In summary:
   `VAR_INPUT`; `TIME_TO_DINT` and `TIME_TO_REAL` give **seconds**, not milliseconds
   ([Module 07](../07-timers/)); variable names must not collide with standard function names
   (`Log` collides with the logarithm function `LOG`, `Len` with `LEN`, `Find` with `FIND`).
+- **OpenPLC's own build of MATIEC** rejects some initialisers that upstream MATIEC and
+  `plctest` accept: initialisers for arrays of structures, structure initialisers with array
+  members, and some other structure initialisers (section 3.2). Set such values in a
+  first-scan block, as the Lab 12-1 and 12-3 files do.
 - [Appendix E](../appendices/E-matiec-openplc-notes.md) has the full list.
 
 ## Labs
 
 All three labs follow the course workflow from [Module 00](../00-start-here/). The starters
 contain the types, the data (with initial values) and the program interface, because those
-names are what the tests use. Copy the starter into `my-work/`, write the logic, run the test,
+names are what the tests use. Where OpenPLC's compiler cannot take an initialiser (section
+3.2), the starter sets the initial values in a first-scan block at the top of the program body.
+Keep that block where it is and write your logic below it. Copy the starter into `my-work/`, write the logic, run the test,
 and compare with `labs/solutions/` when you pass. You may add internal variables, functions and
 function blocks as you like.
 
@@ -1561,13 +1595,13 @@ already holds a "Trial batch" at 95 °C, above the vessel's 85 °C limit, and sl
 |---|---|
 | `ST_Recipe` | `Name : STRING` ('' = empty slot), `Dose : ARRAY[1..3] OF REAL` (kg of ingredients 1..3), `Temp : REAL` (°C), `MixTime : TIME` |
 | `E_LoadResult` | `NotLoaded` (initial), `Loaded`, `BadIndex`, `EmptySlot`, `BadValue`, `BatchBusy` |
-| `ST_RecipeLimits` | The limits below, given as the constant `RECIPE_LIMITS` |
+| `ST_RecipeLimits` | The limits below, given in the variable `RecipeLimits` (set by the starter's first-scan block) |
 
 **Interface: program `RecipeManager`** (use these names exactly):
 
 | Tag | Address | Type | Description |
 |---|---|---|---|
-| `Recipes` | — | ARRAY[1..5] OF ST_Recipe | The recipe book (initial values given; the HMI, and the test, edit it) |
+| `Recipes` | — | ARRAY[1..5] OF ST_Recipe | The recipe book (initial values set by the starter's first-scan block; the HMI, and the test, edit it) |
 | `SelectNo` | — | INT | Recipe number selected on the HMI; 0 = none (initial) |
 | `LoadCmd` | — | BOOL | Load request: the HMI sets it, your program clears it after acting on it |
 | `BatchRunning` | — | BOOL | TRUE while a batch is in progress (from the sequence) |
@@ -1721,7 +1755,7 @@ stop is an ordinary control stop. Emergency stops belong in a safety system
 | `StopAll_NC` | `%IX1.0` | BOOL | Area stop button, **NC**: TRUE = healthy |
 | `P101_Contactor` ... `P104_Contactor` | `%QX0.0` ... `%QX0.3` | BOOL | Contactor of each pump |
 | `FaultLamp` | `%QX0.4` | BOOL | ON while any pump is `Faulted` |
-| `Motors` | — | ARRAY[1..4] OF ST_MotorData | The data model; `Motors[1]` is P-101. Initial `Cfg.FbTimeoutMs`: 2000 ms for pumps 1 to 3, 5000 ms for pump 4 |
+| `Motors` | — | ARRAY[1..4] OF ST_MotorData | The data model; `Motors[1]` is P-101. Initial `Cfg.FbTimeoutMs`: 2000 ms for pumps 1 to 3 (the type default), 5000 ms for pump 4 (set by the starter's first-scan block) |
 | `RunningCount` | — | INT | Number of pumps in state `Running` |
 
 **Requirements:**
