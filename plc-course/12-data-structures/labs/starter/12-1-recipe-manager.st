@@ -34,7 +34,9 @@ END_TYPE
 
 PROGRAM RecipeManager
   VAR (* recipe book, edited on the HMI recipe screen. Slot 4 holds a typing
-         mistake (95 degC) and slot 5 is empty, so both must be refused. *)
+         mistake (95 degC), and slot 5 is empty (it is left out of the
+         initialiser on purpose, so it starts as '', 0.0 and T#0s). Both
+         must be refused. *)
     Recipes : ARRAY[1..5] OF ST_Recipe := [
       (Name := 'Tomato soup',     Dose := [400.0, 150.0, 20.0], Temp := 85.0, MixTime := T#20m),
       (Name := 'Vegetable stock', Dose := [450.0, 300.0, 10.0], Temp := 80.0, MixTime := T#30m),

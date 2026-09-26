@@ -4,8 +4,8 @@
 # start permissives, the clamp and spindle staying on across steps (S/R),
 # the spindle run-up delay before the feed (D), the dwell, the time-limited
 # blow-off that also stops with its step (L), the hole counter counting
-# once per hole (P), the unload step, and the feed-timeout branch with its
-# reset and retract.
+# once per hole (P), the unload step, the feed-timeout branch with its
+# reset and retract, and that all four times are taken from the settings.
 # Interface: StartPB, PartPE, ClampedLS, DrillUpLS, DrillDownLS, ResetPB,
 # ClampValve, Spindle, FeedDown, FeedUp, BlowAir, ReadyLamp, FaultLamp,
 # SpinUpTime (500 ms), DwellTime (1 s), BlowTime (1 s), FeedTimeout (5 s),
@@ -308,3 +308,30 @@ wait 2700ms
 expect FeedUp FALSE
 expect Spindle TRUE
 until FeedUp = TRUE within 600ms
+
+scenario the feed timeout and the blow-off time are adjustable
+set FeedTimeout T#2s
+set BlowTime T#2s
+set PartPE TRUE
+set DrillUpLS TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+set ClampedLS TRUE
+until Spindle = TRUE within 100ms   # Drill has started
+set DrillUpLS FALSE
+wait 1700ms                    # 85 % of the 2 s feed timeout
+expect FaultLamp FALSE
+expect FeedDown TRUE
+until FaultLamp = TRUE within 600ms
+expect FeedDown FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+expect FeedUp TRUE
+expect BlowAir TRUE
+wait 1700ms                    # 85 % of the 2 s blow-off
+expect BlowAir TRUE
+until BlowAir = FALSE within 600ms
+expect FeedUp TRUE             # still retracting

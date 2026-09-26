@@ -7,6 +7,8 @@
 # plctest cannot power-cycle a PLC with retentive memory (every scenario is a
 # cold start), so the "power cut" scenarios write the retained values BEFORE
 # the first scan. That is exactly what a PLC which kept its memory would see.
+# No scenario expects a fill to start on the very first scan, so start-up code
+# may hold the whole first scan in Idle if you prefer.
 
 # ------------------------------------------------------------ basic operation
 

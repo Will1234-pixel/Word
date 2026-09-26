@@ -102,13 +102,16 @@ FUNCTION_BLOCK FB_MotorGroup
   AnyFault := FALSE;
 
   FOR i := 1 TO 4 DO
-    (* -- Reset clears the alarms and leaves the pump stopped. If the cause is
-       still there, the alarm comes back after another full FbTimeoutMs. -- *)
+    (* -- Reset clears the alarms and leaves a faulted pump stopped. If the
+       cause is still there, the alarm comes back after another full
+       FbTimeoutMs. The timing restarts only for a FAULTED pump: a Reset
+       pressed while a disagreement is still being timed must not postpone
+       (and so hide) the alarm. -- *)
     IF Motors[i].Cmd.Reset THEN
       Motors[i].Alm := NO_ALARMS;
-      Motors[i].DisagreeMs := 0;
       IF Motors[i].Sts.State = E_MotorState#Faulted THEN
         Motors[i].Sts.State := E_MotorState#Stopped;
+        Motors[i].DisagreeMs := 0;
       END_IF;
     END_IF;
 
@@ -132,14 +135,16 @@ FUNCTION_BLOCK FB_MotorGroup
     END_IF;
 
     (* -- Supervision: this pump's "timer" is a counter of milliseconds in the
-       structure. It restarts whenever command and feedback agree. -- *)
+       structure. It restarts whenever command and feedback agree, and it
+       stops counting at the timeout (like a TON's ET stops at PT), so it
+       cannot overflow however long a disagreement lasts. -- *)
     Motors[i].Sts.RunCmd := Motors[i].Sts.State = E_MotorState#Starting
                             OR Motors[i].Sts.State = E_MotorState#Running;
     Disagree := Motors[i].Sts.RunCmd XOR Motors[i].RunFb;
-    IF Disagree THEN
-      Motors[i].DisagreeMs := Motors[i].DisagreeMs + ScanMs;
-    ELSE
+    IF NOT Disagree THEN
       Motors[i].DisagreeMs := 0;
+    ELSIF Motors[i].DisagreeMs < Motors[i].Cfg.FbTimeoutMs THEN
+      Motors[i].DisagreeMs := Motors[i].DisagreeMs + ScanMs;
     END_IF;
 
     IF Motors[i].DisagreeMs >= Motors[i].Cfg.FbTimeoutMs THEN

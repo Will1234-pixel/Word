@@ -2,10 +2,12 @@
 # Checks every output in every state (Idle, Filling, Mixing, Heating,
 # Draining, Complete, Held, Faulted), the mix time and the three watchdogs
 # (just before and after each preset), the fault codes and reset, Hold and
-# Resume (the mixing already done still counts; watchdogs restart; nothing
-# runs while held), Abort, command priorities, commands that must be
-# ignored, the heater and inlet interlocks, and that a held Start button
-# never starts a second batch.
+# Resume in every process step (the mixing already done still counts;
+# watchdogs restart; nothing runs or times out while held), Abort from every
+# process step and from Held, command priorities, commands that must be
+# ignored, the heater and inlet interlocks, and that commands act on the
+# press: a held Start, Hold, Resume or Reset button acts only once. (Abort
+# may act on the press or while held; both designs pass.)
 # Interface: StartPB, HoldPB, ResumePB, AbortPB, ResetPB, LevelHighLS,
 # LevelLowLS, TankTemp, InletValve, Agitator, Heater, OutletValve, RunLamp,
 # HeldLamp, FaultLamp, CompleteLamp, FaultCode, BatchCount, TempSP (60.0),
@@ -524,3 +526,167 @@ expect FaultCode 1
 expect HeldLamp FALSE
 expect InletValve FALSE
 expect RunLamp FALSE
+
+scenario hold during heating: nothing times out while held, the heat watchdog restarts
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+wait 50s                       # 50 s of the 60 s allowed
+expect Heater TRUE
+expect FaultLamp FALSE
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+expect HeldLamp TRUE
+expect Heater FALSE
+wait 20s                       # the heat watchdog must not run while held
+expect HeldLamp TRUE
+expect FaultLamp FALSE
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect Heater TRUE
+expect Agitator TRUE
+wait 50s                       # a fresh 60 s after the resume
+expect FaultLamp FALSE
+expect Heater TRUE
+until FaultLamp = TRUE within 12s
+expect FaultCode 2
+expect Heater FALSE
+
+scenario hold during draining: the outlet closes, the drain watchdog restarts
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+set TankTemp 70.0
+until OutletValve = TRUE within 50ms
+set LevelHighLS FALSE
+wait 25s                       # 25 s of the 30 s allowed
+expect OutletValve TRUE
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+expect OutletValve FALSE       # Held: the drain valve closes
+expect HeldLamp TRUE
+expect RunLamp FALSE
+expect Agitator FALSE
+expect Heater FALSE
+wait 10s                       # the drain watchdog must not run while held
+expect FaultLamp FALSE
+expect HeldLamp TRUE
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect OutletValve TRUE        # back in Draining
+expect HeldLamp FALSE
+expect RunLamp TRUE
+wait 25s                       # a fresh 30 s after the resume
+expect FaultLamp FALSE
+expect OutletValve TRUE
+set LevelLowLS FALSE
+until CompleteLamp = TRUE within 50ms
+expect OutletValve FALSE
+wait 50ms
+expect BatchCount 1
+
+scenario abort from filling, heating and draining returns to Idle
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+expect InletValve TRUE         # Filling
+set AbortPB TRUE
+wait 100ms
+set AbortPB FALSE
+expect InletValve FALSE
+expect RunLamp FALSE
+expect HeldLamp FALSE
+expect FaultLamp FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+until Heater = TRUE within 11s # Heating
+set AbortPB TRUE
+wait 100ms
+set AbortPB FALSE
+expect Heater FALSE
+expect Agitator FALSE
+expect RunLamp FALSE
+expect FaultLamp FALSE
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+until Heater = TRUE within 11s
+set TankTemp 70.0
+until OutletValve = TRUE within 50ms
+set LevelHighLS FALSE          # Draining
+wait 2s
+set AbortPB TRUE
+wait 100ms
+set AbortPB FALSE
+expect OutletValve FALSE
+expect RunLamp FALSE
+expect CompleteLamp FALSE
+expect FaultLamp FALSE
+expect HeldLamp FALSE
+wait 40s                       # Idle: no watchdog, nothing moves
+expect OutletValve FALSE
+expect FaultLamp FALSE
+expect BatchCount 0
+
+scenario commands act on the press: a button kept pressed acts only once
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+expect InletValve TRUE
+set HoldPB TRUE                # Hold pressed and kept pressed
+wait 100ms
+expect HeldLamp TRUE
+set ResumePB TRUE              # Resume while Hold is still pressed
+wait 100ms
+set ResumePB FALSE
+wait 1s
+expect HeldLamp FALSE          # the held Hold button does not hold again
+expect InletValve TRUE
+set HoldPB FALSE
+set ResumePB TRUE              # now Resume is kept pressed...
+wait 100ms
+set HoldPB TRUE                # ...and Hold is pressed
+wait 100ms
+set HoldPB FALSE
+wait 1s
+expect HeldLamp TRUE           # the held Resume button does not resume by itself
+expect InletValve FALSE
+set ResumePB FALSE
+wait 100ms
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect InletValve TRUE
+set FillTimeout T#2s
+set ResetPB TRUE               # Reset pressed and kept pressed before a fault
+until FaultLamp = TRUE within 3s
+wait 1s
+expect FaultLamp TRUE          # the held Reset button does not clear a new fault
+expect FaultCode 1
+set ResetPB FALSE
+wait 100ms
+set ResetPB TRUE
+wait 100ms
+set ResetPB FALSE
+expect FaultLamp FALSE
+expect FaultCode 0

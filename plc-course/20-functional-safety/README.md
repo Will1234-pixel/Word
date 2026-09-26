@@ -600,7 +600,10 @@ IEC 61511 classifies programming languages by how much freedom they give:
 | **FVL**, full variability language | General-purpose programming | C, C++, assembler |
 
 Safety application programs are normally written in an LVL, and the more variability, the more
-rigour the standards demand. Most safety tools restrict the instruction set (no pointers, no
+rigour the standards demand. IEC 61511 gives ladder diagram, function block diagram and
+sequential function chart as typical LVLs, and does not count Structured Text or Instruction
+List as LVLs. That is one more reason why the ST in this module is for understanding the
+behaviour, not a pattern for a safety PLC. Most safety tools restrict the instruction set (no pointers, no
 indirect addressing, limited loops) and supply **certified function blocks** for common jobs.
 The **PLCopen** organisation has specified a set of standard safety function blocks, such as
 `SF_EmergencyStop`, `SF_GuardMonitoring`, `SF_Equivalent` and `SF_Antivalent` (two-channel
@@ -784,9 +787,11 @@ behaviour.
 A safety function that has tripped must **stay tripped** until someone deliberately resets it,
 even if the cause goes away a second later. If the trip cleared itself, a pressure hovering
 around the trip point would cycle the shutdown valve, and the plant could restart after a
-transient with nobody having looked at what happened. IEC 61511 expects a SIF that has put the
-process in its safe state to keep it there until a reset, unless the SRS specifies otherwise.
-Machinery standards make the same demand for protective stops.
+transient with nobody having looked at what happened. IEC 61511 requires the SRS to state the
+reset requirements of every SIF, and the normal, conservative practice is that a SIF that has
+put the process in its safe state keeps it there until a deliberate reset. On machines, the
+same principle applies to emergency stops and protective stops: the reset is a separate,
+deliberate act, and it must not start anything.
 
 ```mermaid
 stateDiagram-v2
@@ -845,7 +850,7 @@ of serious incidents. Good practice, which the SRS and site procedures make spec
 |---|---|
 | **Authorisation**: a key switch, permit or password level, plus a work permit | Only authorised people, for a planned reason |
 | **Per-cause, not per-SIF, and never for manual shutdown** | Bypass the one instrument being worked on. The ESD push-button and other manual shutdowns are never bypassable. |
-| **One channel of a voted group, not the group** | Bypassing one transmitter of a 2oo3 group leaves 1oo2 protection in place |
+| **One channel of a voted group, not the group** | Bypassing one transmitter of a 2oo3 group leaves the other two protecting. Whether they vote 1oo2 or 2oo2 depends on the logic: if the bypass reconfigures the vote (like a bad channel in Lab 20-1) it is 1oo2; if it simply forces the channel to "healthy" it is 2oo2. The SRS must say which. |
 | **Time limit with automatic expiry** | A forgotten bypass removes itself. The limit comes from the SRS: often hours, sometimes a shift. |
 | **A new request needed after expiry** | Holding the request on must not restart the bypass |
 | **Bypass-active alarm and indication** | The operator can always see which protections are not active |
@@ -925,8 +930,9 @@ Practical points:
   That finds a stuck valve between full tests without a shutdown.
 - **Record everything:** as-found and as-left condition, failures found, who tested. Failures
   found at proof tests are real-world data that show whether the assumed failure rates hold.
-- Testing one channel of a 2oo3 group online needs a **bypass of that channel** (so 1oo2 during
-  the test) under the bypass controls above. [Module 23](../23-commissioning-and-troubleshooting/)
+- Testing one channel of a 2oo3 group online needs a **bypass of that channel** under the
+  bypass controls above. During the test the other two channels protect alone, as 1oo2 or
+  2oo2 depending on how the bypass is implemented (see the bypass table). [Module 23](../23-commissioning-and-troubleshooting/)
   covers the test procedures.
 
 ## 20.6 Cause-and-effect matrices
@@ -1130,7 +1136,8 @@ That fails the target of 2 × 10⁻³. Two lessons stand out:
    7.7 × 10⁻⁷. The common-cause term is almost 30 times larger. Diversity, separate impulse
    lines and separate tapping points are what reduce it.
 
-Halving the valve's test interval to six months gives 4.38 × 10⁻³, still not enough. Adding a
+Halving the valve's test interval to six months brings the valve to 4.38 × 10⁻³ and the SIF to
+about 4.4 × 10⁻³ (RRF ≈ 227), still not enough. Adding a
 second shutdown valve in series (1oo2, either valve closing stops the flow), with β = 10 % for
 two similar valves:
 
@@ -1409,8 +1416,9 @@ constants `TRIP_BAR` (8.0), `DEV_LIMIT_BAR` (0.5) and `DEV_DELAY` (T#3s).
    not go FALSE even for one scan while `VotedTrip` is TRUE.
 6. XV-201 opens only on a **press** (rising edge) of `OpenPB` while not tripped, and then stays
    open. A trip closes it and cancels the open request. After a reset the valve stays closed
-   until `OpenPB` is pressed again. A press during the trip is ignored, and a button held down
-   through the reset must not reopen the valve.
+   until `OpenPB` is pressed again. A press at any time while `Tripped` is TRUE is ignored and
+   not remembered, even after the cause has cleared, and a button held down through the reset
+   must not reopen the valve.
 7. At power-up with healthy readings, nothing is tripped and the valve is closed.
 8. `DevA`/`DevB`/`DevC`: only while all three channels are healthy, a channel whose pressure
    differs from the median of the three by **more than** 0.5 bar, continuously for 3 s, is
@@ -1504,22 +1512,25 @@ quickly; real limits come from the SRS and are often hours).
 3. **Effects:** each output is FALSE while any latched cause has an X in its column, and TRUE
    otherwise.
 4. **Reset:** on the rising edge of `ResetPB`, every latched cause whose contact is healthy
-   (TRUE), or which is bypassed, is cleared. Causes still present stay latched. A held button
-   does not act later. The trip wins: an output must not re-energise even for one scan while one
-   of its causes is present.
+   (TRUE), or which is bypassed, is cleared. Causes whose contact is still open stay latched,
+   even if their delay has not run out again yet. A held button does not act later. The trip
+   wins: an output must not re-energise even for one scan while one of its causes is present
+   and not bypassed.
 5. `TripAlm` is TRUE while any cause is latched.
 6. **First-out:** when a cause latches while no cause is latched, `FirstOut` becomes its number.
    If several latch on the same scan, the lowest number is shown. Later causes do not change
    it. It returns to 0 when a reset leaves no cause latched.
 7. **Bypass start:** a bypass of cause *i* starts on the **rising edge** of `BypReq[i]` while
-   `BypassKey` is TRUE, for causes 2–6 only. C1 (ESD) can never be bypassed.
-8. **Bypass end:** a bypass ends after `BYPASS_TIME`, when `BypReq[i]` goes FALSE, or when
-   `BypassKey` goes FALSE, whichever comes first. After expiry, it does not restart until the
-   request is removed and made again.
+   `BypassKey` is TRUE, for causes 2–6 only. C1 (ESD) can never be bypassed. Turning the key on
+   while a request is already set does not start a bypass: the request must be made again.
+8. **Bypass end:** a bypass ends `BYPASS_TIME` after it started (each cause has its own timer),
+   when `BypReq[i]` goes FALSE, or when `BypassKey` goes FALSE, whichever comes first. After it
+   ends, it does not restart until the request is removed and made again with the key on.
 9. **While bypassed** a cause cannot latch, and it counts as healthy for the reset. Applying a
-   bypass does not clear an existing latch; a reset is still needed. When a bypass ends with the
-   contact still in the trip state, the cause trips (after its delay, if that has not already
-   run).
+   bypass does not clear an existing latch; a reset is still needed. The confirmation delay
+   keeps timing during a bypass, so when a bypass ends with the contact still in the trip
+   state, the cause trips at once if the contact has already been open for its delay, and
+   otherwise when the delay runs out.
 10. `Bypassed[i]` shows each active bypass, and `BypassAlm` is TRUE while any bypass is active.
 
 **Run the test:**

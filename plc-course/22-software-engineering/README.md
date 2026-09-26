@@ -120,18 +120,22 @@ A before-and-after from the legacy code in Lab 22-2 shows how much names carry:
 T2(IN := P2_Run AND NOT P2_RunFb, PT := T#5s);  (* 4 sec *)
 IF T2.Q THEN
   F2 := TRUE;
+  P2_Run := FALSE;
+END_IF;
 
-(* after *)
+(* after: names say what things are; the preset is a named constant *)
 Pump2FbTimer(IN := P2_Run AND NOT P2_RunFb, PT := P2_FB_TIMEOUT);
 IF Pump2FbTimer.Q THEN
   Pump2Fault := TRUE;
+  P2_Run := FALSE;
+END_IF;
 ```
 
 ### Comments that help
 
 - **Say why, not what.** `Count := Count + 1; (* add one *)` is noise.
-  `(* P-202 has a slower contactor, so its timeout is 5 s: see MOC-0142 *)` saves someone a
-  day.
+  `(* 5 s, not 3 s: P-305 has a larger contactor that closes more slowly, see MOC-0142 *)`
+  saves someone a day.
 - **Give every POU a header**: purpose, a summary of the interface, assumptions (units,
   ranges, which inputs are wired NC) and the design-document section it implements. Don't
   keep a long change history in the header when the code is under version control. A line
@@ -152,7 +156,7 @@ A POU header in practice:
    Behaviour:
      - seal-in start; stop, a missing permissive or a fault drops the seal-in
      - no run feedback within FbTimeout -> Fault (latched), pump off
-     - Fault resets on the rising edge of ResetCmd; reset never restarts the pump
+     - Fault resets on the rising edge of ResetCmd; a reset alone never restarts the pump
    Last change: MOC-0431 (extracted from legacy code, behaviour unchanged) *)
 ```
 
@@ -506,9 +510,10 @@ exactly what to drive and what to observe.
 A **test harness** is a small program that owns an instance of the FB under test and calls it
 every scan. The test drives the harness's inputs and checks outputs as PLC time passes. In
 Lab 22-1, for example, the program `DryRunTrip` is only a thin harness around
-`FB_DryRunTrip`. (With `plctest` you can also drive an instance's inputs directly, such as
-`set Guard.Request 55.0`, if the harness calls the instance without passing that input. An FB
-input that is not assigned in a call keeps its previous value.)
+`FB_DryRunTrip`. (With `plctest` you can also write an instance's input directly, for
+example `set Guard.Request 55.0`, but only if the harness calls `Guard` without passing
+`Request`. An FB input that is not assigned in a call keeps its previous value; one that is
+assigned is overwritten on every call.)
 
 Good tests follow the **arrange, act, assert** pattern:
 
@@ -583,7 +588,8 @@ complete TDD session with `plctest`.
   results with assertion methods of the `AssertEquals` family and ends with `TEST_FINISHED()`,
   so a test can run over several PLC cycles. The main program calls `TcUnit.RUN()`. Results
   appear in the TwinCAT error list and can be written as xUnit XML files for build servers.
-- **CfUnit**, a community port of TcUnit to CODESYS, published on the CODESYS Forge.
+- **CfUnit**, an open-source community port of TcUnit to CODESYS, published on the CODESYS
+  Forge (its project there is called coUnit).
 - **SIMATIC AX** includes a unit-testing framework that runs tests on the PC as part of its
   text-based, Git-centred workflow.
 - **TIA Portal Test Suite**, a Siemens add-on for TIA Portal with a style-guide checker and
@@ -841,8 +847,10 @@ flowchart TB
   URS -. verified by .-> SAT
 ```
 
-In pharmaceutical projects that follow ISPE's GAMP 5 guidance, the same V appears with
-installation, operational and performance qualification (IQ, OQ, PQ) on the right-hand side.
+Pharmaceutical projects use the same V under ISPE's GAMP 5 guidance, where each
+specification on the left is matched by a verification stage on the right. Many companies
+still name those stages with the older qualification terms: installation, operational and
+performance qualification (IQ, OQ, PQ).
 
 **Traceability** ties the chain together: every URS requirement maps to FDS clauses, every
 FDS clause to code and to at least one test. Referencing requirement or clause numbers in
@@ -899,8 +907,8 @@ retested.
 | Step | Action | Expected result | Result |
 |---|---|---|---|
 | 1 | Level at 50 %. Start P-201 with its run feedback held off | P-201 runs, no fault | |
-| 2 | Wait 2.7 s | P-201 still running, fault lamp off | |
-| 3 | Wait until 3.3 s | P-201 stopped, fault lamp on, alarm on the HMI | |
+| 2 | Wait until 2.7 s after the start | P-201 still running, fault lamp off | |
+| 3 | Wait until 3.3 s | P-201 stopped, fault lamp P-201 FLT on | |
 | 4 | Press reset | Fault lamp off, P-201 stays stopped | |
 
 That is the same structure as a `plctest` scenario, which is no accident: an automated test is
@@ -1130,8 +1138,9 @@ Modbus tool on the network. So **the PLC validates every value it receives**:
 
 - **Range**: only accept values proven to be inside the limits, otherwise keep the last good
   value (or use a safe default) and raise an event.
-- **NaN**: a REAL can hold "not a number". Every comparison with NaN is FALSE, so the check
-  `IF (V >= Min) AND (V <= Max) THEN accept` rejects NaN, while the tempting
+- **NaN**: a REAL can hold "not a number". In IEEE 754 arithmetic, which PLC REALs use,
+  every comparison with NaN (`<`, `<=`, `>`, `>=`, `=`) is FALSE; only `<>` is TRUE. So the
+  check `IF (V >= Min) AND (V <= Max) THEN accept` rejects NaN, while the tempting
   `IF (V < Min) OR (V > Max) THEN reject` lets it through. Always write range checks in the
   "accept only if inside" form.
 - **Rate**: some values must not jump. Limit the change per write or the rate of change.
@@ -1305,8 +1314,8 @@ FUNCTION_BLOCK FB_SetpointGuard
   WriteEdge(CLK := Write);
   IF WriteEdge.Q THEN
     (* Accept only a value PROVEN to be inside the limits. Written this way
-       round, NaN (not-a-number) is refused too, because every comparison
-       with NaN is FALSE. *)
+       round, NaN (not-a-number) is refused too, because >= and <= with
+       NaN are always FALSE. *)
     IF (Request >= MinValue) AND (Request <= MaxValue) THEN
       Value := Request;
       Rejected := FALSE;
@@ -1566,15 +1575,16 @@ END_PROGRAM
 | 2 | `HmiSp` is used without any check | A typo or a bad write of 150 % or NaN goes straight into control | Validate it in the PLC (`FB_SetpointGuard`) |
 | 3 | `FillTimer` is called only inside the `IF` | When the condition goes FALSE the timer is no longer called, so it never resets: its `ET` and `Q` freeze at their last values | Call every timer once per scan, unconditionally, with the condition as `IN` |
 | 4 | The valve is written in three places | Hard to reason about; the last writer wins | One writer: compute a request and permissives, assign once |
-| 5 | When `Level` reaches `HmiSp` in auto, nothing closes the valve | The `IF` is skipped and the valve keeps its last value, TRUE, so the tank fills on to 95 % | Close the valve explicitly when the target is reached |
+| 5 | When `Level` reaches `HmiSp` in auto, nothing closes the valve | The `IF` is skipped and the valve keeps its last value, TRUE, so the tank fills on to 95 %. Worse, the high-high switch is only read inside that `IF`, so from then on it is ignored in auto as well | Close the valve explicitly when the target is reached, and apply the interlock outside every `IF` |
 | 6 | Magic number `95.0` | What is it? How does it relate to the high-high switch? | Named constant with a comment and an FDS reference |
 | 7 | `Batches := Batches + 1` runs every scan while the condition is TRUE, and `Filling` is never reset | Counts about 100 per second instead of one per batch | Count on an edge, and reset `Filling` at the end of a batch |
 | 8 | `AvgL := TotalL / Batches` with `Batches = 0` | Integer division by zero: depending on the platform, a runtime fault that can stop the CPU, or a meaningless result. Under `plctest` the simulated PLC crashes on the first scan | Guard the division; and `TotalL` is never updated anyway |
 | 9 | Names such as `HmiSp`, `TotalL`, `AvgL`; no units | The reader has to guess | Descriptive names with units |
 | 10 | The fill timeout (600 s) has no alarm | A timeout that silently closes the valve leaves the operator guessing | Raise an alarm, per the alarm philosophy |
 
-Findings 1, 3, 5, 7 and 8 are functional bugs; running the fragment under `plctest` shows
-3, 5, 7 and 8 directly. The rest are maintainability problems that cause bugs later.
+Findings 1, 3, 5, 7 and 8 are functional bugs. Running the fragment under `plctest` shows 8
+at once (the crash); with the division removed, short scenarios show 3, 5 and 7 as well. The
+rest are maintainability problems that cause bugs later.
 </details>
 
 ## Common mistakes and how to avoid them
@@ -1679,16 +1689,19 @@ program, each with one realistic bug.
 4. **R4** A trip switches the pump off and turns `DryRunAlarm` on. The alarm stays on (latched)
    after flow returns.
 5. **R5** While `DryRunAlarm` is on, Start is ignored.
-6. **R6** `ResetPB` clears the alarm when it is pressed (on the rising edge). Reset never starts
-   the pump; a new Start is needed. A held or jammed reset button must not keep the protection
-   switched off.
+6. **R6** `ResetPB` clears the alarm when it is pressed (on the rising edge). A reset alone
+   never starts the pump; it runs again only when Start is pressed. A held or jammed reset
+   button must not keep the protection switched off.
 7. **R7** A normal stop never raises the alarm, even though flow stops with the pump.
 
 **Steps**
 
 1. Read the requirements and the correct program.
-2. Copy the starter test to your working folder:
-   `cp 22-software-engineering/labs/starter/22-1-dry-run-trip.test my-work/`
+2. Copy the starter test to your working folder (from `plc-course/`):
+   ```bash
+   mkdir -p my-work
+   cp 22-software-engineering/labs/starter/22-1-dry-run-trip.test my-work/
+   ```
 3. Add scenarios. After each one, run the test against the **correct** program:
    ```bash
    python3 tools/plctest.py 22-software-engineering/labs/22-1-dry-run-trip.st my-work/22-1-dry-run-trip.test
@@ -1737,12 +1750,19 @@ reference test against the correct program (must pass) and against every mutant 
 | E | An active alarm doesn't block a new start | R5 | After the trip, press Start: the pump must stay off |
 | F | The "armed" state is never cleared, so a second start gets no priming time | R2 | Run with flow, stop, restart dry: still running at 14.7 s |
 
+**Killing six committed mutants is not the end.** The reference test has two more scenarios
+that none of the six needs: flow that is proven and then lost *during* priming (still
+ignored until 10 s), and a stop and restart *inside* the priming time (the second start gets
+a fresh 10 s). Each one kills a realistic bug: arming the check early once flow has been
+seen, and timing the priming with a `TP` pulse that does not restart on a quick restart.
+Write those two mutants yourself and check that your test kills them.
+
 **Bonus: equivalent or not?** Delete the line `Run := FALSE;` in the trip block of the
 correct program. The reference test still passes. Is this an equivalent mutant? Almost, but
 not quite. Without that line the pump stops one scan later, through `NOT Alarm` in the seal-in
-equation. The only visible difference arises if, in the very next scan after the trip, a reset
-arrives *and* flow has returned: then the seal-in is still set and the pump restarts without a
-Start command. A person cannot press reset within 10 ms, but an automatic or remote reset
+equation. Apart from that one-scan delay, the behaviour differs only if, in the very next scan
+after the trip, a reset arrives *and* flow has returned: then the seal-in is still set and the
+pump restarts without a Start command. A person cannot press reset within 10 ms, but an automatic or remote reset
 could. A test for it would depend on single-scan timing, which this course avoids, so this is
 a case for code review: the explicit `Run := FALSE;` makes the trip independent of evaluation
 order, and it should stay.
@@ -1789,12 +1809,14 @@ characterisation test, and `solutions/22-2-dosing-skid-refactor.st` is one clean
 
 - `LevelPct` = `LevelRaw` × 100 / 27648, without clamping.
 - The low-level alarm comes on below 10 % and clears above 15 %; in between it holds.
-  Low level stops both pumps and blocks starting, and the pumps do not restart by themselves
-  when the level recovers.
+  The alarm (not the raw level) stops both pumps and blocks starting, so at 12 % a pump may
+  or may not start, depending on whether the level came from above or below. The pumps do not
+  restart by themselves when the level recovers.
 - Each pump starts with its start button and seals in; its NC stop button has priority. A run
   command without run feedback for 3 s (P-201) or 5 s (P-202) is a fault: the pump stops and
   its fault lamp latches on.
-- `ResetPB` clears both pumps' faults when pressed (rising edge). Reset never restarts a pump.
+- `ResetPB` clears both pumps' faults when pressed (rising edge). Only the reset clears a
+  fault (the stop button does not), and a reset alone never restarts a pump.
 - `P1_Starts` and `P2_Starts` count each time the pump's output switches on.
 
 **Requirements for your refactor**
@@ -1846,9 +1868,12 @@ the start counters are INT (they wrap after 32767) and not retentive; and nothin
 pump running without a run command (a welded contactor). Each is a reasonable improvement.
 Each changes behaviour, so each needs its own MOC, its own test changes and its own review.
 
-**Extension.** Find a behaviour of the legacy program that the characterisation test does
-*not* pin down, and write a scenario for it before refactoring. One example: what happens if
-the start button is still held at the moment a fault is reset?
+**Extension.** A characterisation test is never complete. Find a behaviour of the legacy
+program that this one does *not* pin down, and write a scenario for it before refactoring.
+One example: the start input acts on its level, not its edge, so a start button that is still
+held when a fault is reset, or when a stop button is released, starts the pump at once. A
+refactor that "tidied" Start into an edge would change that and still pass the test as it
+stands.
 </details>
 
 ## Check your understanding
@@ -1926,4 +1951,4 @@ the start button is still held at the moment a fault is reset?
 - ISPE, *GAMP 5*, for computerised systems in regulated industries.
 
 ---
-Previous: [21 — Architecture and Standards](../21-architecture-and-standards/) · Next: [23 — Commissioning and Troubleshooting](../23-commissioning-and-troubleshooting/)
+Previous: [21 — Architecture, Industry Standards and Design Patterns](../21-architecture-and-standards/) · Next: [23 — Commissioning, Troubleshooting and Maintenance](../23-commissioning-and-troubleshooting/)

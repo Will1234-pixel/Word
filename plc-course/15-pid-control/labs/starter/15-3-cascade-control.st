@@ -6,7 +6,7 @@
 
    The outer temperature controller TIC-101 (TempPID) sets the setpoint of the inner
    steam-flow controller FIC-101 (FlowPID). Requirements (see the lesson):
-   1. MAN  (FlowManual = TRUE): ValvePos = ValveManual. FlowSP tracks FlowPV.
+   1. MAN  (FlowManual = TRUE): ValvePos = ValveManual. FlowSP tracks FlowPV (within 7.).
    2. AUTO (FlowManual = FALSE, CascadeMode = FALSE): FIC-101 controls the flow to
       FlowSPLocal, limited to 0..FLOW_RANGE.
    3. CAS  (FlowManual = FALSE, CascadeMode = TRUE): FlowSP = TempPID output scaled

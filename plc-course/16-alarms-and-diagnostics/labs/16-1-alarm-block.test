@@ -139,6 +139,19 @@ expect TempAlm.Unacked FALSE
 expect TempAlm.State ActiveAcked
 expect Horn FALSE
 
+scenario an acknowledge pressed at the moment an alarm arrives does not acknowledge it
+# Whether the zero-delay alarm activates on this scan or the next, the
+# press came no later than the alarm, so the alarm must stay unacknowledged.
+set DoorOpen TRUE
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+expect DoorAlm.Active TRUE
+expect DoorAlm.Unacked TRUE
+expect DoorAlm.State ActiveUnack
+expect Horn TRUE
+
 scenario a returned, unacknowledged alarm that comes back is a new activation
 set DoorOpen TRUE
 wait 50ms
@@ -281,7 +294,9 @@ set VibHigh FALSE
 wait 100ms
 expect VibAlm.State LatchedRtn
 set VibHigh TRUE
-wait 1200ms
+wait 500ms                         # not yet confirmed: the state follows the CONFIRMED condition
+expect VibAlm.State LatchedRtn
+wait 700ms                         # 1.2 s: confirmed again
 expect VibAlm.Active TRUE
 expect VibAlm.Unacked FALSE
 expect VibAlm.State ActiveAcked

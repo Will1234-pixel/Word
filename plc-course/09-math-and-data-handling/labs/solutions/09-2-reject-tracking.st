@@ -33,14 +33,17 @@ PROGRAM RejectTracking
     GateMask  : WORD;               (* a single 1 in bit GatePos *)
   END_VAR
 
-  (* 1. Which bit is the gate? LIMIT keeps a bad setting inside the word:
-        SHL by 16 or more would give a mask of 0, and the gate would never
-        fire again. *)
+  (* 1. Which bit is the gate? LIMIT keeps a bad setting inside the word.
+        Without it, a shift count of 16 or more is not safe: in MATIEC on a PC,
+        16..31 gives a mask of 0 (the gate never fires) and 40 gives the same
+        as 8 (the gate fires at the wrong part). Other platforms differ. *)
   GatePos := LIMIT(1, RejectPos, 15);
   GateMask := SHL(WORD#16#0001, GatePos);
 
   (* 2. Mark: a fail from the camera sets bit 0, the part at the camera.
-        OR sets that one bit and leaves the other fifteen alone. *)
+        OR sets that one bit and leaves the other fifteen alone. This works
+        on the level of the signal, so a fail that is still on when the belt
+        moves marks the next part too: when in doubt, reject. *)
   IF InspectFail THEN
     TrackWord := TrackWord OR WORD#16#0001;
   END_IF;

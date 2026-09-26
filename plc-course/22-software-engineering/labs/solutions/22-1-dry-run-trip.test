@@ -8,6 +8,11 @@
 # PumpRun, DryRunAlarm. Times are checked just before and just after each
 # limit, never by counting scans.
 #
+# Two R2 scenarios go further than the six committed mutants need: flow lost
+# during priming after it was proven, and a quick stop/restart inside the
+# priming time. They kill two more realistic bugs (early arming once flow is
+# seen, and a TP pulse used for priming); the README's answers explain them.
+#
 # Timeline of a start with no flow at all (times from the start press):
 #   0 s     pump starts, priming time begins
 #   10 s    flow check armed, loss timer begins (no flow yet)
@@ -87,6 +92,19 @@ wait 30s
 expect PumpRun TRUE
 expect DryRunAlarm FALSE
 
+scenario R2 flow lost during priming is ignored, even after flow was proven
+set StopPB_NC TRUE
+set FlowSw TRUE                  # flow proven at once...
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 2s
+set FlowSw FALSE                 # ...then lost 2 s into priming (air pocket)
+wait 12700ms                     # 14.7 s after start: priming still protects it
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+until DryRunAlarm = TRUE within 600ms   # armed at 10 s, trips at 15 s
+
 scenario R3 a healthy pump with steady flow runs indefinitely
 set StopPB_NC TRUE
 set FlowSw TRUE
@@ -158,6 +176,25 @@ expect DryRunAlarm FALSE
 until DryRunAlarm = TRUE within 600ms
 wait 100ms
 expect PumpRun FALSE
+
+scenario R2 a quick stop and restart inside the priming time still gets a full 10 s
+set StopPB_NC TRUE
+set FlowSw FALSE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 3s
+set StopPB_NC FALSE              # stopped 3 s into priming
+scan
+set StopPB_NC TRUE
+wait 1s
+set StartPB TRUE                 # restarted 4 s after the first start, still dry
+scan
+set StartPB FALSE
+wait 14700ms                     # 10 s + 5 s from the SECOND start
+expect PumpRun TRUE
+expect DryRunAlarm FALSE
+until DryRunAlarm = TRUE within 600ms
 
 # ------------------------------------------------------------- R4/R5 latching
 scenario R4 the alarm stays latched after the cause has gone

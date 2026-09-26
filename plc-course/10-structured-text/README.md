@@ -1279,8 +1279,8 @@ CODESYS (and Beckhoff TwinCAT 3, which is built on it) implements most of editio
 standard, with extensions. CODESYS calls the result *Extended Structured Text*. Beyond what this module
 uses:
 
-- **Object orientation** (edition 3): methods, properties, interfaces and inheritance on
-  function blocks. [Module 21](../21-architecture-and-standards/) introduces them. A taste:
+- **Object orientation**: methods, interfaces and inheritance on function blocks (edition 3),
+  plus properties (a CODESYS/TwinCAT extension, not part of the standard). [Module 21](../21-architecture-and-standards/) introduces them. A taste:
 
   ```iecst
   // CODESYS / TwinCAT syntax - not testable here (MATIEC has no OOP)

@@ -83,8 +83,9 @@ PROGRAM PumpDiagnostics
   PT301Chk(PV := PT301, Tolerance := 0.05, FreezeTime := T#10s, Enable := PumpRunFb);
   FT302Chk(PV := FT302, Tolerance := 0.5, FreezeTime := T#20s, Enable := PumpRunFb);
 
-  (* PLC-2 counts once a second: 3 s allows two missed updates.
-     SCADA writes more slowly and less regularly: 10 s. *)
+  (* PLC-2 counts once a second: a 3 s timeout rides through one lost or
+     late update without a false fault. SCADA writes more slowly and less
+     regularly: 10 s. *)
   PartnerMon(Counter := PartnerHB, Timeout := T#3s);
   ScadaMon(Counter := ScadaHB, Timeout := T#10s);
 
@@ -92,7 +93,8 @@ PROGRAM PumpDiagnostics
   CommAlm := PartnerMon.CommFault OR ScadaMon.CommFault;
 
   (* TODO: this PLC's own heartbeat. HeartbeatOut starts at 0 and adds 1
-     every second; after 32767 it goes back to 0. Replace the placeholder. *)
+     every second; after 32767 it goes back to 0. Count in HeartbeatOut
+     itself (the test presets it to check the wrap). Replace the placeholder. *)
   HeartbeatOut := 0;
 END_PROGRAM
 

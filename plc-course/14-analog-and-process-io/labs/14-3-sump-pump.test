@@ -141,6 +141,37 @@ wait 100ms
 expect LowLowAlm TRUE
 expect PumpRun FALSE
 
+scenario a jammed reset button cannot clear the low-low latch either
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 17280             # LT-301 reads 2.5 m
+wait 100ms
+expect PumpRun TRUE
+set PumpRunFb TRUE
+set ResetPB TRUE                # button jammed in while the pump runs
+wait 500ms
+set LSLL302_NC FALSE            # float operates
+scan
+expect LowLowAlm TRUE
+expect PumpRun FALSE
+set PumpRunFb FALSE
+wait 1s
+set LSLL302_NC TRUE             # water back above the float, button still jammed
+scan
+expect LowLowAlm TRUE           # a held button is not a new reset
+expect PumpRun FALSE
+wait 2s
+expect LowLowAlm TRUE
+expect PumpRun FALSE
+set ResetPB FALSE               # button freed...
+scan
+set ResetPB TRUE                # ...and pressed properly
+scan
+set ResetPB FALSE
+wait 100ms
+expect LowLowAlm FALSE
+expect PumpRun TRUE             # automatic again: 2.5 m is above the start level
+
 scenario overload trip: pump stops, fault latches, reset needs a healthy overload
 set LSLL302_NC TRUE
 set PumpOL_NC TRUE

@@ -1,6 +1,6 @@
 # 17 — Industrial Communications and Networks
 
-> **Level:** 4 — Advanced · **Time:** ~12–14 hours · **Prerequisites:** [03 — Numbers, Data Types and Addressing](../03-data-types-and-addressing/), [09 — Math and Data Handling](../09-math-and-data-handling/), [11 — Program Organisation](../11-program-organization/)
+> **Level:** 4 — Advanced · **Time:** ~12–14 hours · **Prerequisites:** [03 — Numbers, Data Types and Addressing](../03-data-types-and-addressing/), [09 — Maths, Comparison, Data Movement and Bit Manipulation](../09-math-and-data-handling/), [11 — Program Organisation and Reusable Function Blocks](../11-program-organization/)
 
 A modern PLC is rarely alone. Its remote I/O sits on a fieldbus, its drives take their
 speed references over Ethernet, a power meter answers Modbus requests on an RS-485 pair,
@@ -86,7 +86,7 @@ Typical requirements (rough figures, to give a feel for the scale):
 | Tank level, temperature, slow process loops | 100 ms – 1 s | Little: the process moves slowly |
 | Pumps, valves, conveyors, general machine I/O | 5 – 50 ms | A photo-eye pulse is missed; a reject gate fires late |
 | Fast packaging, high-speed sorting | 1 – 5 ms | Products are mistracked |
-| Coordinated multi-axis motion | well under 1 ms, with very low jitter | Axes lose synchronism; the path is wrong |
+| Coordinated multi-axis motion | a few ms down to well under 1 ms, with very low jitter | Axes lose synchronism; the path is wrong |
 | SCADA displays, historian | 1 s or slower | An operator sees an old value |
 
 Ordinary office Ethernet gives no guarantees, so the industrial protocols add their own
@@ -374,8 +374,8 @@ open in firewalls):
 | TCP 1883 / 8883 | MQTT / MQTT over TLS |
 | UDP 123 | NTP time synchronisation |
 
-PROFINET RT and EtherCAT cyclic data do not use IP at all; they have their own Ethernet frame
-types, so there is no port to open, and a router cannot forward them.
+PROFINET RT and EtherCAT cyclic data normally do not use IP at all; they have their own
+Ethernet frame types, so there is no port to open, and a router cannot forward them.
 
 ### 3.4 Broadcasts, multicast and VLANs
 
@@ -889,9 +889,10 @@ share one protocol:
   9.6 kbit/s up to 12 Mbit/s. The higher the rate, the shorter the segment: about 100 m at
   12 Mbit/s, up to about 1200 m at the lowest rates. A **class 1 master** (the PLC) exchanges
   cyclic data with its slaves every bus cycle; a **class 2 master** (an engineering or
-  diagnostic tool) can join for acyclic access. Each station has an **address** (commonly
-  1–125) set by rotary switches or software. The extensions DP-V1 and DP-V2 add acyclic
-  services, alarms and clock-synchronous operation.
+  diagnostic tool) can join for acyclic access. Each station has a unique **address** from 0
+  to 125, set by rotary switches or software, and a segment carries at most 32 stations;
+  repeaters join segments. The extensions DP-V1 and DP-V2 add acyclic services, alarms and
+  clock-synchronous operation.
 - **PROFIBUS PA** (Process Automation) uses the same protocol over a different physical
   layer, **MBP** (Manchester coded, bus powered, IEC 61158-2), at 31.25 kbit/s. Two wires carry
   both power and data to the field instruments, and the physical layer can be made
@@ -1325,8 +1326,8 @@ consistency:
    `16#0000_FFFF` (65,535) to `16#0001_0000` (65,536). A client that reads the high word with
    one request and the low word with another, and the device updates in between, can read the
    old high word `16#0000` and the new low word `16#0000`: **0**. In the other order it reads
-   the new high word and the old low word: **131,071**. Both are wrong by 65,535, and the error
-   is rare, so it survives testing and appears in production. **Read every multi-register
+   the new high word and the old low word: **131,071**. Both are wrong by about 65,536, and the
+   error is rare, so it survives testing and appears in production. **Read every multi-register
    value in one request.** (Some devices latch the second register when the first is read;
    rely on that only when the manual says so.)
 2. **Buffers that change during the scan.** Communication buffers may be updated by the
@@ -1335,10 +1336,10 @@ consistency:
    and work only on the copy** ([Module 11](../11-program-organization/)).
 3. **Blocks bigger than one message.** A recipe of 300 registers needs three requests; a
    block written by another PLC may be caught half written. **Frame the block with a sequence
-   number at both ends**: the sender writes the new number into the first register and the
-   same number into the last one, with the data in between. The receiver accepts the block
-   only when the two numbers agree and differ from the last block accepted (worked
-   example 3).
+   number at both ends**: the sender writes the new number into the first register *before*
+   any of the data, and the same number into the last register *after* all of it. The
+   receiver accepts the block only when the two numbers agree and differ from the last block
+   accepted (worked example 3).
 
 Fieldbuses guarantee consistency only for a configured unit of data, for example a module's
 input data or an area marked as consistent in the hardware configuration. For larger blocks
@@ -1396,8 +1397,9 @@ covers IEC 62443 and the secure PLC coding practices.
 
 ### 8.1 What travels
 
-[Module 19](../19-motion-and-drives/) listed three ways to command a drive; this section is
-about the third. On a fieldbus the PLC and the drive exchange, every cycle:
+A PLC can command a drive in three ways: hard-wired digital signals, an analog speed
+reference, or a fieldbus. [Module 19](../19-motion-and-drives/) compares all three; this
+section is about the fieldbus. On a fieldbus the PLC and the drive exchange, every cycle:
 
 | PLC → drive (cyclic) | Drive → PLC (cyclic) | Acyclic, on demand |
 |---|---|---|
@@ -1450,8 +1452,8 @@ may be waiting for a transition you have not requested, which its status word wi
   whose bits include run forward, run reverse and fault reset in the output data, and
   faulted, running and at-reference in the input data, alongside speed reference and
   actual speed. Many drives offer richer vendor-specific assemblies as well; Rockwell's
-  PowerFlex drives, for example, appear in Studio 5000 with named "logic command" and "logic
-  status" tags.
+  PowerFlex manuals, for example, call their own words the *logic command* and *logic
+  status*, and the drive's add-on profile in Studio 5000 creates named tags for the bits.
 
 The exact bit meanings differ between profiles, between telegrams or assemblies of one
 profile, and sometimes between drive firmware versions. **Always take the bit layout from the
@@ -1527,12 +1529,12 @@ what each symptom meant:
 | 2 | Still timeouts; the meter's RX LED flickers but its TX LED never lights | The meter hears the frames but does not recognise them: the pair is reversed at the meter (its "A" is the other devices' "B"). Swap the two wires at the meter |
 | 3 | The meter answers, but with exception 02 | The block was set up to read *holding* registers (FC 03). The manual's 3xxxx numbers mean *input* registers: use FC 04. An exception, not a timeout, proved that steps 1 and 2 were now right |
 | 4 | The voltage reads −2.42 × 10⁻⁴¹ | Word order. The raw registers are `16#8000`, `16#4366`; low word first they form `16#4366_8000` = 230.5 V (section 4.8). Set the block's word-swap option for this meter |
-| 5 | Energy reads 1,003 kWh; the meter's display shows 1,003 kWh | The same word order applies to the energy total, and checking it against the display confirms it |
-| 6 | The terminator | The meter is now the last device on the cable, so its built-in terminator is switched on and the one in the device that used to be last is switched off |
+| 5 | Energy reads 65,732,608 kWh; the meter's display shows 1,003 kWh | The same word order applies to the energy total: 1,003 is `16#0000_03EB`, sent low word first, and read high word first it becomes `16#03EB_0000` = 1,003 × 65,536. With the word-swap option also set for this value, it reads 1,003 kWh, matching the display |
+| 6 | No symptom yet: a final check before leaving site | The meter is now the last device on the cable, so its built-in terminator is switched on and the one in the device that used to be last is switched off |
 
-Then the effect on the polling cycle is checked: the meter adds one read of two blocks per
-cycle, so the segment's cycle time grows by about the time worked example 2 calculates for
-one device.
+Then the effect on the polling cycle is checked: the meter adds two short reads per cycle
+(one for each block), so the segment's cycle time grows by roughly what worked example 2
+calculates for one device.
 
 ### Worked example 2: the polling budget of an RS-485 network
 
@@ -1680,7 +1682,7 @@ normal operation far fewer.
 | Checking a heartbeat for *increase*, or using a toggling bit | False comm-loss alarms at wrap-around; a live partner that looks dead (aliasing) | A counter, checked for any change (section 7.2) |
 | Declaring the link healthy at power-up before anything has been received | The first seconds after a restart run on zeros or stale values | Start "unproven" and require a period of health (Lab 17-2) |
 | Scaling that overflows the register (× 100 on a value that can exceed 327.67) | Wrap-around: 400.0 bar arrives as −25,536 | Choose the scale for the full range; clamp and flag before converting |
-| Truncating instead of rounding when packing scaled values | Every value biased low by up to one count | `REAL_TO_INT` (rounds), not `TRUNC` |
+| Truncating instead of rounding when packing scaled values | Every value biased towards zero by up to one count | `REAL_TO_INT` (rounds), not `TRUNC` |
 | Writing to a device on every scan | A saturated serial network; worn-out EEPROM in the device | Write on change, with a deadband, a minimum interval and a slow refresh (worked example 4) |
 | A one-scan fault-reset bit, or a reset bit that can stay set | The drive never sees the reset, or ignores later ones | A fixed-length pulse of several bus cycles (Lab 17-3) |
 | Leaving RUN set while a drive is faulted | The drive restarts the moment someone resets it | Drop RUN on a fault; require a fresh run command (Lab 17-3) |
@@ -1702,8 +1704,9 @@ straight into `DINT`/`REAL` variables, and `SWAP` swaps bytes when needed. PLC-t
 options include S7 `PUT`/`GET` (which must be explicitly permitted in the CPU's protection
 settings, and is best left off where not needed), open user communication (`TSEND_C` /
 `TRCV_C`), and the I-device function (a CPU acting as a PROFINET IO device for another
-controller). S7-1500 CPUs offer an OPC UA server that you enable and scope in the project.
-SINAMICS drives use PROFIdrive telegrams, and Siemens provides library blocks for them.
+controller). S7-1500 CPUs offer an OPC UA server that you enable and scope in the project
+(check which runtime licence it needs). SINAMICS drives use PROFIdrive telegrams, and Siemens
+provides library blocks for them.
 
 **Rockwell (Studio 5000 Logix Designer, CCW).** EtherNet/IP is native: devices are added
 with an add-on profile or an EDS file, each I/O connection has an RPI, and a connection
@@ -1772,7 +1775,7 @@ settings that can be changed on site after a check with a known value.
 | `HR_Status` bit | Meaning |
 |---|---|
 | 0 | `PumpRunning` |
-| 1 | `PumpFault` |
+| 1 | Pump fault: P-301 motor protection tripped, or its wire broken (`OverloadOK_NC` FALSE) |
 | 2 | `PressOutOfRange` |
 | 3 | `SPRejected` |
 | 4–15 | Always 0 |
@@ -1782,7 +1785,7 @@ settings that can be changed on site after a check with a known value.
 | Tag | Address | Type | Description |
 |---|---|---|---|
 | `PumpRunning` | `%IX0.0` | BOOL | P-301 running (contactor auxiliary contact) |
-| `PumpFault` | `%IX0.1` | BOOL | P-301 motor protection tripped |
+| `OverloadOK_NC` | `%IX0.1` | BOOL | P-301 motor protection, **NC**: TRUE while healthy, FALSE when tripped or when its wire is broken |
 | `HR_Status` | `%MW0` | WORD | Status word to SCADA |
 | `HR_Pressure` | `%MW1` | INT | Pressure to SCADA, bar × 100 |
 | `HR_RunSecA` | `%MW2` | WORD | First register of `RunSeconds` |
@@ -1815,7 +1818,8 @@ settings that can be changed on site after a check with a known value.
    `HR_SupplySP` / 10 **with its decimal** (125 gives 12.5) and `SPRejected` is FALSE.
    Otherwise `SupplySP` keeps its last good value and `SPRejected` is TRUE. At power-up
    `SupplySP` is 5.0.
-5. `HR_Status` carries the four flags in bits 0–3; bits 4–15 are always 0.
+5. `HR_Status` carries the four flags in bits 0–3; bits 4–15 are always 0. Bit 1 is a
+   *fault* bit, so it is 1 when `OverloadOK_NC` is FALSE.
 6. Everything is recomputed every scan: a word-order setting takes effect at once, and a
    value written by someone else into a PLC → SCADA register is overwritten at the next scan.
 
@@ -1837,7 +1841,8 @@ Write three small functions above the program and the program body becomes simpl
 try it by hand on −100,000 (`16#FFFE_7960`) to see why. For the pressure, compare the scaled
 `REAL` with 32767.0 and −32768.0 *before* calling `REAL_TO_INT`. For the setpoint, convert
 with `INT_TO_REAL` before dividing by 10.0, and simply don't assign `SupplySP` when the raw
-value is out of range. Build the status word from `16#0000` every scan.
+value is out of range. Build the status word from `16#0000` every scan, and remember that
+the pump-fault bit is the *inverse* of the NC healthy contact.
 </details>
 
 ### Lab 17-2: Communication watchdog
@@ -1947,9 +1952,11 @@ a conveyor are protected by safety-rated stopping functions, [Module 20](../20-f
    Bits 4–15 are ignored.
 2. `DriveCtrl` has RUN in bit 0, REV in bit 1 and RESET in bit 2; bits 3–15 are always 0.
 3. **RUN** is 1 while `RunReq` is TRUE, except that RUN is 0 while the drive reports FAULT
-   or `StartFail` is latched. A run request that was TRUE at any moment while the drive was
-   faulted or `StartFail` was latched is **spent**: RUN stays 0, even after the fault is
-   reset, until `RunReq` has gone FALSE and TRUE again.
+   or `StartFail` is latched. RUN is *not* gated by READY: a drive that is not ready (for
+   example switched to local control) must still receive RUN, so that the start supervision
+   in requirement 6 can detect it and raise `StartFail`. A run request that was TRUE at any
+   moment while the drive was faulted or `StartFail` was latched is **spent**: RUN stays 0,
+   even after the fault is reset, until `RunReq` has gone FALSE and TRUE again.
 4. **REV** follows `RevReq`, but only while the drive does not report RUNNING. While it
    reports RUNNING (including while it ramps down after RUN has been removed), REV keeps its
    value.
@@ -1957,7 +1964,8 @@ a conveyor are protected by safety-rated stopping functions, [Module 20](../20-f
    however long the button is held; holding the button does not repeat it. The same press
    clears `StartFail`.
 6. **StartFail** latches TRUE when RUN has been 1 for 3 s while the drive does not report
-   RUNNING, whether it never started or stopped by itself. RUN then goes to 0.
+   RUNNING, whether it never started or stopped by itself. RUN then goes to 0. It stays
+   latched, even if the drive later reports RUNNING, until the next press of `ResetPB`.
 7. `DriveSpeedRef` = `SpeedSP` limited to 0–100 %, × 163.84, **rounded**. It is sent all the
    time, whether or not RUN is set; direction is the REV bit, never a negative reference.
 
@@ -2086,4 +2094,4 @@ Build the control word from `16#0000` with `OR` masks.
 
 ---
 
-Previous: [16 — Alarms and Diagnostics](../16-alarms-and-diagnostics/) · Next: [18 — HMI and SCADA Integration](../18-hmi-and-scada/)
+Previous: [16 — Alarms, Diagnostics and Fault Handling](../16-alarms-and-diagnostics/) · Next: [18 — HMI and SCADA Integration](../18-hmi-and-scada/)

@@ -45,8 +45,9 @@ END_FUNCTION
 
 PROGRAM ModbusMap
   VAR (* field inputs *)
-    PumpRunning AT %IX0.0 : BOOL;   (* P-301 running (contactor auxiliary contact) *)
-    PumpFault   AT %IX0.1 : BOOL;   (* P-301 motor protection tripped *)
+    PumpRunning   AT %IX0.0 : BOOL; (* P-301 running (contactor auxiliary contact) *)
+    OverloadOK_NC AT %IX0.1 : BOOL; (* P-301 motor protection, NC: TRUE while healthy,
+                                       FALSE when tripped or when its wire is broken *)
   END_VAR
   VAR (* holding registers served to SCADA. OpenPLC Runtime v3: %MW0 = holding register 1024 *)
     HR_Status   AT %MW0 : WORD;     (* PLC -> SCADA: status bits *)
@@ -115,12 +116,14 @@ PROGRAM ModbusMap
     SPRejected := TRUE;
   END_IF;
 
-  (* 5. Status word, rebuilt from zero every scan so no bit can go stale. *)
+  (* 5. Status word, rebuilt from zero every scan so no bit can go stale.
+        Bit 1 is a FAULT bit, so it is the inverse of the NC healthy contact:
+        a tripped overload and a broken wire both report a fault to SCADA. *)
   Sts := 16#0000;
-  IF PumpRunning     THEN Sts := Sts OR 16#0001; END_IF;
-  IF PumpFault       THEN Sts := Sts OR 16#0002; END_IF;
-  IF PressOutOfRange THEN Sts := Sts OR 16#0004; END_IF;
-  IF SPRejected      THEN Sts := Sts OR 16#0008; END_IF;
+  IF PumpRunning       THEN Sts := Sts OR 16#0001; END_IF;
+  IF NOT OverloadOK_NC THEN Sts := Sts OR 16#0002; END_IF;
+  IF PressOutOfRange   THEN Sts := Sts OR 16#0004; END_IF;
+  IF SPRejected        THEN Sts := Sts OR 16#0008; END_IF;
   HR_Status := Sts;
 END_PROGRAM
 

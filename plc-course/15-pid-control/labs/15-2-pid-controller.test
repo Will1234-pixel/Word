@@ -5,6 +5,9 @@
 # inputs directly and check how Out responds. These checks pin down what the
 # parameters MEAN (ideal form, Kc in % per unit, Ti and Td in seconds), not how the
 # block is coded, so a velocity-form or back-calculation design passes too.
+# The test aid BenchPVRate ramps Bench.PV smoothly; on a ramp the derivative part
+# settles at Kc x Td x rate whatever derivative filter is used. SlowBench is a third
+# instance called every 10th scan with Ts = T#100ms, to prove the block uses Ts.
 #
 # Part B runs the controller Loop against the simulated heater Plant
 # (K = 0.8 degC/%, Tau = 20 s, dead time 3 s, 20 degC with the heater off) with the
@@ -34,16 +37,27 @@ expect Bench.Out ~ 80.0 0.001
 set Bench.ManualOut 5.0
 scan
 expect Bench.Out ~ 10.0 0.001
+set Bench.ManualOut 95.0            # more than OutMax = 80
+scan
+expect Bench.Out ~ 80.0 0.001
+set Bench.Manual FALSE              # to auto: P only (default Ti = 0), SP = PV = 0 so E = 0
+scan
+expect Bench.Out ~ 80.0 0.01        # bumpless from the output actually sent (80), not from 95
+set Bench.PV 5.0                    # E = -5 with the default Kc = 1
+scan
+expect Bench.Out ~ 75.0 0.01        # the output moves off the limit at once
 
 scenario A2 manual to auto is bumpless, then the integral ramps at Kc x E / Ti
 set Bench.Kc 2.0
 set Bench.Ti 5.0                    # seconds
 set Bench.Td 1.0                    # derivative on as well: it must not kick at the switch
 set Bench.SP 50.0
-set Bench.PV 40.0                   # reverse acting: error = SP - PV = +10
+set Bench.PV 38.0
 set Bench.Manual TRUE
 set Bench.ManualOut 30.0
-wait 1s
+wait 500ms
+set Bench.PV 40.0                   # PV moves while in manual: the derivative memory must follow
+wait 1s                             # reverse acting: error = SP - PV = +10
 expect Bench.Out ~ 30.0 0.001
 set Bench.Manual FALSE
 scan
@@ -191,6 +205,62 @@ wait 60s
 expect Bench.Out ~ 0.0 0.001
 set Bench.PV 40.0                   # error +10
 until Bench.Out > 5.0 within 1s
+
+scenario A11 derivative on a PV ramp is Kc x Td x rate; manual to auto is bumpless while PV moves
+set Bench.Kc 2.0
+set Bench.Ti 0.0
+set Bench.Td 2.0
+set Bench.SP 50.0
+set Bench.PV 50.0
+set Bench.Manual TRUE
+set Bench.ManualOut 50.0
+wait 1s
+set BenchPVRate 1.0                 # PV ramps up at 1 unit per second
+wait 2s                             # PV about 52; the derivative part has settled at -2 x 2 x 1 = -4 %
+expect Bench.Out ~ 50.0 0.001       # still in manual
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 50.0 0.2         # no bump, although P = -4 % and D = -4 % at this moment
+wait 2s
+expect Bench.Out ~ 46.0 0.3         # PV up another 2: P falls by 2 x 2 = 4 %, D stays at -4 %
+set BenchPVRate 0.0                 # the PV stops, so the derivative part dies away...
+wait 2s
+expect Bench.Out ~ 50.0 0.3         # ...and the output rises by Kc x Td x rate = 4 %
+
+scenario A12 direct action: the derivative acts in the same direction as the proportional part
+set Bench.DirectAction TRUE
+set Bench.Kc 2.0
+set Bench.Ti 0.0
+set Bench.Td 2.0
+set Bench.SP 50.0
+set Bench.PV 50.0
+set Bench.Manual TRUE
+set Bench.ManualOut 50.0
+wait 1s
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 50.0 0.01
+set BenchPVRate 1.0                 # PV rising: a direct-acting controller raises its output
+wait 2s
+expect Bench.Out ~ 58.0 0.3         # P = 2 x 2 = +4 %, D = 2 x 2 x 1 = +4 %
+set BenchPVRate 0.0
+wait 2s
+expect Bench.Out ~ 54.0 0.3         # the derivative part has gone, P remains
+
+scenario A13 the block uses Ts: called every 100 ms with Ts = 100 ms it acts the same in real time
+set SlowBench.Kc 2.0
+set SlowBench.Ti 5.0
+set SlowBench.SP 50.0
+set SlowBench.PV 40.0               # error +10, as in A2
+set SlowBench.Manual TRUE
+set SlowBench.ManualOut 30.0
+wait 1s
+expect SlowBench.Out ~ 30.0 0.001
+set SlowBench.Manual FALSE
+wait 2500ms
+expect SlowBench.Out ~ 40.0 0.6     # integral: 2 x 10 / 5 = 4 % per second of PLC time
+wait 2500ms
+expect SlowBench.Out ~ 50.0 0.6
 
 # ---------------------------------------------------------------------------------
 # Part B - closed loop: Loop controls the simulated heater

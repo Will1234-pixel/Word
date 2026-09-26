@@ -12,13 +12,17 @@
 #     is proved closed; DosedTotal_L reports the quantity,
 #   - Hold closes the valve, keeps counting material that still arrives,
 #     and Restart continues towards the SAME target (no overdose),
-#   - Stop waits for the valve to prove closed; Abort does not wait,
+#   - Stop waits for the valve to prove closed; Abort does not wait; Stop and
+#     Abort are accepted in Holding, Held and Restarting, always through
+#     Stopping or Aborting; Restart is refused until the phase is Held,
 #   - commands are cleared every scan and illegal ones change nothing,
 #   - the totaliser ignores flow below the cut-off and is frozen in the
-#     final states,
-#   - no flow while the valve is open, or the high-level interlock, make the
-#     phase hold itself with the right FailureCode, and nothing restarts
-#     by itself.
+#     final states (Complete, Stopped, Aborted),
+#   - no flow while the valve is open (flow below the cut-off counts as no
+#     flow), or the high-level interlock refusing an open request, make the
+#     phase hold itself with the right FailureCode; the no-flow allowance
+#     starts again after a Restart; FailureCode is kept until Restart, Reset
+#     or Start clears it; nothing restarts by itself.
 # Only interface tags are used, so any correct design passes.
 #
 # PhaseCmd:   1 Start  2 Hold  3 Restart  4 Stop  5 Abort  6 Reset
@@ -253,6 +257,7 @@ set XV201_ZSC TRUE
 until PhaseState = 5 within 200ms
 set PhaseCmd 4                   # Stop from Held
 scan
+expect PhaseState 7              # Stopping is visible for at least one scan
 until PhaseState = 8 within 200ms   # the valve is already closed
 expect XV201_SOL FALSE
 
@@ -575,3 +580,182 @@ expect XV201_SOL FALSE
 until PhaseState = 5 within 300ms  # holds itself again
 expect FailureCode 2
 expect XV201_SOL FALSE
+
+scenario Stop and Abort are accepted in Holding, Restart is not
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 10.0
+set FT201_Flow_Lpm 60.0
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 1s
+set PhaseCmd 2                   # Hold
+scan
+expect PhaseState 4              # Holding: the valve is still travelling
+set PhaseCmd 3                   # Restart in Holding: not held yet, so refused
+scan
+expect PhaseCmd 0
+expect PhaseState 4
+expect XV201_SOL FALSE
+set PhaseCmd 4                   # Stop in Holding
+scan
+expect PhaseState 7              # Stopping
+set FT201_Flow_Lpm 0.0
+set XV201_ZSC TRUE
+until PhaseState = 8 within 200ms
+set PhaseCmd 6
+scan
+set FT201_Flow_Lpm 60.0
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 1s
+set PhaseCmd 2
+scan
+expect PhaseState 4
+set PhaseCmd 5                   # Abort in Holding
+scan
+expect PhaseState 9
+until PhaseState = 10 within 200ms
+expect XV201_SOL FALSE
+
+scenario Stop and Abort are accepted in Held and Restarting, each through its acting state
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 10.0
+set FT201_Flow_Lpm 60.0
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 1s
+set PhaseCmd 2
+scan
+set FT201_Flow_Lpm 0.0
+set XV201_ZSC TRUE
+until PhaseState = 5 within 200ms
+set PhaseCmd 5                   # Abort in Held
+scan
+expect PhaseState 9              # Aborting is visible
+until PhaseState = 10 within 200ms
+set PhaseCmd 6
+scan
+set FT201_Flow_Lpm 60.0
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 1s
+set PhaseCmd 2
+scan
+set FT201_Flow_Lpm 0.0
+set XV201_ZSC TRUE
+until PhaseState = 5 within 200ms
+set PhaseCmd 3                   # Restart
+scan
+expect PhaseState 6              # Restarting
+set PhaseCmd 4                   # Stop at once
+scan
+expect PhaseState 7              # Stopping
+until PhaseState = 8 within 200ms
+expect XV201_SOL FALSE
+
+scenario FailureCode stays through Stop and is cleared by Reset
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 5.0
+set FT201_Flow_Lpm 0.0           # no supply
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+until PhaseState = 4 within 5300ms
+expect FailureCode 1
+set XV201_ZSC TRUE
+until PhaseState = 5 within 200ms
+set PhaseCmd 4                   # the operator ends the phase instead of restarting it
+scan
+until PhaseState = 8 within 200ms
+expect FailureCode 1             # the reason is still reported in Stopped
+set PhaseCmd 6                   # Reset
+scan
+expect PhaseState 1
+expect FailureCode 0             # Reset clears it
+
+scenario the total is frozen in Aborted, even if the valve sticks open
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 10.0
+set FT201_Flow_Lpm 60.0
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 1s
+set PhaseCmd 5                   # Abort; the valve never reports closed and flow goes on
+scan
+until PhaseState = 10 within 200ms
+expect DosedTotal_L ~ 1.0 0.1
+wait 2s
+expect DosedTotal_L ~ 1.0 0.1    # frozen in Aborted
+
+scenario flow below the cut-off counts as no flow for the watchdog
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 5.0
+set FT201_Flow_Lpm 0.3           # a trickle below the 0.5 L/min cut-off: not real flow
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 4500ms
+expect PhaseState 2
+expect FailureCode 0
+until PhaseState = 4 within 800ms
+expect FailureCode 1
+
+scenario the no-flow allowance starts again after a Restart
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 5.0
+set FT201_Flow_Lpm 0.0
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+wait 4s                          # 4 s of the 5 s allowance used
+set PhaseCmd 2                   # the operator holds the phase
+scan
+set XV201_ZSC TRUE
+until PhaseState = 5 within 200ms
+wait 2s
+set PhaseCmd 3                   # Restart, still without flow
+scan
+until XV201_SOL = TRUE within 200ms
+set XV201_ZSC FALSE
+wait 4s
+expect PhaseState 2              # a fresh 5 s allowance, not the 1 s left over
+expect FailureCode 0
+until PhaseState = 4 within 1500ms
+expect FailureCode 1
+
+scenario the interlock only holds the phase when it refuses an open request
+set XV201_ZSC TRUE
+set LSH201_NC TRUE
+set DoseTarget_L 2.0
+set FT201_Flow_Lpm 60.0
+scan
+set PhaseCmd 1
+scan
+set XV201_ZSC FALSE
+until XV201_SOL = FALSE within 2500ms   # target reached: valve requested closed
+expect PhaseState 2              # waiting for the valve to prove closed
+set LSH201_NC FALSE              # the level switch trips as the dose ends
+wait 300ms
+expect PhaseState 2              # nothing was refused, so no failure hold
+expect FailureCode 0
+set FT201_Flow_Lpm 0.0
+set XV201_ZSC TRUE
+until PhaseState = 3 within 200ms
+expect FailureCode 0

@@ -2,7 +2,8 @@
 # Interface: FlowRate (REAL, m3/h), ResetPB, PresetPB, PresetValue_m3 (DINT), TaskCycle (TIME,
 # T#10ms), Total_m3 (LREAL), TotalWhole_m3 (DINT), TotalReal_m3 (REAL, the naive total).
 # Arithmetic reminder: 36 m3/h = 0.01 m3/s, so 36 m3/h for 170 s = 1.7 m3.
-# Checks avoid whole-number boundaries, so TotalWhole_m3 must be cut off (7.7 -> 7), not rounded.
+# Checks avoid whole-number boundaries reached by integration, so TotalWhole_m3 must be cut off
+# (7.7 -> 7), not rounded. An exact preset value (1001.0) must give exactly 1001.
 # The test sets FlowRate directly; in a plant it would come from a scaled analog input.
 
 scenario power-up: everything reads zero and nothing counts without flow
@@ -69,12 +70,12 @@ wait 90s
 expect Total_m3 ~ 0.9 0.002
 set ResetPB TRUE
 scan
-expect Total_m3 ~ 0.0 0.0001
+expect Total_m3 ~ 0.0 0.00001  # tighter than one scan's increment (0.0001 m3 at 36 m3/h)
 expect TotalWhole_m3 0
-expect TotalReal_m3 ~ 0.0 0.0001
-wait 10s                       # still flowing, but held at zero
-expect Total_m3 ~ 0.0 0.0001
-expect TotalReal_m3 ~ 0.0 0.0001
+expect TotalReal_m3 ~ 0.0 0.00001
+wait 10s                       # still flowing, but held at zero: nothing is added
+expect Total_m3 ~ 0.0 0.00001
+expect TotalReal_m3 ~ 0.0 0.00001
 set ResetPB FALSE
 wait 50s
 expect Total_m3 ~ 0.5 0.002    # 0.9 + 0.5 would be 1.4 if part of the old total survived
@@ -121,16 +122,22 @@ expect TotalWhole_m3 5000007
 expect TotalReal_m3 ~ 5000000.0 0.5
 
 scenario reset wins over preset
-set PresetValue_m3 1000
+set PresetValue_m3 1001
 set PresetPB TRUE
 scan 2
 set PresetPB FALSE
+scan 2
+expect Total_m3 ~ 1001.0 0.0001
+expect TotalWhole_m3 1001        # exactly 1001.0 m3 is 1001 whole m3 (cut off, not rounded down from 1000.5)
 set FlowRate 36.0
 wait 100s
-expect Total_m3 ~ 1001.0 0.002
+expect Total_m3 ~ 1002.0 0.002
 set ResetPB TRUE
 set PresetPB TRUE
 scan 2
-expect Total_m3 ~ 0.0 0.0001
+expect Total_m3 ~ 0.0 0.00001
 expect TotalWhole_m3 0
-expect TotalReal_m3 ~ 0.0 0.0001
+expect TotalReal_m3 ~ 0.0 0.00001
+wait 1s                          # both held, flow on: reset still wins and nothing is added
+expect Total_m3 ~ 0.0 0.00001
+expect TotalReal_m3 ~ 0.0 0.00001

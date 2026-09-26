@@ -6,11 +6,13 @@
 #   - PressureBar sent as HR_Pressure = bar x 100, rounded, clamped with PressOutOfRange;
 #   - HR_SupplySP (degC x 10) range-checked (-100..150) into SupplySP, keeping the last
 #     good value and setting SPRejected when the raw value is out of range;
-#   - HR_Status bits 0..3, bits 4..15 always 0, and PLC-owned registers rewritten every scan.
+#   - HR_Status bits 0..3 (bit 1 = pump fault = NOT OverloadOK_NC), bits 4..15 always 0,
+#     and PLC-owned registers rewritten every scan.
 # Only interface variables are used. Each step runs two scans, so the order of the
 # statements inside your program does not matter.
 
 scenario power-up values
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 scan 2
 expect HR_Status 16#0000
 expect HR_Pressure 0
@@ -23,6 +25,7 @@ expect SPRejected FALSE
 expect PressOutOfRange FALSE
 
 scenario RunSeconds packed high word first (RunSecLowFirst = FALSE)
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set RunSeconds 100000               # 16#0001_86A0
 scan 2
 expect HR_RunSecA 16#0001
@@ -45,6 +48,7 @@ expect HR_RunSecA 16#7FFF
 expect HR_RunSecB 16#FFFF
 
 scenario RunSeconds packing works for negative values (full DINT range)
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set RunSeconds -2                   # 16#FFFF_FFFE
 scan 2
 expect HR_RunSecA 16#FFFF
@@ -63,6 +67,7 @@ expect HR_RunSecA 16#8000
 expect HR_RunSecB 16#0000
 
 scenario RunSeconds packed low word first (RunSecLowFirst = TRUE)
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set RunSecLowFirst TRUE
 set RunSeconds 100000
 scan 2
@@ -78,6 +83,7 @@ expect HR_RunSecA 16#FFFE
 expect HR_RunSecB 16#7960
 
 scenario meter total, high word first (MeterLowFirst = FALSE)
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set MeterRegA 16#0001
 set MeterRegB 16#86A0               # low word with bit 15 set: must not sign-extend
 scan 2
@@ -96,6 +102,7 @@ scan 2
 expect MeterTotal 2147483647
 
 scenario meter total, negative values
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set MeterRegA 16#FFFE
 set MeterRegB 16#7960
 scan 2
@@ -110,6 +117,7 @@ scan 2
 expect MeterTotal -2147483648
 
 scenario meter total, low word first (MeterLowFirst = TRUE)
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set MeterLowFirst TRUE
 set MeterRegA 16#86A0               # low word first
 set MeterRegB 16#0001
@@ -128,6 +136,7 @@ scan 2
 expect MeterTotal 100000
 
 scenario pressure x 100 is rounded to the nearest integer, not truncated
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set PressureBar 4.567               # 456.7 -> 457
 scan 2
 expect HR_Pressure 457
@@ -147,6 +156,7 @@ expect HR_Pressure 1200
 expect HR_Status 16#0000
 
 scenario pressure outside the INT range is clamped and flagged, then recovers
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set PressureBar 327.6               # 32760 still fits
 scan 2
 expect HR_Pressure 32760
@@ -165,6 +175,14 @@ scan 2
 expect HR_Pressure -32760
 expect PressOutOfRange FALSE
 expect HR_Status 16#0000
+set PressureBar 327.666             # 32766.6 rounds to 32767, which fits: NOT out of range
+scan 2
+expect HR_Pressure 32767
+expect PressOutOfRange FALSE
+set PressureBar -327.676            # -32767.6 rounds to -32768, which fits: NOT out of range
+scan 2
+expect HR_Pressure -32768
+expect PressOutOfRange FALSE
 set PressureBar -350.0
 scan 2
 expect HR_Pressure -32768
@@ -176,6 +194,7 @@ expect PressOutOfRange FALSE
 expect HR_Status 16#0000
 
 scenario setpoint from SCADA: valid values are converted with their decimals
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set HR_SupplySP 125                 # 12.5 degC (integer division would give 12)
 scan 2
 expect SupplySP 12.5
@@ -192,6 +211,7 @@ expect SupplySP 0.0
 expect SPRejected FALSE
 
 scenario setpoint limits are inclusive, and a bad write keeps the last good value
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set HR_SupplySP 150                 # +15.0 degC: the upper limit is allowed
 scan 2
 expect SupplySP 15.0
@@ -222,16 +242,25 @@ set HR_SupplySP 80                  # a good value clears the rejection
 scan 2
 expect SupplySP 8.0
 expect SPRejected FALSE
+set HR_SupplySP 999                 # rejected: keep 8.0 (clamping to the limit would give 15.0)
+scan 2
+expect SupplySP 8.0
+expect SPRejected TRUE
+set HR_SupplySP -500                # rejected: keep 8.0 (clamping would give -10.0)
+scan 2
+expect SupplySP 8.0
+expect SPRejected TRUE
 
 scenario status word: each bit on its own, then combinations
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set PumpRunning TRUE
 scan 2
 expect HR_Status 16#0001
 set PumpRunning FALSE
-set PumpFault TRUE
+set OverloadOK_NC FALSE             # overload tripped, or its wire broken: pump fault
 scan 2
 expect HR_Status 16#0002
-set PumpFault FALSE
+set OverloadOK_NC TRUE
 set PressureBar 999.0
 scan 2
 expect HR_Status 16#0004
@@ -243,17 +272,18 @@ set PumpRunning TRUE
 set PressureBar 999.0
 scan 2
 expect HR_Status 16#000D            # bits 0, 2 and 3
-set PumpFault TRUE
+set OverloadOK_NC FALSE
 scan 2
 expect HR_Status 16#000F            # bits 4..15 stay 0
 set PumpRunning FALSE
-set PumpFault FALSE
+set OverloadOK_NC TRUE
 set PressureBar 1.0
 set HR_SupplySP 20
 scan 2
 expect HR_Status 16#0000
 
 scenario registers owned by the PLC are rewritten every scan
+set OverloadOK_NC TRUE              # healthy NC overload contact first
 set PumpRunning TRUE
 set PressureBar 3.21
 set RunSeconds 70000                # 16#0001_1170

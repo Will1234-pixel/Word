@@ -201,7 +201,7 @@ inputs:
 | Calculation | Worst case | Fits in |
 |---|---|---|
 | `Raw * 1000`, Raw an `INT` | 32,767 × 1,000 = 32,767,000 | `DINT` (max 2,147,483,647) |
-| `Raw * 100000` | 32,767 × 100,000 ≈ 3.3 × 10⁹ | nothing 32-bit: rearrange (section 7.3) |
+| `Raw * 100000` | 32,767 × 100,000 ≈ 3.3 × 10⁹ | not a `DINT`: rearrange it (section 1.7, rule 4) |
 | Production count, 1 part/s for 20 years | ≈ 631 million | `DINT` |
 | Energy in Wh, 5 MW for 1 year | ≈ 4.4 × 10¹⁰ | `LINT`, or kWh in a `DINT`, or `LREAL` |
 
@@ -223,16 +223,20 @@ END_IF;
 ### 1.6 Division by zero
 
 **Integers.** What happens depends on the platform. The C code MATIEC generates does not check,
-so an integer division by zero crashed the program under test (`plctest` reports "test program
-crashed"). The OpenPLC Runtime runs the same kind of generated code, so expect the PLC program
-to stop. Other PLCs set a status flag, log a fault or go to STOP, depending on the model and
-the data type. `MOD` by zero returned 0 in MATIEC. Never let it happen: check the divisor.
+and integer division by zero is undefined in C. Under `plctest` on a PC it crashed the program
+(`plctest` reports "test program crashed"). The OpenPLC Runtime runs the same kind of
+generated code, so the result depends on the processor it runs on: the runtime may stop, or
+the program may carry on with a meaningless value. Other PLCs set a status flag, log a fault
+or go to STOP, depending on the model and the data type. `MOD` by zero returned 0 in MATIEC
+(its library checks for it). Never let a division by zero happen: check the divisor.
 
 **REALs** follow IEEE 754. A non-zero number divided by 0.0 is +infinity or −infinity, and
 0.0 / 0.0 is NaN (not a number). Neither causes a fault in MATIEC; the program just carries on
 with a nonsense value. Worse, converting them to an integer can hide them:
-`REAL_TO_INT` of infinity **and** of NaN both returned **0** in MATIEC. A missing check in a
-speed calculation can send a believable "0" to a drive without any alarm.
+`REAL_TO_INT` of infinity **and** of NaN both returned **0** in MATIEC on a PC. (Converting
+infinity or NaN to an integer is undefined in the generated C, so another processor can give
+another value.) A missing check in a speed calculation can send a believable "0" to a drive
+without any alarm.
 
 ```iecst
 (* Guard every division whose divisor can be zero *)
@@ -292,7 +296,7 @@ way and can lose information:
 | `DINT_TO_REAL(16777217)` | A REAL has 24 significant bits | 16,777,216.0 |
 | `REAL_TO_INT(40000.0)` | Out of range: undefined in the standard | −25,536 |
 | `REAL_TO_INT(2.5)` | A tie: rounding rule is platform-specific | 2 |
-| `REAL_TO_INT(NaN)` | Not a number at all | 0 |
+| `REAL_TO_INT(NaN)` | Not a number at all | 0 (on a PC; undefined in C) |
 | `LREAL_TO_REAL(x)` | Digits beyond the 7th are rounded off | — |
 
 The full list of conversion functions is in [Module 03](../03-data-types-and-addressing/) and
@@ -316,7 +320,10 @@ rounding", which avoids a bias when many values are rounded):
 |---|---|---|---|---|---|---|
 | `REAL_TO_INT` in MATIEC | 0 | 2 | 2 | 4 | −2 | −4 |
 
-Other platforms round halves away from zero (2.5 → 3, −2.5 → −3). Code that depends on a tie
+Platforms differ here. Rockwell Logix also rounds an exact half to the even number when a
+REAL is stored in an integer tag. Schneider Electric documents the opposite rule for its
+Modicon M580, halves away from zero (2.5 → 3, −2.5 → −3), while its older Quantum rounds to
+even. Code that depends on a tie
 behaves differently when it moves to another PLC. In practice ties are rare with measured
 values, and the labs never depend on them. Where a rounding rule really matters (a value that
 is billed, or reported to a regulator), write it in the functional specification and code it
@@ -352,8 +359,8 @@ through. Validate a signal before you use it ([Module 14](../14-analog-and-proce
 `WORD_TO_INT(16#FFFF)` is −1. The bits are copied unchanged and reinterpreted, so it is not a
 number conversion at all. Use `WORD`/`DWORD` for things that are patterns of bits (status
 words, masks) and `INT`/`DINT`/`UINT` for things that are numbers, and convert deliberately
-at the boundary. Mixing them up is how a status word ends up displayed as −32,768 on a SCADA
-screen ([Module 03](../03-data-types-and-addressing/), worked example 1).
+at the boundary. Mixing them up is how a status word ends up displayed as a large negative
+number on a SCADA screen ([Module 03](../03-data-types-and-addressing/), worked example 1).
 
 ## 3. Comparison
 
@@ -418,8 +425,9 @@ Other rules follow from the same idea:
   numbers, counts, modes.
 - For "has it changed?", compare with a deadband, `ABS(X - XLast) >= Deadband`
   ([Module 06](../06-edges-and-one-shots/)).
-- NaN compares FALSE with everything, even itself, so `X <> X` is TRUE only for NaN
-  ([Module 03](../03-data-types-and-addressing/)).
+- Every comparison with NaN is FALSE, even with itself, except `<>`, which is TRUE. So
+  `X = X` is FALSE and `X <> X` is TRUE only when `X` is NaN
+  ([Module 03](../03-data-types-and-addressing/)). Worked example 3 uses this.
 
 ### 3.3 Range checks: `LE`, `LIMIT` and `LIM`
 
@@ -436,9 +444,11 @@ is true while Low ≤ Test ≤ High. When Low > High it is true while Test ≥ L
 Test ≤ High, which is the band *outside* the two limits. That is handy for a value that wraps
 round, such as an angle: `LIM 350, Angle, 10` is true from 350° through 0° to 10°.
 
-`LIMIT(MN, IN, MX)` expects `MN <= MX`. If they are the wrong way round the result depends on
-the platform: `LIMIT(100.0, 50.0, 0.0)` returned 100.0 in MATIEC. This is exactly what goes
-wrong when you clamp a reverse-acting scaling (Lab 09-1).
+`LIMIT(MN, IN, MX)` expects `MN <= MX`. If they are the wrong way round the result is
+nonsense, and it depends on the platform: in MATIEC `LIMIT(100.0, 50.0, 0.0)` returned 100.0
+and `LIMIT(100.0, 150.0, 0.0)` returned 0.0, so the output only ever takes one of the two
+limit values. This is exactly what goes wrong when you clamp a reverse-acting scaling
+(Lab 09-1).
 
 A single comparison of an analog value **chatters** when the value sits near the limit, so
 alarms and on/off controllers add a deadband or hysteresis
@@ -648,9 +658,12 @@ Worked on `W = 16#8001` (bits 15 and 0 set), checked with MATIEC:
 
 Some details:
 
-- Shifting a `WORD` by 16 or more gave 0 in MATIEC. Don't rely on it: other platforms may
-  use only the low bits of N, so `SHL(W, 17)` might behave like `SHL(W, 1)`. Keep N inside
-  the word (Lab 09-2 uses `LIMIT`).
+- Keep N inside the word. MATIEC passes N straight to a C shift, and on a PC `SHL` or `SHR`
+  of a `WORD` by 16 to 31 gave 0, but `SHL(W, 40)` gave the same as `SHL(W, 8)` and
+  `SHR(W, 32)` returned `W` unchanged. (A shift by 32 or more, or by a negative N, is
+  undefined in C, and the PC's processor uses only the low five bits of N.) Other platforms
+  have their own rules. A shift count that comes from a setting can therefore move a bit to
+  the wrong place instead of clearing it, so limit it first (Lab 09-2 uses `LIMIT`).
 - For unsigned values, `SHL` by 1 multiplies by 2 and `SHR` by 1 divides by 2 (truncating),
   as long as nothing falls off the end. For arithmetic, write `* 2` and `/ 2`, which say what
   you mean and work for signed values too. IEC defines shifts on bit strings only (`SHL` on an
@@ -769,8 +782,9 @@ RejectPusher := Bad[5];
 
 Written the other way, `FOR i := 1 TO 15 DO Bad[i] := Bad[i - 1]; END_FOR;`, the loop copies
 `Bad[0]` into `Bad[1]`, then that same value into `Bad[2]`, and so on: one bad bottle marks the
-whole conveyor bad in a single scan. The loop runs only on the pulse, not every scan, so even a
-long register costs little scan time ([Module 10](../10-structured-text/)).
+whole conveyor bad in a single scan. The loop runs only in the scan that sees the pulse, but
+that scan must still fit the cycle-time budget, so a very long register is better built as a
+ring buffer (section 6.4, [Module 10](../10-structured-text/) for loops and scan time).
 
 ### 6.4 Word (data) shift registers: carrying data with the product
 
@@ -821,7 +835,8 @@ Vendor instructions:
 - **CODESYS and others:** write it in ST, or use a library block; free libraries such as
   OSCAT include FIFO and stack blocks.
 
-FIFOs, LIFOs and ring buffers are built properly in [Module 12](../12-data-structures/).
+FIFO queues and ring buffers are built properly in [Module 12](../12-data-structures/). A LIFO
+is the simpler cousin: one array and one index that goes up on a load and down on an unload.
 
 ### 6.6 Tracking in the real world
 
@@ -918,7 +933,8 @@ FUNCTION F_ScaleInt : DINT
     RETURN;
   END_IF;
   (* Multiply first. (In - InMin) * (OutMax - OutMin) must fit in a DINT:
-     keep |input span| x |output span| below 2,147,483,647. *)
+     keep the largest |In - InMin| (allow for over-range inputs) times
+     |output span| below 2,147,483,647. *)
   Num := (In - InMin) * (OutMax - OutMin);
   (* Round to the nearest whole number, halves away from zero: add half the
      divisor when the quotient is positive, subtract it when negative. *)
@@ -1054,7 +1070,7 @@ alarm. Rules of thumb:
 ### 8.4 Totalising properly
 
 1. **Use `LREAL`.** 53 significant bits instead of 24. The same 50 m³/h totaliser would not
-   freeze until about 10¹² m³, and the rounding error over a year is far below anything a flow
+   freeze until about 2 × 10¹² m³, and the rounding error over a year is far below anything a flow
    meter can measure. This is the simplest fix wherever `LREAL` is available (CODESYS, TIA
    Portal on S7-1500 and S7-1200, newer Logix controllers). Lab 09-3's reference solution
    does this.
@@ -1229,7 +1245,8 @@ PROGRAM MedianSelect
     TT101C : REAL;
     TT101  : REAL;                 (* the selected (median) value used for control *)
     Spread : REAL;                 (* highest minus lowest reading *)
-    DiscrepancyAlm : BOOL;         (* the transmitters disagree *)
+    AllNumbers : BOOL;             (* FALSE if any reading is NaN *)
+    DiscrepancyAlm : BOOL;         (* the transmitters disagree, or a reading is not a number *)
   END_VAR
   VAR CONSTANT
     MAX_SPREAD : REAL := 2.0;      (* degC *)
@@ -1239,9 +1256,14 @@ PROGRAM MedianSelect
      (the smaller of (the larger of A and B) and C) *)
   TT101 := MAX(MIN(TT101A, TT101B), MIN(MAX(TT101A, TT101B), TT101C));
 
-  (* Written so that it must be proven healthy: a NaN spread raises the alarm *)
+  (* MAX and MIN do not handle NaN reliably (see below), so check each
+     reading: X = X is FALSE only when X is NaN *)
+  AllNumbers := (TT101A = TT101A) AND (TT101B = TT101B) AND (TT101C = TT101C);
+
+  (* Written so that the healthy state must be proven: a NaN spread
+     also makes "Spread <= MAX_SPREAD" FALSE and raises the alarm *)
   Spread := MAX(TT101A, TT101B, TT101C) - MIN(TT101A, TT101B, TT101C);
-  DiscrepancyAlm := NOT (Spread <= MAX_SPREAD);
+  DiscrepancyAlm := NOT (AllNumbers AND (Spread <= MAX_SPREAD));
 END_PROGRAM
 ```
 
@@ -1250,6 +1272,13 @@ END_PROGRAM
 | 80.1 | 80.4 | 80.3 | 80.1 | 80.4 | 80.3 | **80.3** | no |
 | 80.1 | 80.4 | 250.0 (failed high) | 80.1 | 80.4 | 80.4 | **80.4** | yes |
 | 80.1 | −50.0 (failed low) | 80.3 | −50.0 | 80.1 | 80.1 | **80.1** | yes |
+| 80.1 | NaN | 80.3 | — | — | — | 80.1 in MATIEC | yes, from `AllNumbers` |
+
+Why the separate NaN check? `MAX` and `MIN` compare their inputs one after another, and every
+comparison with NaN is FALSE, so the result depends on *where* the NaN is. In MATIEC, with
+TT-101B = NaN the median came out as 80.1 and the spread as 0.2 °C, so without `AllNumbers`
+there would have been no alarm at all. With TT-101A = NaN the median itself was NaN, and a NaN
+would have gone to the controller. Never assume that a NaN will find its own way to an alarm.
 
 In practice the discrepancy alarm gets an on-delay ([Module 07](../07-timers/)) and each
 transmitter's own signal validation ([Module 14](../14-analog-and-process-io/)), so that a
@@ -1318,7 +1347,8 @@ in SCL, whole arrays and structures of the same type can be assigned directly. S
 interrupt OB (OB30–OB38) so that Δt is fixed.
 
 **CODESYS (and TwinCAT, WAGO, Schneider Machine Expert and other CODESYS-based tools).** The
-full IEC function set, plus edition-3 types such as `LTIME` and 64-bit integers. Implicit
+full IEC function set, 64-bit integers (`LINT`, `ULINT`), and edition-3 additions such as
+`LTIME`. Implicit
 conversions are allowed (with warnings where information may be lost), and `TO_INT(x)`-style
 generic conversions exist. Bit access `MyWord.3` and bitwise operators on integers are allowed.
 `TIME_TO_REAL` returns milliseconds. Whole arrays can be assigned; memory-copy functions in the
@@ -1328,11 +1358,13 @@ Integer overflow wraps silently.
 **OpenPLC and MATIEC (this course).** Strict edition-2 typing: no implicit conversions, no
 arithmetic on `WORD`, no bitwise operations on `INT`, no bit access. Integers wrap when stored
 (intermediate results are calculated in 32 bits by the generated C). Integer division by zero
-is not checked and crashes the program; `MOD` by zero returns 0. `REAL_TO_INT` rounds ties to
-even and returns 0 for NaN and infinity; out-of-range values wrap. `TIME_TO_REAL` and
-`TIME_TO_LREAL` return seconds and `TIME_TO_DINT` whole seconds. `SHL`/`SHR` by 16 or more
-gave 0 on a `WORD`. `MUX` with an out-of-range index returned 0. `LIMIT` with `MN > MX`
-returned `MN`. The MATIEC library's `INTEGRAL` block keeps its output in a `REAL`, so it has
+is not checked (it crashed the program under `plctest`); `MOD` by zero returns 0.
+`REAL_TO_INT` rounds ties to even and out-of-range values wrap; on a PC it returned 0 for NaN
+and infinity. `TIME_TO_REAL` and `TIME_TO_LREAL` return seconds and `TIME_TO_DINT` whole
+seconds. A `WORD` shifted by 16 to 31 gave 0, but larger shift counts are passed to the
+processor unchecked (`SHL(W, 40)` behaved like `SHL(W, 8)` on a PC). `MUX` with an
+out-of-range index returned 0. `LIMIT` with `MN > MX` returned `MN` or `MX`, never anything in
+between. The MATIEC library's `INTEGRAL` block keeps its output in a `REAL`, so it has
 exactly the precision problem of section 8.3: don't use it for a long-running totaliser.
 [Appendix E](../appendices/E-matiec-openplc-notes.md) lists all MATIEC restrictions.
 
@@ -1435,7 +1467,9 @@ presses reset.
 
 1. At power-up nothing is tracked: `TrackWord` = 0, the pusher is off, the count is 0.
 2. While `InspectFail` is TRUE, bit 0 of `TrackWord` is set. No other bit changes. The bit
-   stays set after the signal goes away.
+   stays set after the signal goes away. Mark on the level, not on an edge: if the fail
+   signal is still on when the belt moves, the part that arrives at the camera is marked as
+   well. When in doubt, reject.
 3. On each **rising edge** of `EncoderPulse`, every bit moves one place towards the pusher
    (bit n to bit n + 1), bit 0 becomes 0, and the bit leaving bit 15 is discarded, never
    rotated back. A pulse that stays TRUE causes only one shift.
@@ -1445,9 +1479,10 @@ presses reset.
 5. `RejectCount` goes up by one for every bad part that arrives at the pusher. Two bad parts
    in a row keep the pusher on for two pitches and count **two**.
 6. A `RejectPos` outside 1..15 is treated as the nearest limit (0 acts as 1, 40 acts as 15),
-   so a bad setting cannot silently disable the pusher.
-7. While `ResetPB` is TRUE the tracking is cleared (all bits 0, pusher off). `RejectCount`
-   is production data and is **not** cleared.
+   so a bad setting cannot silently disable the pusher or move it to the wrong part.
+7. While `ResetPB` is TRUE the tracking is cleared (all bits 0, pusher off), so a camera
+   result or a pulse that arrives while the button is held leaves nothing behind.
+   `RejectCount` is production data and is **not** cleared.
 
 The test never changes `InspectFail` and `EncoderPulse` in the same scan, and it runs two
 scans after every change, so the order of your statements does not matter.
@@ -1510,7 +1545,8 @@ alongside the correct one.
    cannot test this: every scenario starts from a fresh PLC).
 
 The test simulates up to an hour of flow per scenario (a second or so of real time) and checks
-most totals to ±0.002 m³, and to ±0.02 m³ after a full hour.
+most totals to ±0.002 m³, and to ±0.02 m³ after a full hour. While reset is held the totals
+must stay at zero to within ±0.00001 m³, less than one scan's increment.
 
 <details>
 <summary>Hint (open only if stuck)</summary>
@@ -1560,8 +1596,9 @@ ELSE (add) END_IF;` handles the priorities. In the add branch,
    2.4999998 and the comparison is FALSE; whether it happens to be exact depends on how the
    value was calculated. Use a one-sided comparison, `Level_m >= 2.5`, for "has reached", or a
    tolerance, `ABS(Level_m - 2.5) <= 0.005`, for "is at".
-4. 2: MATIEC rounds an exact half to the even neighbour. Other platforms return 3 (halves away
-   from zero), so code that depends on it changes behaviour when it moves. Measured values are
+4. 2: MATIEC rounds an exact half to the even neighbour. Some other platforms return 3
+   (halves away from zero, as Schneider documents for the Modicon M580), so code that depends
+   on it changes behaviour when it moves. Measured values are
    rarely exact halves; where a rounding rule matters, code it explicitly (section 2.2).
 5. `ManualSP`. `SEL` returns `IN0` (here `AutoSP`) when the selector is FALSE and `IN1` when
    it is TRUE.

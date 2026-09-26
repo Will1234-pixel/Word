@@ -1256,7 +1256,8 @@ instruction (section 4.5).
 ### CODESYS and Beckhoff TwinCAT
 
 - **POUs**: *Program*, *Function Block* and *Function*, plus edition-3 object orientation
-  (*Method*, *Property*, *Interface*, `EXTENDS`, `IMPLEMENTS`) and *Actions*. An OOP motor
+  (*Method*, *Interface*, `EXTENDS`, `IMPLEMENTS`), the CODESYS extension *Property*, and
+  *Actions*. An OOP motor
   block might offer methods such as `Pump1.Start()`. That syntax is for CODESYS/TwinCAT and is
   not testable here. [Module 21](../21-architecture-and-standards/) shows where OOP helps.
 - **Tasks** are set up in the *Task Configuration*: *cyclic*, *event* (rising edge of a

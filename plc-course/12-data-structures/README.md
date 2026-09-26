@@ -53,7 +53,7 @@ structures:
 | `P1_Start`, `P1_Stop`, `P1_Running`, `P1_Fault`, `P1_Speed`, `P1_Hours` | `Pumps[1].Cmd.Start`, `Pumps[1].Sts.Running`, ... |
 | `P2_Start`, `P2_Stop`, `P2_Running`, ... (and again for P3 and P4) | `Pumps[2]...` (same member names for every pump) |
 | One HMI faceplate per pump, each wired by hand to its six tags | One faceplate, told "you are pump *n*" |
-| Adding pump 5: twenty new tags, new logic, a new faceplate | Adding pump 5: change the array bound to 5 |
+| Adding pump 5: another full set of tags, new logic, a new faceplate | Adding pump 5: change the array bound (and its loop constant) to 5 |
 | "Total run hours" = `P1_Hours + P2_Hours + P3_Hours + P4_Hours` | A `FOR` loop over `Pumps[i].Sts.RunHours` |
 
 The structured version has three big advantages. **Every pump is the same**, so a fix or a new
@@ -327,8 +327,8 @@ FUNCTION F_AddRunHours : BOOL
 END_FUNCTION
 ```
 
-It is called as `Ok := F_AddRunHours(Pumps := Pumps, DeltaHours := 0.001);`. (`ST_Pump` is
-the structure from section 4.)
+It is called as `Ok := F_AddRunHours(Pumps := Pumps, DeltaHours := 0.001);`, for example on a
+pulse every 3.6 s (0.001 h), not on every scan. (`ST_Pump` is the structure from section 4.)
 
 ## 3. Structures
 
@@ -645,8 +645,10 @@ HMI can show a table of all four with one row definition.
 Arrays of structures are also where the **one-writer rule** needs care. If the HMI writes
 `Pumps[2].Cmd.Start` and the program writes `Pumps[2].Sts...`, all is well. If the HMI writes
 back a whole `Pumps[2]` element (some drivers and scripts write a whole structure when one
-member changes), it overwrites the PLC's status with stale values for one scan. Map
-commands and status as separate structures or tag groups, so that each has one writer.
+member changes), it overwrites the PLC's data with the stale copy it read earlier. Members
+that the PLC recalculates every scan recover on the next scan, but latched alarms, counters
+and run hours are simply lost, and a `Cfg` value can be silently put back. Map commands and
+status as separate structures or tag groups, so that each has one writer.
 
 ### 4.5 Changing a data type in a running plant
 
@@ -656,10 +658,13 @@ sometimes other PLCs. Changing it is a change to all of them:
 - Adding a member changes the size and layout of every variable of that type. With
   address-based communication, **every member after the new one moves**. Add new members at the
   end, or reserve spare members in advance.
-- On most platforms, changing a type that is in use cannot be done as a simple online change.
-  It needs a download, and the data of variables of that type may be re-initialised to their
-  start values. Plan it like any other download, and save the current values first (recipe
-  data especially).
+- Changing a type that is in use is not always possible as an online change. Depending on the
+  platform and on the change, it may need an offline edit and a download (Studio 5000 does not
+  let you add or remove members of a UDT that tags use while online), or the variables of that
+  type may be re-initialised to their start values when the change is loaded. CODESYS can
+  usually carry the values of unchanged members across an online change. Find out what your
+  tool does before you change a type in a running plant, plan it like any other download, and
+  save the current values first (recipe data especially).
 - Version the type together with the FB and the HMI faceplate that use it (Module 11, section
   6.7).
 
@@ -824,7 +829,7 @@ The standard string functions, with results checked in MATIEC. Positions count f
 | Function | Meaning | Example | Result |
 |---|---|---|---|
 | `LEN(IN)` | Current length | `LEN('TT-104')` | `6` |
-| `CONCAT(IN1, IN2, ...)` | Join (any number of inputs) | `CONCAT('TT-', '104', ' HI')` | `'TT-104 HI'` |
+| `CONCAT(IN1, IN2, ...)` | Join (the standard and MATIEC accept any number of inputs) | `CONCAT('TT-', '104', ' HI')` | `'TT-104 HI'` |
 | `LEFT(IN, L)` | First L characters | `LEFT('TT-104', 2)` | `'TT'` |
 | `RIGHT(IN, L)` | Last L characters | `RIGHT('TT-104', 3)` | `'104'` |
 | `MID(IN, L, P)` | L characters starting at position P | `MID('TT-104', 3, 4)` | `'104'` |
@@ -836,6 +841,11 @@ The standard string functions, with results checked in MATIEC. Positions count f
 Watch the argument order of `MID`, `DELETE` and `REPLACE`: the **length comes before the
 position**. That is the order in the standard, and it is the opposite of what many programmers
 expect. Use formal calls (`MID(IN := Label, L := 5, P := 5)`) when in doubt.
+
+Not every tool implements the standard functions in exactly the same way. `CONCAT` with three
+or more inputs works in MATIEC, but CODESYS and TIA Portal join two strings per call, so nest
+the calls there: `CONCAT(CONCAT('TT-', '104'), ' HI')`. Logix's `CONCAT` instruction also joins
+two strings, into a destination tag.
 
 Strings compare with `=`, `<>`, `<`, `>`, `<=` and `>=`. Comparison is character by character
 and **case-sensitive**: `'abc' = 'ABC'` is FALSE, `'ABC' < 'ABD'` is TRUE, and `'B' > 'ABC'` is
@@ -1078,7 +1088,7 @@ those are FB instances. You rebuild their small memories as structure members:
 
 | FB you would use | What it remembers | Replacement in the structure |
 |---|---|---|
-| `TON` for a timeout | When the condition started | A millisecond counter (add the scan time while the condition holds, clear it when it doesn't), or a start time stamp compared with a clock |
+| `TON` for a timeout | When the condition started | A millisecond counter (add the scan time while the condition holds, stop adding at the preset, clear it when the condition drops), or a start time stamp compared with a clock |
 | `R_TRIG` on a command | The input's value last scan | A `BOOL` member holding last scan's value: edge = `NOT Old AND New` |
 | Seal-in or latch | The latched state | A `BOOL` or an enumeration state member |
 | `CTU` | The count | An integer member |
@@ -1103,10 +1113,10 @@ FUNCTION_BLOCK FB_MotorGroup
   LastMs := NowMs;
   FOR i := 1 TO 4 DO
     ...
-    IF Disagree THEN                  (* this pump's own "timer", in its element *)
-      Motors[i].DisagreeMs := Motors[i].DisagreeMs + ScanMs;
-    ELSE
+    IF NOT Disagree THEN              (* this pump's own "timer", in its element *)
       Motors[i].DisagreeMs := 0;
+    ELSIF Motors[i].DisagreeMs < Motors[i].Cfg.FbTimeoutMs THEN
+      Motors[i].DisagreeMs := Motors[i].DisagreeMs + ScanMs;   (* stops at the timeout *)
     END_IF;
     IF Motors[i].DisagreeMs >= Motors[i].Cfg.FbTimeoutMs THEN
       ...                             (* latch the alarm that matches the state *)
@@ -1416,7 +1426,7 @@ outside can disturb the indexes.
    array shrank to 8. Keep a constant next to the literal bound, and loop over exactly the bounds.
 3. **Assuming the other platform's lower bound.** Logix arrays always start at 0. Code
    translated from Logix to a `[1..N]` array (or back) is off by one everywhere unless every
-   index is checked.
+   index is adjusted.
 4. **Partial copies.** Copying a recipe member by member while validating leaves a mixture of
    two recipes when a check fails. Validate first, then copy the whole structure once.
 5. **A live view where a snapshot was needed** (or the opposite). `Active := Recipes[ActiveNo];`
@@ -1462,9 +1472,12 @@ outside can disturb the indexes.
   Keep optimised access unless something must address the block by offset.
 - **Arrays of multi-instances** of FBs in an FB's *Static* section, as in section 8.4 (check your
   CPU and version).
-- **Enumerations**: TIA Portal has traditionally had no enumeration data type for S7-1200/1500
-  programs. The usual practice is named constants, either user constants in the PLC tag table or
-  constants in the block interface. Check what your version offers.
+- **Enumerations**: for most of its history TIA Portal had no enumeration data type, and the
+  usual practice is named constants, either user constants in the PLC tag table or constants in
+  the block interface. Recent versions add *named value data types* for S7-1500 (inside
+  software units): names for values of an integer base type, much like a CODESYS enumeration
+  with explicit values, although a variable of such a type can still hold any value of its base
+  type. Check what your version and CPU offer; on S7-1200, use constants.
 - **Strings**: `String[n]` (n up to 254, n + 2 bytes), `WString`, `Char`. Functions `LEN`,
   `CONCAT`, `LEFT`, `RIGHT`, `MID`, `FIND`, `INSERT`, `DELETE`, `REPLACE`, plus conversions such as
   `S_CONV`, `STRG_VAL`, `VAL_STRG`, `Strg_TO_Chars` and `Chars_TO_Strg`.
@@ -1474,9 +1487,9 @@ outside can disturb the indexes.
 - **Arrays**: always zero-based, up to three dimensions for a tag. A UDT member can be an array
   of one dimension. `BOOL` arrays come in multiples of 32. An index out of range at run time is a
   major fault (type 4, code 20). The `SIZE` instruction returns the number of elements.
-- **UDTs**: members are aligned and padded as in section 7.6, so group `BOOL`s together. On many
-  versions a UDT that tags already use cannot be changed online, so plan UDT changes as offline
-  edits and a download.
+- **UDTs**: members are aligned and padded as in section 7.6, so group `BOOL`s together.
+  Members cannot be added to or removed from a UDT that tags already use while online, so plan
+  such UDT changes as offline edits and a download.
 - **No user-defined enumerations.** States and modes are `DINT`s, documented in descriptions,
   often with constant tags for the values.
 - **Strings**: the built-in `STRING` type has `.LEN` and `.DATA[82]`, and you can create string
@@ -1619,7 +1632,9 @@ count, and overwriting of the oldest entry.
 operator actions) so that the local HMI can show them and a historian can collect them. Other
 parts of the program raise an event by writing its code (from the station's event list) into
 `NewCode` and setting `LogReq`. Each entry holds the code and a time stamp in milliseconds since
-start-up. The millisecond clock is given in the starter.
+start-up. The millisecond clock is given in the starter. It is built from a `TON` and stops
+after 24 days, which is plenty for a lab; a real controller would use its own free-running
+millisecond counter or real-time clock.
 
 **Type** (given): `ST_Event` with `Code : INT` (1..32767, 0 = empty entry) and `Stamp : DINT`
 (ms since power-up).
@@ -1724,7 +1739,9 @@ stop is an ordinary control stop. Emergency stops belong in a safety system
    Agreement, even briefly, restarts the allowance.
 5. A `Faulted` pump has `RunCmd` FALSE and refuses `Start`. `Reset` clears the pump's alarms and
    makes it `Stopped`. It never starts the pump. If the cause is still there, the alarm returns
-   after another full timeout. A `Reset` of one pump does not affect the others.
+   after another full timeout. A `Reset` of a pump that is not faulted does not restart the
+   timing of a disagreement (pressing Reset must not postpone an alarm). A `Reset` of one pump
+   does not affect the others.
 6. All command bits are cleared by your logic every scan, whether they were used or not.
 7. The four pumps are independent: each has its own timing.
 8. `RunningCount` and `FaultLamp` summarise the four pumps.
@@ -1746,10 +1763,12 @@ the contactors last. In between, compute `ScanMs := NowMs - LastMs; LastMs := No
 loop `FOR i := 1 TO 4`. Inside the loop, in this order: handle `Cmd.Reset`; handle Start and
 Stop with a `CASE Motors[i].Sts.State OF` (qualify the values: `E_MotorState#Stopped:`);
 promote `Starting` to `Running` on feedback; set `RunCmd`; then the timer:
-`IF Motors[i].Sts.RunCmd XOR Motors[i].RunFb THEN` add `ScanMs` to `Motors[i].DisagreeMs`,
-`ELSE` set it to 0. When it reaches `Cfg.FbTimeoutMs`, latch the alarm for the current state and
-go to `Faulted`. Finally clear the command bits. The reference solution puts the loop in one
-`FUNCTION_BLOCK` whose `VAR_IN_OUT` is the whole array (section 8.2, pattern A).
+`IF Motors[i].Sts.RunCmd XOR Motors[i].RunFb THEN` add `ScanMs` to `Motors[i].DisagreeMs`
+(until it reaches the timeout, so that it can never overflow), `ELSE` set it to 0. When it
+reaches `Cfg.FbTimeoutMs`, latch the alarm for the current state and go to `Faulted`. Clear
+`DisagreeMs` on a Reset only when the pump was `Faulted`. Finally clear the command bits. The
+reference solution puts the loop in one `FUNCTION_BLOCK` whose `VAR_IN_OUT` is the whole array
+(section 8.2, pattern A).
 </details>
 
 ## Check your understanding
@@ -1815,10 +1834,11 @@ go to `Faulted`. Finally clear the command bits. The reference solution puts the
 7. One reasonable answer: **Cmd**: `ModeReq` (enum Manual/Auto), `ManualOut` (% requested in
    manual), `Reset`. **Sts**: `Mode` (in force), `Output` (% actually sent), `Position` (% from
    feedback), `Deviation` (%), `InManual`, `Faulted`. **Cfg**: `OutMin`/`OutMax` (%),
-   `FbDeviationLimit` (%), `FbDelayMs`, `FailPosition` (%), `TagName`. **Alm**: `PositionDeviation`
-   (feedback does not follow the output), `FeedbackBad` (feedback signal in the NAMUR NE43
-   failure region, below 3.6 mA or above 21 mA, see Module 14), `OutputFault`. The important points are the request/status pairs (`ManualOut` vs
-   `Output`, `ModeReq` vs `Mode`), units on every member, and configuration kept apart.
+   `FbDeviationLimit` (%), `FbDelayMs`, `FailPosition` (%), `TagName`. **Alm**:
+   `PositionDeviation` (feedback does not follow the output), `FeedbackBad` (feedback signal in
+   the NAMUR NE43 failure region, at or below 3.6 mA or at or above 21 mA, see Module 14),
+   `OutputFault`. The important points are the request/status pairs (`ManualOut` vs `Output`,
+   `ModeReq` vs `Mode`), units on every member, and configuration kept apart.
 8. One `TON` is called four times per scan with four inputs. Motor 1's condition is TRUE, but
    motors 2 to 4 give FALSE in the same scan, so the timer's input drops every scan, it restarts
    every time, and `Q` never comes on: motor 1's failure is never detected. The loop only times
@@ -1833,10 +1853,10 @@ go to `Faulted`. Finally clear the command bits. The reference solution puts the
 10. Each `DINT` must start on a 4-byte boundary, and each separate group of `BOOL`s needs its own
     hidden `SINT` host member. `BOOL, DINT, BOOL, DINT, BOOL` needs three hidden bytes, each
     followed by padding up to the next 4-byte boundary. Grouped, the three `BOOL`s share one
-    hidden byte and the two `DINT`s follow after one lot of padding. In a Siemens optimised block
-    there are no fixed offsets at all (and absolute addressing is not possible), so a Modbus map
-    must be built by a routine that copies each member by name into a register array in a
-    documented order.
+    hidden byte and the two `DINT`s follow after one lot of padding: 4 + 4 + 4 + 4 + 4 = 20 bytes
+    against 4 + 4 + 4 = 12 bytes. In a Siemens optimised block there are no fixed offsets at all
+    (and absolute addressing is not possible), so a Modbus map must be built by a routine that
+    copies each member by name into a register array in a documented order.
 </details>
 
 ## Further reading
@@ -1848,7 +1868,7 @@ go to `Faulted`. Finally clear the command bits. The reference solution puts the
 - Siemens, *Programming Guideline for S7-1200/S7-1500* (Siemens Industry Online Support): PLC
   data types, optimised block access, arrays.
 - Rockwell Automation, *Logix 5000 Controllers I/O and Tag Data* and *Logix 5000 Controllers
-  Design Considerations* programming manuals: arrays, UDTs and memory use.
+  Design Considerations* manuals: arrays, UDTs and memory use.
 - CODESYS Online Help: data types (DUTs), `ARRAY[*]`, and POUs for implicit checks.
 - PLCopen, *Coding Guidelines*: naming and structuring data.
 
