@@ -1,0 +1,528 @@
+# Lab 20-1 acceptance tests: 2oo3 overpressure trip on PT-201A/B/C closing XV-201.
+# TRAINING EXERCISE ONLY - these tests check teaching logic, not a real safety function.
+#
+# Raw counts (Module 14 convention): 0 = 4 mA = 0 bar, 27648 = 20 mA = 10 bar,
+# 1 bar = 2764.8 counts, 1 mA = 1728 counts. Values used below:
+#   4.4 bar = 12165   5.0 bar = 13824   5.4 bar = 14930   7.0 bar = 19354
+#   7.9 bar = 21842   8.1 bar = 22395   8.5 bar = 23501
+#   wire break (0 mA) = -6912            failed high (22 mA) = 31104
+#   3.61 mA = -680 (good)  3.59 mA = -700 (bad)  20.96 mA = 29300 (good)  21.04 mA = 29450 (bad)
+# Trip at or above 8.0 bar. Deviation limit 0.5 bar from the median, delay 3 s.
+# Every scenario starts with all three transmitters healthy at 5.0 bar.
+
+scenario healthy plant: no trip, no alarms, and the valve opens only on command
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+expect HealthyCount 3
+expect A_Bad FALSE
+expect B_Bad FALSE
+expect C_Bad FALSE
+expect VotedTrip FALSE
+expect Tripped FALSE
+expect TripLamp FALSE
+expect ChanFaultAlm FALSE
+expect XV201_Sol FALSE         # nothing opens by itself at power-up
+wait 1s
+expect XV201_Sol FALSE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+wait 5s
+expect XV201_Sol TRUE
+expect DevAlarm FALSE
+expect Tripped FALSE
+
+scenario one high channel on its own does not trip (A, then B, then C)
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+set PT201A_Raw 23501
+wait 500ms
+expect VotedTrip FALSE
+expect Tripped FALSE
+expect XV201_Sol TRUE
+set PT201A_Raw 13824
+set PT201B_Raw 23501
+wait 500ms
+expect VotedTrip FALSE
+expect Tripped FALSE
+expect XV201_Sol TRUE
+set PT201B_Raw 13824
+set PT201C_Raw 23501
+wait 500ms
+expect VotedTrip FALSE
+expect Tripped FALSE
+expect XV201_Sol TRUE
+expect TripLamp FALSE
+
+scenario A and B high: 2oo3 trips and XV-201 closes
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+set PT201A_Raw 23501
+set PT201B_Raw 23501
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect TripLamp TRUE
+expect XV201_Sol FALSE
+
+scenario B and C high: 2oo3 trips
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201B_Raw 23501
+set PT201C_Raw 23501
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect XV201_Sol FALSE
+
+scenario A and C high: 2oo3 trips
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw 23501
+set PT201C_Raw 23501
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect XV201_Sol FALSE
+
+scenario trip point: 7.9 bar on all three does not trip, 8.1 bar on two does
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw 21842
+set PT201B_Raw 21842
+set PT201C_Raw 21842
+wait 2s
+expect VotedTrip FALSE
+expect Tripped FALSE
+expect XV201_Sol TRUE
+set PT201A_Raw 22395
+set PT201C_Raw 22395
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect XV201_Sol FALSE
+
+scenario the trip latches after the pressure falls again
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw 23501
+set PT201B_Raw 23501
+wait 50ms
+expect Tripped TRUE
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+wait 2s
+expect VotedTrip FALSE          # the cause has gone...
+expect Tripped TRUE             # ...but the trip stays until someone resets it
+expect TripLamp TRUE
+expect XV201_Sol FALSE
+
+scenario reset is refused while the voted trip is present, then accepted
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw 23501
+set PT201B_Raw 23501
+wait 50ms
+expect Tripped TRUE
+set ResetPB TRUE               # reset while both channels are still high
+scan
+expect Tripped TRUE            # checked on the very scan of the press: not even one scan of reset
+expect TripLamp TRUE
+expect XV201_Sol FALSE
+scan
+expect Tripped TRUE
+set ResetPB FALSE
+wait 200ms
+expect Tripped TRUE
+set PT201A_Raw 13824           # the cause clears
+set PT201B_Raw 13824
+wait 1s
+expect Tripped TRUE            # the earlier press does not count
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect Tripped FALSE
+expect TripLamp FALSE
+expect XV201_Sol FALSE         # reset must not restart: the valve stays shut
+wait 2s
+expect XV201_Sol FALSE
+set OpenPB TRUE                # a new, deliberate open command
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+
+scenario reset acts on the press, not on a held button
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201B_Raw 23501
+set PT201C_Raw 23501
+wait 50ms
+expect Tripped TRUE
+set ResetPB TRUE               # held down (or stuck) while the cause is present
+wait 200ms
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+wait 1s
+expect VotedTrip FALSE
+expect Tripped TRUE            # a held reset must not act when the cause clears
+set ResetPB FALSE
+wait 100ms
+expect Tripped TRUE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect Tripped FALSE
+
+scenario the valve cannot be opened while tripped, and a held Open button does not reopen it at reset
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+set PT201A_Raw 23501
+set PT201B_Raw 23501
+wait 50ms
+expect XV201_Sol FALSE
+set OpenPB TRUE                # operator presses Open during the trip...
+wait 500ms
+expect XV201_Sol FALSE         # ...and nothing happens
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+wait 200ms
+expect XV201_Sol FALSE
+set ResetPB TRUE               # reset while Open is still held
+scan
+set ResetPB FALSE
+wait 50ms
+expect Tripped FALSE
+expect XV201_Sol FALSE         # the held Open button must not reopen the valve
+wait 1s
+expect XV201_Sol FALSE
+set OpenPB FALSE
+wait 50ms
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+
+scenario an Open press after the cause has cleared, but before the reset, is ignored too
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+set PT201A_Raw 23501
+set PT201B_Raw 23501
+wait 50ms
+expect Tripped TRUE
+set PT201A_Raw 13824           # the cause clears; the trip is still latched
+set PT201B_Raw 13824
+wait 200ms
+expect VotedTrip FALSE
+expect Tripped TRUE
+set OpenPB TRUE                # Open pressed and released while still tripped
+scan
+set OpenPB FALSE
+wait 200ms
+expect XV201_Sol FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect Tripped FALSE
+expect XV201_Sol FALSE         # the earlier Open press must not be remembered
+wait 1s
+expect XV201_Sol FALSE
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+expect XV201_Sol TRUE
+
+scenario a broken wire on A: bad quality, fault alarm, no trip, no deviation alarm
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw -6912           # 0 mA: reads -2.5 bar if you ignore quality
+wait 50ms
+expect A_Bad TRUE
+expect B_Bad FALSE
+expect C_Bad FALSE
+expect HealthyCount 2
+expect ChanFaultAlm TRUE
+expect VotedTrip FALSE
+expect Tripped FALSE
+expect XV201_Sol TRUE
+wait 5s
+expect DevA FALSE              # a bad channel is not compared with the others
+expect DevAlarm FALSE
+expect Tripped FALSE
+set PT201A_Raw 13824           # wire repaired
+wait 50ms
+expect A_Bad FALSE
+expect HealthyCount 3
+expect ChanFaultAlm FALSE
+
+scenario degraded 1oo2: A failed low, then B alone going high trips
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw -6912
+wait 500ms
+expect VotedTrip FALSE
+expect XV201_Sol TRUE
+set PT201B_Raw 23501
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect XV201_Sol FALSE
+
+scenario degraded 1oo2: C failed high (22 mA), then A alone going high trips
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201C_Raw 31104
+wait 500ms
+expect C_Bad TRUE
+expect HealthyCount 2
+expect VotedTrip FALSE         # a failed channel alone is not a trip in 1oo2
+expect Tripped FALSE
+expect XV201_Sol TRUE
+set PT201A_Raw 23501
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect XV201_Sol FALSE
+
+scenario degraded 1oo2: B failed low, C alone going high trips
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201B_Raw -6912
+wait 500ms
+expect VotedTrip FALSE
+set PT201C_Raw 23501
+wait 50ms
+expect VotedTrip TRUE
+expect Tripped TRUE
+
+scenario two bad channels trip, and reset is refused until one is repaired
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+set OpenPB TRUE
+scan
+set OpenPB FALSE
+wait 50ms
+set PT201A_Raw -6912
+set PT201B_Raw 31104
+wait 50ms
+expect HealthyCount 1
+expect VotedTrip TRUE          # one healthy channel is not enough: fail safe
+expect Tripped TRUE
+expect XV201_Sol FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect Tripped TRUE            # still not healthy: reset refused
+set PT201B_Raw 13824           # B repaired: back to 1oo2 on B and C
+wait 50ms
+expect HealthyCount 2
+expect VotedTrip FALSE
+expect Tripped TRUE            # repaired, but still latched
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect Tripped FALSE
+expect XV201_Sol FALSE
+
+scenario three bad channels trip
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201A_Raw -6912
+set PT201B_Raw -6912
+set PT201C_Raw -6912
+wait 50ms
+expect HealthyCount 0
+expect VotedTrip TRUE
+expect Tripped TRUE
+expect ChanFaultAlm TRUE
+
+scenario bad quality follows the NE43 limits of 3.6 mA and 21.0 mA
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201A_Raw -680            # 3.61 mA: under-range but still a measurement
+set PT201B_Raw 29300           # 20.96 mA: over-range but still a measurement
+wait 50ms
+expect A_Bad FALSE
+expect B_Bad FALSE
+expect HealthyCount 3
+set PT201A_Raw -700            # 3.59 mA: failure signal
+set PT201B_Raw 13824
+wait 50ms
+expect A_Bad TRUE
+expect B_Bad FALSE
+set PT201A_Raw 13824
+set PT201B_Raw 29450           # 21.04 mA: failure signal
+wait 50ms
+expect A_Bad FALSE
+expect B_Bad TRUE
+expect HealthyCount 2
+
+scenario deviation is measured from the median, after 3 s
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201C_Raw 19354           # C reads 7.0 bar, A and B read 5.0 bar
+wait 2700ms
+expect DevC FALSE
+expect DevAlarm FALSE
+wait 600ms
+expect DevC TRUE
+expect DevAlarm TRUE
+expect DevA FALSE              # measured from the median (5.0), A and B are fine
+expect DevB FALSE              # (from the average, 5.67, they would not be)
+expect VotedTrip FALSE         # a deviation alarm is not a trip
+expect Tripped FALSE
+set PT201C_Raw 14930           # 5.4 bar: back within 0.5 bar
+wait 50ms
+expect DevC FALSE
+expect DevAlarm FALSE
+
+scenario a channel drifting low is caught too
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201A_Raw 12165           # A reads 4.4 bar: 0.6 bar below the median
+wait 2700ms
+expect DevA FALSE
+wait 600ms
+expect DevA TRUE
+expect DevB FALSE
+expect DevC FALSE
+expect DevAlarm TRUE
+
+scenario small differences and short deviations do not alarm
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201B_Raw 14930           # A 5.0, B 5.4, C 5.4: A is 0.4 bar from the median
+set PT201C_Raw 14930
+wait 5s
+expect DevAlarm FALSE
+expect DevA FALSE
+set PT201B_Raw 13824
+set PT201C_Raw 19354           # C deviates for 2 s...
+wait 2s
+set PT201C_Raw 13824           # ...comes back briefly...
+wait 200ms
+set PT201C_Raw 19354           # ...and deviates again: the delay starts again
+wait 2s
+expect DevC FALSE
+wait 700ms
+expect DevC FALSE
+wait 600ms
+expect DevC TRUE
+
+scenario a deviation flag clears as soon as any channel goes bad, and re-times afterwards
+set PT201A_Raw 13824
+set PT201B_Raw 13824
+set PT201C_Raw 13824
+scan
+set PT201C_Raw 19354           # C reads 7.0 bar: 2.0 bar from the median
+wait 3300ms
+expect DevC TRUE
+expect DevAlarm TRUE
+set PT201A_Raw -6912           # A breaks: C is still 2.0 bar from the median of all three...
+wait 50ms
+expect A_Bad TRUE
+expect DevC FALSE              # ...but with a bad channel there is no deviation check at all
+expect DevA FALSE
+expect DevAlarm FALSE
+wait 5s
+expect DevC FALSE
+expect DevAlarm FALSE
+set PT201A_Raw 13824           # A repaired: C still deviates, and the 3 s delay starts again
+wait 50ms
+expect HealthyCount 3
+expect DevC FALSE
+wait 2600ms
+expect DevC FALSE
+wait 700ms
+expect DevC TRUE
+expect DevAlarm TRUE

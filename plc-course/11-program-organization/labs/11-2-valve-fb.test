@@ -1,0 +1,298 @@
+# Lab 11-2 acceptance tests: FB_Valve used for XV101 (fail closed, 5 s)
+# and XV102 (fail open, 8 s).
+# Tested: solenoid polarity from the fail position, limit switch decoding,
+# travel-time faults when opening and closing and when a valve drifts out of
+# position, the timer restarting when the command is reversed mid-stroke,
+# the 500 ms both-limits discrepancy filter (checked on both sides of 500 ms),
+# going to the fail position on a fault, fault latching, a reset that cannot
+# clear a fault whose cause is still present, and the independence of the
+# two instances.
+# Only interface names are used: the program I/O plus XV101/XV102
+# .IsOpen .IsClosed .TravelFault .LimitFault .Fault.
+# The test plays the part of the valves by setting the limit switches.
+# Unless a scenario says otherwise, both valves start closed with their
+# selector switches at CLOSE.
+
+scenario power-up: the fail-closed valve stays closed and the fail-open valve is driven closed
+set XV101_ZSC TRUE                  # XV101 de-energised = closed
+set XV102_ZSO TRUE                  # XV102 de-energised = open (its spring opens it)
+scan
+expect XV101_SOL FALSE              # closed and fail-closed: nothing to do
+expect XV102_SOL TRUE               # must energise to close
+expect XV101.IsClosed TRUE
+expect XV101.IsOpen FALSE
+expect XV102.IsOpen TRUE
+expect XV102.IsClosed FALSE
+expect FaultLamp FALSE
+wait 1s
+set XV102_ZSO FALSE                 # XV102 leaves open...
+wait 2s
+set XV102_ZSC TRUE                  # ...and arrives closed after 3 s
+scan 2
+expect XV102.IsClosed TRUE
+wait 10s
+expect XV101_SOL FALSE
+expect XV102_SOL TRUE
+expect XV101.Fault FALSE
+expect XV102.Fault FALSE
+expect FaultLamp FALSE
+
+scenario XV101 opens and closes normally inside its 5 s travel time
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan 2
+expect XV101_SOL TRUE
+wait 500ms
+set XV101_ZSC FALSE                 # moving: neither switch made
+scan 2
+expect XV101.IsOpen FALSE
+expect XV101.IsClosed FALSE
+wait 3s
+set XV101_ZSO TRUE                  # open after 3.5 s
+scan 2
+expect XV101.IsOpen TRUE
+wait 10s
+expect XV101_SOL TRUE
+expect XV101.Fault FALSE
+set XV101_OpenSw FALSE              # now close it
+scan 2
+expect XV101_SOL FALSE
+wait 500ms
+set XV101_ZSO FALSE
+wait 3s
+set XV101_ZSC TRUE
+scan 2
+expect XV101.IsClosed TRUE
+wait 10s
+expect XV101.Fault FALSE
+expect FaultLamp FALSE
+
+scenario XV102 opens by de-energising and closes by energising
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan 2
+expect XV102_SOL TRUE
+set XV102_OpenSw TRUE
+scan 2
+expect XV102_SOL FALSE
+set XV102_ZSC FALSE
+wait 4s
+set XV102_ZSO TRUE
+scan 2
+expect XV102.IsOpen TRUE
+wait 10s
+expect XV102.Fault FALSE
+expect XV102_SOL FALSE
+set XV102_OpenSw FALSE
+scan 2
+expect XV102_SOL TRUE
+
+scenario XV101 fails to open: travel fault after 5 s and back to its fail position (closed)
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan
+wait 500ms
+set XV101_ZSC FALSE                 # leaves closed, but never reaches open
+wait 4000ms
+expect XV101.TravelFault FALSE      # 4.5 s after the command
+expect XV101_SOL TRUE
+expect FaultLamp FALSE
+wait 1000ms
+expect XV101.TravelFault TRUE       # 5.5 s after the command
+expect XV101.Fault TRUE
+expect XV101.LimitFault FALSE
+expect XV101_SOL FALSE              # de-energised: spring closes it
+expect FaultLamp TRUE
+expect XV102.Fault FALSE            # the other valve is unaffected
+expect XV102_SOL TRUE
+
+scenario XV101 stuck on its closed switch also trips on travel time
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan
+wait 4500ms
+expect XV101.TravelFault FALSE
+wait 1000ms
+expect XV101.TravelFault TRUE
+expect XV101_SOL FALSE
+
+scenario XV102 fails to close: travel fault after 8 s and it is sent to its fail position (open)
+set XV101_ZSC TRUE
+set XV102_OpenSw TRUE               # start with XV102 open and healthy
+set XV102_ZSO TRUE
+scan 2
+expect XV102_SOL FALSE
+expect XV102.IsOpen TRUE
+wait 1s
+set XV102_OpenSw FALSE              # command closed
+scan
+expect XV102_SOL TRUE
+wait 500ms
+set XV102_ZSO FALSE                 # leaves open, jams half way
+wait 7000ms
+expect XV102.TravelFault FALSE      # 7.5 s: still inside its 8 s allowance
+expect XV102_SOL TRUE
+wait 1000ms
+expect XV102.TravelFault TRUE       # 8.5 s
+expect XV102.Fault TRUE
+expect XV102_SOL FALSE              # de-energised: spring drives it OPEN
+expect FaultLamp TRUE
+expect XV101.Fault FALSE
+
+scenario loss of instrument air on an open fail-closed valve is detected
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan
+wait 1s
+set XV101_ZSC FALSE
+wait 1s
+set XV101_ZSO TRUE
+wait 5s
+expect XV101.IsOpen TRUE
+expect XV101.Fault FALSE
+set XV101_ZSO FALSE                 # air lost: the spring closes the valve
+set XV101_ZSC TRUE                  # with the command still OPEN
+scan
+wait 4400ms
+expect XV101.TravelFault FALSE
+wait 1200ms
+expect XV101.TravelFault TRUE
+expect XV101_SOL FALSE
+expect FaultLamp TRUE
+
+scenario the travel timer restarts when the command is reversed mid-stroke
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE               # open...
+scan
+wait 500ms
+set XV101_ZSC FALSE
+wait 2500ms
+set XV101_OpenSw FALSE              # ...operator changes their mind after 3 s
+scan
+wait 4500ms                         # 7.5 s after the first command, 4.5 s after the second
+expect XV101.TravelFault FALSE
+expect XV101_SOL FALSE
+set XV101_ZSC TRUE                  # arrives closed
+scan 2
+expect XV101.IsClosed TRUE
+wait 6s
+expect XV101.Fault FALSE
+expect FaultLamp FALSE
+
+scenario an overlap of both limit switches shorter than 500 ms is ignored
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_ZSO TRUE                  # both made for 440 ms
+scan 2
+expect XV101.IsOpen FALSE           # neither position is confirmed while both are made
+expect XV101.IsClosed FALSE
+wait 420ms
+expect XV101.LimitFault FALSE
+set XV101_ZSO FALSE
+scan 2
+expect XV101.IsClosed TRUE
+wait 3s
+expect XV101.LimitFault FALSE
+expect XV101.Fault FALSE
+
+scenario both limit switches made together latch a limit fault and drop the solenoid
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan
+set XV101_ZSC FALSE
+wait 2s
+set XV101_ZSO TRUE
+wait 2s
+expect XV101.IsOpen TRUE
+expect XV101_SOL TRUE
+set XV101_ZSC TRUE                  # closed switch comes on as well (wiring fault)
+scan
+wait 400ms
+expect XV101.LimitFault FALSE       # 400 ms: still inside the 500 ms filter
+until XV101.LimitFault = TRUE within 300ms
+expect XV101.Fault TRUE
+expect XV101.TravelFault FALSE
+expect XV101_SOL FALSE              # fail position
+expect FaultLamp TRUE
+set XV101_ZSC FALSE                 # cause cleared...
+wait 3s
+expect XV101.LimitFault TRUE        # ...fault stays latched
+expect XV101_SOL FALSE
+
+scenario a limit fault cannot be reset away while both switches are still made
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_ZSO TRUE
+wait 1s
+expect XV101.LimitFault TRUE
+set ResetPB TRUE
+scan 3
+expect XV101.LimitFault TRUE        # cause still present: it stays on while reset is held
+expect FaultLamp TRUE
+set ResetPB FALSE
+wait 1s
+expect XV101.LimitFault TRUE
+expect FaultLamp TRUE
+
+scenario a travel fault stays latched until reset, then the valve follows its command again
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan
+set XV101_ZSC FALSE                 # jams part-open
+wait 6s
+expect XV101.TravelFault TRUE
+expect XV101_SOL FALSE
+set XV101_ZSC TRUE                  # spring has taken it back to closed
+wait 5s
+expect XV101.TravelFault TRUE       # latched
+expect XV101_SOL FALSE
+expect FaultLamp TRUE
+set ResetPB TRUE                    # selector is still at OPEN
+scan 2
+set ResetPB FALSE
+scan 2
+expect XV101.Fault FALSE
+expect FaultLamp FALSE
+expect XV101_SOL TRUE               # follows the command again after the reset
+wait 1s
+set XV101_ZSC FALSE                 # this time it strokes properly
+wait 2s
+set XV101_ZSO TRUE
+wait 5s
+expect XV101.IsOpen TRUE
+expect XV101.Fault FALSE
+expect XV101_SOL TRUE
+
+scenario after a reset the valve gets a full travel time again
+set XV101_ZSC TRUE
+set XV102_ZSC TRUE
+scan
+set XV101_OpenSw TRUE
+scan
+wait 6s
+expect XV101.TravelFault TRUE       # stuck closed
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 4000ms                         # still stuck, but 4 s after the reset is inside 5 s
+expect XV101.TravelFault FALSE
+expect XV101_SOL TRUE
+wait 1500ms
+expect XV101.TravelFault TRUE
+expect XV101_SOL FALSE

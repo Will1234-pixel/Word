@@ -1,0 +1,310 @@
+# Lab 12-1 acceptance tests: recipe manager.
+# Tested: the power-up state; loading a recipe copies EVERY member (including
+# the Dose array inside the structure); the active recipe is a snapshot that
+# later edits of the book do not change; the load command is acted on once
+# and cleared; bad indexes (0, 6, negative, huge), an empty slot and every
+# value limit (both sides, inclusive boundaries, each of the three doses, the
+# total) are rejected with the right result; a rejected or refused load
+# leaves Active and ActiveNo completely unchanged; loads are refused while a
+# batch runs; SelectedOk follows the selection and HMI edits live.
+# Only interface names are used: Recipes, SelectNo, LoadCmd, BatchRunning,
+# SelectedOk, Active, ActiveNo, LoadResult, the members of ST_Recipe and the
+# values of E_LoadResult. Checks allow two scans after a change.
+
+scenario power-up: nothing loaded, nothing selected
+scan 2
+expect LoadResult NotLoaded
+expect ActiveNo 0
+expect Active.Name ''
+expect Active.Temp 0.0
+expect SelectedOk FALSE            # SelectNo is 0: no recipe selected
+expect Recipes[1].Name 'Tomato soup'   # the given recipe book is still in place
+expect Recipes[4].Temp 95.0
+
+scenario loading recipe 2 copies the whole recipe into Active
+set SelectNo 2
+scan 2
+expect SelectedOk TRUE
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect LoadCmd FALSE               # the PLC clears the command once it has acted on it
+expect ActiveNo 2
+expect Active.Name 'Vegetable stock'
+expect Active.Dose[1] 450.0
+expect Active.Dose[2] 300.0
+expect Active.Dose[3] 10.0
+expect Active.Temp 80.0
+expect Active.MixTime T#30m
+
+scenario loading another recipe replaces every member
+set SelectNo 3
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect ActiveNo 3
+expect Active.Name 'Cheese sauce'
+set SelectNo 1
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect ActiveNo 1
+expect Active.Name 'Tomato soup'
+expect Active.Dose[1] 400.0
+expect Active.Dose[2] 150.0
+expect Active.Dose[3] 20.0
+expect Active.Temp 85.0
+expect Active.MixTime T#20m
+
+scenario the load command is acted on once: a reload needs a new command
+set SelectNo 2
+set LoadCmd TRUE
+scan 2
+expect ActiveNo 2
+set SelectNo 3                     # operator browses to another recipe...
+wait 500ms
+expect ActiveNo 2                  # ...but nothing loads without a new Load command
+expect Active.Name 'Vegetable stock'
+expect LoadCmd FALSE
+
+scenario Active is a snapshot: editing the book does not change the running recipe
+set SelectNo 2
+set LoadCmd TRUE
+scan 2
+expect Active.Temp 80.0
+set Recipes[2].Temp 70.0           # the operator edits the recipe that is in use
+set Recipes[2].Dose[3] 12.5
+set Recipes[2].Name 'Stock v2'
+wait 500ms
+expect Active.Temp 80.0            # the batch keeps the values it was given
+expect Active.Dose[3] 10.0
+expect Active.Name 'Vegetable stock'
+set LoadCmd TRUE                   # a deliberate reload picks up the edit
+scan 2
+expect LoadResult Loaded
+expect Active.Temp 70.0
+expect Active.Dose[3] 12.5
+expect Active.Name 'Stock v2'
+
+scenario bad indexes are rejected and the active recipe is kept
+set SelectNo 1
+set LoadCmd TRUE
+scan 2
+expect ActiveNo 1
+set SelectNo 0
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadIndex
+expect LoadCmd FALSE
+expect ActiveNo 1
+expect Active.Name 'Tomato soup'
+set SelectNo 6                     # one past the end
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadIndex
+expect ActiveNo 1
+expect Active.Name 'Tomato soup'
+expect Active.Temp 85.0
+set LoadResult NotLoaded           # (reset the result so each case is seen fresh)
+set SelectNo -1
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadIndex
+expect SelectedOk FALSE
+set LoadResult NotLoaded
+set SelectNo 32767
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadIndex
+expect SelectedOk FALSE
+expect ActiveNo 1
+expect Active.Dose[1] 400.0
+expect Active.MixTime T#20m
+
+scenario an empty slot is refused as EmptySlot
+set SelectNo 5
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult EmptySlot
+expect ActiveNo 0
+expect Active.Name ''
+set Recipes[5].Name 'New product'          # a name alone is not a recipe:
+scan 2                                     # all doses are still 0 kg
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+
+scenario a slot whose values are all valid but has no name is still EmptySlot
+set Recipes[5].Dose[1] 100.0
+set Recipes[5].Temp 50.0
+set Recipes[5].MixTime T#5m
+set SelectNo 5
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult EmptySlot
+set Recipes[5].Name 'Water only'
+scan 2
+expect SelectedOk TRUE
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect Active.Name 'Water only'
+
+scenario the trial batch (95 degC) is refused and nothing in Active changes
+set SelectNo 1
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+set SelectNo 4
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+expect ActiveNo 1
+expect Active.Name 'Tomato soup'
+expect Active.Dose[1] 400.0
+expect Active.Dose[2] 150.0
+expect Active.Dose[3] 20.0
+expect Active.Temp 85.0
+expect Active.MixTime T#20m
+set Recipes[4].Temp 85.0           # fix the typing mistake on the HMI
+scan 2
+expect SelectedOk TRUE             # SelectedOk follows the edit without any command
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect ActiveNo 4
+expect Active.Name 'Trial batch'
+
+scenario temperature limits are inclusive, 20.0 to 85.0 degC
+set SelectNo 3
+set Recipes[3].Temp 85.0
+scan 2
+expect SelectedOk TRUE
+set Recipes[3].Temp 85.1
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+expect ActiveNo 0
+set Recipes[3].Temp 20.0
+scan 2
+expect SelectedOk TRUE
+set Recipes[3].Temp 19.9
+scan 2
+expect SelectedOk FALSE
+
+scenario each dose must be 0.0 to 500.0 kg, and all three doses are checked
+set SelectNo 3
+set Recipes[3].Dose[1] 500.0
+scan 2
+expect SelectedOk TRUE
+set Recipes[3].Dose[1] 500.5
+scan 2
+expect SelectedOk FALSE
+set Recipes[3].Dose[1] 250.0
+set Recipes[3].Dose[2] 500.5
+scan 2
+expect SelectedOk FALSE
+set Recipes[3].Dose[2] 200.0
+set Recipes[3].Dose[3] 500.5
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+set Recipes[3].Dose[3] -0.1        # a negative dose is a typing mistake, too
+scan 2
+expect SelectedOk FALSE
+set Recipes[3].Dose[3] 0.0         # zero means "not used in this product": allowed
+scan 2
+expect SelectedOk TRUE
+
+scenario the total must fit the vessel (at most 1000 kg) and not be zero
+set SelectNo 3
+set Recipes[3].Dose[1] 500.0
+set Recipes[3].Dose[2] 400.0
+set Recipes[3].Dose[3] 100.0       # every dose is legal and the total is exactly 1000 kg
+scan 2
+expect SelectedOk TRUE
+set Recipes[3].Dose[3] 100.5       # every dose is still legal, but 1000.5 kg overfills
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+expect ActiveNo 0
+set Recipes[3].Dose[1] 0.0
+set Recipes[3].Dose[2] 0.0
+set Recipes[3].Dose[3] 0.0         # nothing to make
+scan 2
+expect SelectedOk FALSE
+
+scenario mixing time must be 1 min to 2 h
+set SelectNo 2
+set Recipes[2].MixTime T#1m
+scan 2
+expect SelectedOk TRUE
+set Recipes[2].MixTime T#59s
+scan 2
+expect SelectedOk FALSE
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+set Recipes[2].MixTime T#2h
+scan 2
+expect SelectedOk TRUE
+set Recipes[2].MixTime T#2h1s
+scan 2
+expect SelectedOk FALSE
+
+scenario no load while a batch is running, even of a valid recipe
+set SelectNo 1
+set LoadCmd TRUE
+scan 2
+expect ActiveNo 1
+set BatchRunning TRUE
+set SelectNo 2
+scan 2
+expect SelectedOk TRUE             # the recipe itself is fine...
+set LoadCmd TRUE
+scan 2
+expect LoadResult BatchBusy        # ...but the batch in progress keeps its recipe
+expect LoadCmd FALSE
+expect ActiveNo 1
+expect Active.Name 'Tomato soup'
+expect Active.Temp 85.0
+set SelectNo 9                     # busy is reported before the index is even looked at
+set LoadCmd TRUE
+scan 2
+expect LoadResult BatchBusy
+set BatchRunning FALSE
+set SelectNo 2
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect ActiveNo 2
+
+scenario the result stays until the next command
+set SelectNo 4
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue
+set SelectNo 2                     # selecting a good recipe does not change the result...
+wait 1s
+expect LoadResult BadValue
+expect SelectedOk TRUE
+set LoadCmd TRUE                   # ...the next command does
+scan 2
+expect LoadResult Loaded

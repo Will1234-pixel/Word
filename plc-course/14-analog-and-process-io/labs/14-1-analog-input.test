@@ -1,0 +1,249 @@
+# Lab 14-1 acceptance tests: FB_AnalogInput.
+# Tests the two instances the program is given:
+#   LT101 (LT101_Raw, %IW0): 0.0..4.0 m, FilterTime 2 s, FaultDelay 1 s, hold last value on a fault
+#   TT102 (TT102_Raw, %IW1): -50..150 degC, no filter, FaultDelay 2 s, substitute 150 degC on a fault
+# Raw convention: 0..27648 = 4..20 mA, 1728 counts per mA.
+#   LT101: 1 m = 6912 counts  (1.0 m = 6912, 2.0 m = 13824, 3.0 m = 20736)
+#   TT102: 0 degC = 6912, 50 degC = 13824, 100 degC = 20736
+#   NE43 limits: 3.6 mA = -691.2 counts, 21.0 mA = 29376 counts
+# Only the interface from the lab sheet is used (instance outputs and the two raw inputs).
+
+scenario loop current is worked out from the raw count, unfiltered and unclamped
+set LT101_Raw 13824
+set TT102_Raw 6912
+scan
+expect LT101.Current_mA ~ 12.0 0.01
+expect TT102.Current_mA ~ 8.0 0.01
+set LT101_Raw 0
+scan
+expect LT101.Current_mA ~ 4.0 0.01
+set LT101_Raw 27648
+scan
+expect LT101.Current_mA ~ 20.0 0.01
+set LT101_Raw 28000             # 20.2 mA: the current itself is never clamped
+scan
+expect LT101.Current_mA ~ 20.204 0.01
+set LT101_Raw -6912             # 0 mA: open circuit
+scan
+expect LT101.Current_mA ~ 0.0 0.01
+
+scenario healthy signals scale to engineering units from the very first scan
+set LT101_Raw 13824             # 12 mA = 2.0 m
+set TT102_Raw 6912              # 8 mA = 0 degC (EuMin is -50, not 0)
+scan
+expect LT101.Value ~ 2.0 0.01   # the filter starts at the measured value, no ramp from 0
+expect TT102.Value ~ 0.0 0.05
+expect LT101.Good TRUE
+expect TT102.Good TRUE
+expect LT101.Fault FALSE
+expect TT102.Fault FALSE
+wait 3s
+expect LT101.Value ~ 2.0 0.01
+expect LT101.UnderRange FALSE
+expect LT101.OverRange FALSE
+expect LT101.Fault FALSE
+expect TT102.UnderRange FALSE
+expect TT102.OverRange FALSE
+expect TT102.Fault FALSE
+expect TT102.Good TRUE
+
+scenario the unfiltered instance follows every change on the next scan
+set LT101_Raw 13824
+set TT102_Raw 6912
+scan
+set TT102_Raw 20736             # 16 mA = 100 degC
+scan
+expect TT102.Value ~ 100.0 0.05
+set TT102_Raw 0                 # 4 mA = bottom of range
+scan
+expect TT102.Value ~ -50.0 0.05
+set TT102_Raw 27648             # 20 mA = top of range
+scan
+expect TT102.Value ~ 150.0 0.05
+set TT102_Raw 17280             # 14 mA = 75 degC
+scan
+expect TT102.Value ~ 75.0 0.05
+
+scenario readings outside 4-20 mA but inside the NE43 limits are clamped, not faults
+set LT101_Raw 13824
+set TT102_Raw 28000             # 20.2 mA: unclamped would be 152.5 degC
+scan
+expect TT102.Value ~ 150.0 0.01
+expect TT102.Good TRUE
+set TT102_Raw 29300             # 20.96 mA: still below 21.0 mA
+wait 3s
+expect TT102.Value ~ 150.0 0.01
+expect TT102.OverRange FALSE
+expect TT102.Fault FALSE
+expect TT102.Good TRUE
+set TT102_Raw -300              # 3.83 mA: unclamped would be -52.2 degC
+scan
+expect TT102.Value ~ -50.0 0.01
+expect TT102.Good TRUE
+set TT102_Raw -680              # 3.61 mA: still above 3.6 mA
+wait 3s
+expect TT102.Value ~ -50.0 0.01
+expect TT102.UnderRange FALSE
+expect TT102.Fault FALSE
+expect TT102.Good TRUE
+
+scenario just beyond the NE43 limits is a failure once the delay has run
+set LT101_Raw 13824
+set TT102_Raw 13824
+scan
+set TT102_Raw 29450             # 21.04 mA
+scan
+expect TT102.Good FALSE         # quality drops at once...
+expect TT102.OverRange FALSE    # ...but the fault waits for the delay
+wait 2200ms
+expect TT102.OverRange TRUE
+expect TT102.UnderRange FALSE
+expect TT102.Fault TRUE
+set TT102_Raw -700              # 3.59 mA: straight into the other failure band
+scan
+expect TT102.OverRange FALSE    # the flags follow the band...
+expect TT102.UnderRange TRUE
+expect TT102.Fault TRUE         # ...but the signal is still bad: no new delay
+wait 2200ms
+expect TT102.UnderRange TRUE
+expect TT102.OverRange FALSE
+expect TT102.Fault TRUE
+
+scenario a failed transmitter that is then disconnected keeps its substitute value
+set LT101_Raw 13824
+set TT102_Raw 20736             # 100 degC
+scan
+set TT102_Raw 31104             # 22 mA: the transmitter has failed upscale
+wait 2200ms
+expect TT102.OverRange TRUE
+expect TT102.Value ~ 150.0 0.01
+set TT102_Raw -6912             # disconnected for replacement: 0 mA
+scan
+expect TT102.Fault TRUE         # the fault must not clear...
+expect TT102.UnderRange TRUE
+expect TT102.OverRange FALSE
+expect TT102.Value ~ 150.0 0.01 # ...and the substitute must not disappear
+wait 1s
+expect TT102.Fault TRUE
+expect TT102.Value ~ 150.0 0.01
+set TT102_Raw 31104             # and back again
+scan
+expect TT102.Fault TRUE
+expect TT102.OverRange TRUE
+expect TT102.UnderRange FALSE
+expect TT102.Value ~ 150.0 0.01
+
+scenario LT101 wire break: value held during the delay, then UnderRange, still held
+set LT101_Raw 13824             # 2.0 m
+set TT102_Raw 13824
+wait 1s
+set LT101_Raw -6912             # 0 mA: the loop is open
+scan
+expect LT101.Good FALSE
+expect LT101.Fault FALSE
+expect LT101.Value ~ 2.0 0.01   # held: a broken wire is not an empty tank
+wait 800ms
+expect LT101.UnderRange FALSE   # 0.8 s: not yet
+expect LT101.Fault FALSE
+expect LT101.Value ~ 2.0 0.01
+wait 300ms
+expect LT101.UnderRange TRUE    # 1.1 s: confirmed
+expect LT101.OverRange FALSE
+expect LT101.Fault TRUE
+expect LT101.Good FALSE
+expect LT101.Value ~ 2.0 0.01   # UseSubst is FALSE: hold the last good value
+expect TT102.Good TRUE          # the other channel is not affected
+expect TT102.Fault FALSE
+wait 5s
+expect LT101.Fault TRUE
+expect LT101.Value ~ 2.0 0.01
+
+scenario LT101 recovers: fault clears at once and the value restarts from the live reading
+set LT101_Raw 13824
+set TT102_Raw 13824
+wait 1s
+set LT101_Raw -6912
+wait 2s
+expect LT101.Fault TRUE
+set LT101_Raw 20736             # wire repaired, level now 3.0 m
+scan
+expect LT101.Fault FALSE
+expect LT101.UnderRange FALSE
+expect LT101.Good TRUE
+expect LT101.Value ~ 3.0 0.01   # no slow ramp up from the held 2.0 m
+set LT101_Raw 6912              # and the filter works again: step down to 1.0 m
+wait 2s
+expect LT101.Value ~ 1.736 0.04 # 3.0 - 2.0 * 63.2 %
+
+scenario first-order filter: 63 percent of a step after one time constant
+set LT101_Raw 6912              # 1.0 m
+set TT102_Raw 13824
+scan
+expect LT101.Value ~ 1.0 0.01
+set LT101_Raw 20736             # step to 3.0 m
+scan
+expect LT101.Value > 1.0        # it moves...
+expect LT101.Value < 1.05       # ...but only a little on the first scan
+wait 1990ms                     # 2.0 s = one time constant after the step
+expect LT101.Value ~ 2.264 0.04 # 1.0 + 2.0 * (1 - 1/e)
+wait 18s                        # 20 s = ten time constants
+expect LT101.Value ~ 3.0 0.01
+expect LT101.Good TRUE
+
+scenario brief glitches shorter than the fault delay never raise a fault
+set LT101_Raw 13824
+set TT102_Raw 13824
+scan
+set LT101_Raw -6912
+wait 600ms
+expect LT101.Value ~ 2.0 0.01
+set LT101_Raw 13824             # back for 100 ms: the delay must start again
+wait 100ms
+expect LT101.Good TRUE
+set LT101_Raw -6912
+wait 600ms
+expect LT101.Fault FALSE        # 1.2 s in total, but never 1 s in one go
+expect LT101.UnderRange FALSE
+expect LT101.Value ~ 2.0 0.01
+set LT101_Raw 13824
+scan
+expect LT101.Good TRUE
+expect LT101.Value ~ 2.0 0.01
+
+scenario TT102 over-range: held during the delay, then the substitute value
+set LT101_Raw 13824
+set TT102_Raw 20736             # 100 degC
+scan
+expect TT102.Value ~ 100.0 0.05
+set TT102_Raw 32767             # Siemens overflow code (about 23 mA)
+scan
+expect TT102.Good FALSE
+expect TT102.Fault FALSE
+expect TT102.Value ~ 100.0 0.05 # held while the fault is being confirmed
+wait 1700ms
+expect TT102.OverRange FALSE
+expect TT102.Value ~ 100.0 0.05
+wait 500ms
+expect TT102.OverRange TRUE     # 2.2 s: confirmed
+expect TT102.UnderRange FALSE
+expect TT102.Fault TRUE
+expect TT102.Value ~ 150.0 0.01 # UseSubst: the configured substitute value
+set TT102_Raw 13824             # repaired, 50 degC
+scan
+expect TT102.Fault FALSE
+expect TT102.Good TRUE
+expect TT102.Value ~ 50.0 0.05
+
+scenario TT102 wire break also gives the substitute value (fail high)
+set LT101_Raw 13824
+set TT102_Raw 6912              # 0 degC
+scan
+set TT102_Raw -32768            # Siemens underflow code
+wait 1700ms
+expect TT102.UnderRange FALSE
+expect TT102.Value ~ 0.0 0.05   # held
+wait 500ms
+expect TT102.UnderRange TRUE
+expect TT102.OverRange FALSE
+expect TT102.Fault TRUE
+expect TT102.Value ~ 150.0 0.01 # not -50: the substitute is the safe direction here

@@ -1,0 +1,552 @@
+# Lab 16-3 acceptance tests: FB_FrozenSignal, FB_Heartbeat and the PLC's own heartbeat.
+# Instances, set up by the program:
+#   PT301Chk   PV PT301 (bar)    tolerance 0.05  freeze time 10 s  enabled while PumpRunFb
+#   FT302Chk   PV FT302 (m3/h)   tolerance 0.5   freeze time 20 s  enabled while PumpRunFb
+#   PartnerMon counter PartnerHB timeout 3 s
+#   ScadaMon   counter ScadaHB   timeout 10 s
+# The tests write PT301, FT302, PartnerHB and ScadaHB directly. In the
+# frozen-signal scenarios the heartbeats are not exercised, and in the
+# heartbeat scenarios the pump is stopped. Timing checks sit at about 90 %
+# and 110 % of each time.
+
+scenario no frozen alarm while the pump is stopped, however steady the values
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+wait 30s
+expect PT301Chk.Frozen FALSE
+expect FT302Chk.Frozen FALSE
+expect FrozenAlm FALSE
+
+scenario a dead-steady value while the pump runs is frozen after the freeze time
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+wait 5s                            # stopped for a while first: that time does not count
+set PumpRunFb TRUE
+wait 9s
+expect PT301Chk.Frozen FALSE
+wait 2s                            # 11 s since the pump started
+expect PT301Chk.Frozen TRUE
+expect FrozenAlm TRUE
+expect FT302Chk.Frozen FALSE       # the flow check has its own, longer time
+wait 7s                            # 18 s
+expect FT302Chk.Frozen FALSE
+wait 4s                            # 22 s
+expect FT302Chk.Frozen TRUE
+
+scenario movement smaller than the tolerance does not count as movement
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+set PT301 4.23
+wait 500ms
+set PT301 4.20
+wait 500ms
+set PT301 4.23
+wait 500ms
+set PT301 4.20
+wait 500ms
+set PT301 4.23
+wait 500ms
+set PT301 4.20
+wait 500ms
+set PT301 4.23
+wait 500ms
+set PT301 4.20
+wait 500ms
+set PT301 4.23
+wait 500ms
+set PT301 4.20
+wait 500ms
+set PT301 4.23
+wait 500ms
+wait 4s                            # 9.5 s: 0.03 bar of ripple, tolerance 0.05
+expect PT301Chk.Frozen FALSE
+wait 1500ms                        # 11 s
+expect PT301Chk.Frozen TRUE
+
+scenario a noisy live signal is never frozen
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+expect PT301Chk.Frozen FALSE
+expect FT302Chk.Frozen FALSE
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+set PT301 4.20
+set FT302 50.0
+wait 1s
+set PT301 4.30
+set FT302 51.0
+wait 1s
+expect PT301Chk.Frozen FALSE
+expect FT302Chk.Frozen FALSE
+expect FrozenAlm FALSE
+
+scenario a slow steady drift adds up to movement (compare with a reference, not the last scan)
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+set PT301 4.21
+wait 500ms
+set PT301 4.22
+wait 500ms
+set PT301 4.23
+wait 500ms
+set PT301 4.24
+wait 500ms
+set PT301 4.25
+wait 500ms
+set PT301 4.26
+wait 500ms
+set PT301 4.27
+wait 500ms
+set PT301 4.28
+wait 500ms
+set PT301 4.29
+wait 500ms
+set PT301 4.30
+wait 500ms
+set PT301 4.31
+wait 500ms
+set PT301 4.32
+wait 500ms
+set PT301 4.33
+wait 500ms
+set PT301 4.34
+wait 500ms
+set PT301 4.35
+wait 500ms
+set PT301 4.36
+wait 500ms
+set PT301 4.37
+wait 500ms
+set PT301 4.38
+wait 500ms
+set PT301 4.39
+wait 500ms
+set PT301 4.40
+wait 500ms
+set PT301 4.41
+wait 500ms
+set PT301 4.42
+wait 500ms
+expect PT301Chk.Frozen FALSE     # 0.01 bar per step, but 0.1 bar every 5 s
+set PT301 4.43
+wait 500ms
+set PT301 4.44
+wait 500ms
+set PT301 4.45
+wait 500ms
+set PT301 4.46
+wait 500ms
+set PT301 4.47
+wait 500ms
+set PT301 4.48
+wait 500ms
+set PT301 4.49
+wait 500ms
+set PT301 4.50
+wait 500ms
+set PT301 4.51
+wait 500ms
+set PT301 4.52
+wait 500ms
+expect PT301Chk.Frozen FALSE     # 0.01 bar per step, but 0.1 bar every 5 s
+
+scenario every real move restarts the freeze time
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+wait 4s
+set PT301 4.30
+wait 4s
+set PT301 4.40
+wait 4s
+set PT301 4.30
+wait 4s
+set PT301 4.20
+wait 4s
+set PT301 4.30
+wait 4s
+set PT301 4.40
+wait 4s
+set PT301 4.50
+wait 4s                            # 32 s running, never 10 s without a move
+expect PT301Chk.Frozen FALSE
+wait 5s                            # 9 s since the last move
+expect PT301Chk.Frozen FALSE
+wait 2s                            # 11 s
+expect PT301Chk.Frozen TRUE
+
+scenario a frozen alarm clears at once when the value moves, and returns if it freezes again
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+wait 11s
+expect PT301Chk.Frozen TRUE
+set PT301 4.35
+wait 20ms
+expect PT301Chk.Frozen FALSE
+expect FrozenAlm FALSE
+wait 9s
+expect PT301Chk.Frozen FALSE
+wait 2s
+expect PT301Chk.Frozen TRUE
+
+scenario stopping the pump clears the alarm, and a restart gets the full freeze time again
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+wait 11s
+expect PT301Chk.Frozen TRUE
+set PumpRunFb FALSE
+wait 20ms
+expect PT301Chk.Frozen FALSE
+wait 5s
+set PumpRunFb TRUE                 # same value as before the stop
+wait 200ms
+expect PT301Chk.Frozen FALSE
+wait 8800ms                        # 9 s since the restart
+expect PT301Chk.Frozen FALSE
+wait 2s                            # 11 s
+expect PT301Chk.Frozen TRUE
+
+scenario the flow check uses its own tolerance
+set PumpRunFb FALSE
+set PT301 4.20
+set FT302 50.0
+scan
+set PumpRunFb TRUE
+set PT301 4.30
+set FT302 50.3
+wait 2s
+set PT301 4.20
+set FT302 50.0
+wait 2s
+set PT301 4.30
+set FT302 50.3
+wait 2s
+set PT301 4.20
+set FT302 50.0
+wait 2s
+set PT301 4.30
+set FT302 50.3
+wait 2s
+set PT301 4.20
+set FT302 50.0
+wait 2s
+set PT301 4.30
+set FT302 50.3
+wait 2s
+set PT301 4.20
+set FT302 50.0
+wait 2s
+set PT301 4.30
+set FT302 50.3
+wait 2s
+expect FT302Chk.Frozen FALSE     # 18 s: 0.3 m3/h ripple, tolerance 0.5
+set PT301 4.20
+set FT302 50.0
+wait 2s
+set PT301 4.30
+set FT302 50.3
+wait 2s
+set PT301 4.20
+set FT302 50.0
+wait 2s
+expect FT302Chk.Frozen TRUE         # 24 s
+expect PT301Chk.Frozen FALSE        # 0.1 bar steps are real movement for PT-301
+
+scenario after power-up nothing is proven: no fault yet, but not OK either
+set PumpRunFb FALSE
+set PartnerHB 1234
+set ScadaHB 77
+scan
+wait 1s
+expect PartnerMon.CommOK FALSE     # the first value read is not a heartbeat
+expect PartnerMon.CommFault FALSE  # ... and not a fault yet either
+expect ScadaMon.CommOK FALSE
+wait 1700ms                        # 2.7 s
+expect PartnerMon.CommFault FALSE
+wait 600ms                         # 3.3 s without a change
+expect PartnerMon.CommFault TRUE
+expect PartnerMon.CommOK FALSE
+expect CommAlm TRUE
+expect ScadaMon.CommFault FALSE
+wait 5700ms                        # 9 s
+expect ScadaMon.CommFault FALSE
+wait 2s                            # 11 s
+expect ScadaMon.CommFault TRUE
+
+scenario the first change proves the partner is alive
+set PumpRunFb FALSE
+set PartnerHB 1234
+set ScadaHB 77
+scan
+wait 1s
+set PartnerHB 1235
+wait 20ms
+expect PartnerMon.CommOK TRUE
+expect PartnerMon.CommFault FALSE
+expect ScadaMon.CommOK FALSE       # the other monitor is independent
+
+scenario a partner counting every second is healthy, and a stopped one is lost after the timeout
+set PumpRunFb FALSE
+set PartnerHB 100
+set ScadaHB 0
+scan
+wait 1s
+set PartnerHB 101
+wait 1s
+set PartnerHB 102
+wait 1s
+set PartnerHB 103
+wait 1s
+set PartnerHB 104
+wait 1s
+set PartnerHB 105
+expect PartnerMon.CommOK TRUE
+expect PartnerMon.CommFault FALSE
+wait 1s
+set PartnerHB 106
+wait 1s
+set PartnerHB 107
+wait 1s
+set PartnerHB 108
+wait 1s
+set PartnerHB 109
+wait 1s
+set PartnerHB 110
+wait 1s
+set PartnerHB 111
+wait 1s
+set PartnerHB 112
+wait 1s
+set PartnerHB 113
+wait 1s
+set PartnerHB 114
+wait 1s
+set PartnerHB 115
+wait 1s
+set PartnerHB 116
+wait 1s
+set PartnerHB 117
+wait 1s
+set PartnerHB 118
+wait 1s
+set PartnerHB 119
+wait 1s
+set PartnerHB 120
+expect PartnerMon.CommOK TRUE
+expect PartnerMon.CommFault FALSE
+wait 2700ms                        # the counter stopped 2.7 s ago
+expect PartnerMon.CommOK TRUE
+expect PartnerMon.CommFault FALSE
+wait 600ms                         # 3.3 s
+expect PartnerMon.CommFault TRUE
+expect PartnerMon.CommOK FALSE
+expect CommAlm TRUE
+wait 5s
+expect PartnerMon.CommFault TRUE
+set PartnerHB 121                  # the partner is back
+wait 20ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+
+scenario wrap-around from 32767 to -32768 is still a heartbeat
+# PLC-2 is slow today: it counts every 2 s, still inside the 3 s timeout.
+# If the wrap were not seen as a change, the gap would be 4 s: a false fault.
+set PumpRunFb FALSE
+set PartnerHB 32764
+set ScadaHB 0
+scan
+wait 500ms
+set PartnerHB 32765
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 32766
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 32767
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB -32768
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB -32767
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB -32766
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+
+scenario a partner that restarts and counts from zero again is still alive
+set PumpRunFb FALSE
+set PartnerHB 500
+set ScadaHB 0
+scan
+wait 500ms
+set PartnerHB 501
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 502
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 503
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 0
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 1
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+wait 500ms
+set PartnerHB 2
+wait 1500ms
+expect PartnerMon.CommFault FALSE
+expect PartnerMon.CommOK TRUE
+
+scenario the SCADA watchdog tolerates slow updates up to its own timeout
+set PumpRunFb FALSE
+set PartnerHB 0
+set ScadaHB 10
+scan
+wait 8s
+set ScadaHB 11
+wait 8s
+set ScadaHB 12
+wait 8s
+set ScadaHB 13
+wait 8s
+set ScadaHB 14
+wait 20ms
+expect ScadaMon.CommOK TRUE
+expect ScadaMon.CommFault FALSE
+wait 8800ms                        # 8.8 s since the last update
+expect ScadaMon.CommFault FALSE
+wait 2s                            # 10.8 s
+expect ScadaMon.CommFault TRUE
+expect ScadaMon.CommOK FALSE
+
+scenario this PLC's own heartbeat counts up once a second from zero
+set PumpRunFb FALSE
+set PartnerHB 0
+set ScadaHB 0
+scan
+expect HeartbeatOut 0
+wait 900ms
+expect HeartbeatOut 0
+wait 250ms                         # about 1.15 s
+expect HeartbeatOut 1
+wait 650ms                         # about 1.8 s
+expect HeartbeatOut 1
+wait 500ms                         # about 2.3 s
+expect HeartbeatOut 2
+wait 7500ms                        # about 9.8 s
+expect HeartbeatOut 9
+wait 500ms                         # about 10.3 s
+expect HeartbeatOut 10

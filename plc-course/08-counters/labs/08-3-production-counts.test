@@ -1,0 +1,433 @@
+# Lab 08-3 acceptance tests: production counts, yield and shift reset.
+# Tested: one count per pack on each photo-eye, however long it blocks the
+# beam, including a good pack and a reject in the same scan; TotalCount;
+# YieldPct as a REAL to 0.01 % (so integer division fails); YieldPct is 0.0
+# and nothing breaks while the total is 0 (power-up and after a shift
+# change); the shift change acts on the PRESS: it snapshots the finished
+# shift, clears the shift counts, is not repeated while the button is held,
+# and loses no pack (packs during the press, and in the same scan, count in
+# the new shift); LifetimeTotal is never reset and stops at the DINT maximum
+# instead of wrapping, also when a good pack and a reject arrive together
+# one below the maximum; the yield is still right with the large counts of a
+# high-speed line (the test sets GoodCount and RejectCount directly for this);
+# LastShiftYield is a REAL too; LowYieldLamp needs MinSample packs and a yield
+# strictly below YieldLimit.
+# Only interface variables are used. Each scenario starts from a fresh PLC.
+
+scenario at power-up everything is zero, with no division by zero
+scan
+expect GoodCount 0
+expect RejectCount 0
+expect TotalCount 0
+expect YieldPct ~ 0.0 0.001        # 0.0, not "not a number"
+expect LowYieldLamp FALSE
+expect LifetimeTotal 0
+wait 1s
+expect TotalCount 0
+expect YieldPct ~ 0.0 0.001
+expect LowYieldLamp FALSE
+
+scenario each pack counts once, on arrival, however long it blocks the beam
+scan
+set GoodPE TRUE
+scan
+expect GoodCount 1                 # counted in the same scan
+wait 3s                            # a pack stuck in front of the eye
+expect GoodCount 1
+set GoodPE FALSE
+scan
+expect GoodCount 1
+set RejectPE TRUE
+wait 500ms
+set RejectPE FALSE
+scan
+expect RejectCount 1
+expect GoodCount 1
+set GoodPE TRUE                # three quick good packs
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set RejectPE TRUE
+wait 30ms
+set RejectPE FALSE
+wait 30ms
+set RejectPE TRUE
+wait 30ms
+set RejectPE FALSE
+wait 30ms
+expect GoodCount 4
+expect RejectCount 3
+expect TotalCount 7
+expect LifetimeTotal 7
+
+scenario a good pack and a reject in the same scan are both counted
+scan
+set GoodPE TRUE
+set RejectPE TRUE
+scan
+expect GoodCount 1
+expect RejectCount 1
+expect TotalCount 2
+expect LifetimeTotal 2
+
+scenario the yield is a REAL percentage, not an integer division
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect YieldPct ~ 100.0 0.01       # 1 good of 1
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect YieldPct ~ 50.0 0.01        # 1 of 2
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect TotalCount 3
+expect YieldPct ~ 66.667 0.01      # 2 of 3: integer maths would give 66 or 0
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect TotalCount 7
+expect YieldPct ~ 85.714 0.01      # 6 of 7
+
+scenario a shift of rejects only gives 0 %, not a division error
+scan
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect GoodCount 0
+expect TotalCount 2
+expect YieldPct ~ 0.0 0.001
+
+scenario the shift change snapshots the finished shift and starts the new one from zero
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect TotalCount 4
+expect YieldPct ~ 75.0 0.01
+set ShiftResetPB TRUE              # the supervisor presses Shift Change
+scan
+expect LastShiftGood 3
+expect LastShiftReject 1
+expect LastShiftYield ~ 75.0 0.01
+expect GoodCount 0
+expect RejectCount 0
+expect TotalCount 0
+expect YieldPct ~ 0.0 0.001        # empty shift: no division by zero
+expect LifetimeTotal 4             # the lifetime total is not reset
+wait 1s                            # the button is held for a second...
+expect LastShiftGood 3             # ...and the snapshot is NOT overwritten with zeros
+expect LastShiftReject 1
+expect LastShiftYield ~ 75.0 0.01
+set ShiftResetPB FALSE
+scan
+expect LastShiftGood 3
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect GoodCount 2
+expect RejectCount 1
+expect LifetimeTotal 7
+expect LastShiftGood 3
+set ShiftResetPB TRUE              # next shift change
+scan
+set ShiftResetPB FALSE
+scan
+expect LastShiftGood 2
+expect LastShiftReject 1
+expect LastShiftYield ~ 66.667 0.01    # 2 of 3, as a REAL: not 66 and not 0
+expect GoodCount 0
+expect RejectCount 0
+expect LifetimeTotal 7
+
+scenario no pack is lost at a shift change
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect GoodCount 5
+set ShiftResetPB TRUE              # a pack arrives in the same scan as the press
+set GoodPE TRUE
+scan
+expect LastShiftGood 5             # the old shift is closed at 5...
+expect GoodCount 1                 # ...and this pack is the first of the new shift
+expect TotalCount 1
+expect LifetimeTotal 6
+set GoodPE FALSE
+scan
+set GoodPE TRUE                # packs keep coming while the button is held
+wait 100ms
+set GoodPE FALSE
+wait 100ms
+set GoodPE TRUE
+wait 100ms
+set GoodPE FALSE
+wait 100ms
+set RejectPE TRUE
+wait 100ms
+set RejectPE FALSE
+wait 100ms
+expect GoodCount 3                 # they count in the new shift
+expect RejectCount 1
+expect LastShiftGood 5
+expect LifetimeTotal 9
+set ShiftResetPB FALSE
+scan
+expect GoodCount 3
+expect RejectCount 1
+expect YieldPct ~ 75.0 0.01
+
+scenario the lifetime total never wraps round to a negative number
+scan
+set LifetimeTotal 2147483645       # jump to the end of a long life
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect LifetimeTotal 2147483646
+set GoodPE TRUE                    # a good pack and a reject in the same scan,
+set RejectPE TRUE                  # one count below the top
+scan
+set GoodPE FALSE
+set RejectPE FALSE
+scan
+expect LifetimeTotal 2147483647    # the largest DINT: no wrap to -2147483648
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect LifetimeTotal 2147483647    # stays there
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect LifetimeTotal 2147483647
+expect GoodCount 3                 # the shift counts carry on normally
+expect RejectCount 2
+
+scenario the yield stays right for the large counts of a high-speed line
+scan
+set GoodCount 959999               # a can line at 2,000 per minute makes 960,000 a shift
+set RejectCount 40000
+set GoodPE TRUE
+scan
+expect GoodCount 960000
+expect TotalCount 1000000
+expect YieldPct ~ 96.0 0.01        # scaled integer maths such as Good * 10000 overflows here
+expect LowYieldLamp FALSE          # 96 % is above the default 95 % limit
+set GoodPE FALSE
+scan
+set ShiftResetPB TRUE
+scan
+expect LastShiftGood 960000
+expect LastShiftReject 40000
+expect LastShiftYield ~ 96.0 0.01
+expect GoodCount 0
+
+scenario the low-yield lamp waits for MinSample packs (default settings: 20 packs, 95 %)
+scan
+set GoodPE TRUE                # 18 good...
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set RejectPE TRUE              # ...and 1 reject: 19 packs at 94.7 %
+scan
+set RejectPE FALSE
+scan
+expect TotalCount 19
+expect YieldPct < 95.0
+expect LowYieldLamp FALSE          # only 19 packs: not enough to judge
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect TotalCount 20
+expect YieldPct ~ 90.0 0.01
+expect LowYieldLamp TRUE           # 20 packs at 90 %: warn
+set ShiftResetPB TRUE
+scan
+set ShiftResetPB FALSE
+scan
+expect LowYieldLamp FALSE          # new shift: nothing to judge yet
+
+scenario the low-yield lamp follows MinSample and YieldLimit from the HMI
+set MinSample 4
+set YieldLimit 80.0
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set RejectPE TRUE
+scan
+set RejectPE FALSE
+scan
+expect YieldPct ~ 66.667 0.01
+expect LowYieldLamp FALSE          # 3 packs: below MinSample
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect YieldPct ~ 75.0 0.01
+expect LowYieldLamp TRUE           # 4 packs at 75 %: below 80 %
+set YieldLimit 75.0
+scan
+expect LowYieldLamp FALSE          # exactly at the limit is not below it
+set YieldLimit 80.0
+scan
+expect LowYieldLamp TRUE
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+set GoodPE TRUE
+scan
+set GoodPE FALSE
+scan
+expect YieldPct ~ 83.333 0.01
+expect LowYieldLamp FALSE          # 6 packs at 83.3 %: good again
+set YieldLimit 90.0                # tighten the limit
+scan
+expect LowYieldLamp TRUE

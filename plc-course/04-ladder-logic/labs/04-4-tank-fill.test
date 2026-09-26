@@ -1,0 +1,196 @@
+# Lab 04-4 acceptance tests: tank fill valve with set/reset.
+# Tests: fill starts at the low switch and stops at the high switch, with
+# memory in between (the valve stays open while the level rises past the low
+# switch, and stays closed while it falls back from the high switch);
+# power-up behaviour at each level; OFF closes the valve and AUTO does not
+# reopen it between the switches; the high switch always wins; the
+# impossible "low and high at once" combination (in either selector position)
+# latches a sensor fault that closes the valve and blocks the next fill,
+# cannot be reset while present (set-dominant), and needs a reset once it
+# has cleared.
+# LSL: LevelAboveLow TRUE = level above the low switch.
+# LSH: HighLevelOK_NC TRUE = level below the high switch (healthy).
+
+scenario power-up with the level between the switches: valve stays closed
+set AutoSel TRUE
+set LevelAboveLow TRUE
+set HighLevelOK_NC TRUE
+scan
+expect FillValve FALSE
+expect SensorFault FALSE
+wait 2s
+expect FillValve FALSE              # nothing to do until the level reaches the low switch
+expect SensorFault FALSE
+
+scenario power-up with the level below the low switch: filling starts
+set AutoSel TRUE
+set LevelAboveLow FALSE
+set HighLevelOK_NC TRUE
+scan
+expect FillValve TRUE
+expect SensorFault FALSE
+
+scenario power-up at high level: valve stays closed
+set AutoSel TRUE
+set LevelAboveLow TRUE
+set HighLevelOK_NC FALSE
+scan
+expect FillValve FALSE
+expect SensorFault FALSE
+wait 1s
+expect FillValve FALSE
+
+scenario power-up in OFF with the level low: closed until AUTO is selected
+set AutoSel FALSE
+set LevelAboveLow FALSE
+set HighLevelOK_NC TRUE
+scan
+expect FillValve FALSE
+wait 1s
+expect FillValve FALSE
+set AutoSel TRUE
+scan
+expect FillValve TRUE
+
+scenario a full fill cycle: open at low, stay open, close at high, stay closed
+set AutoSel TRUE
+set LevelAboveLow TRUE
+set HighLevelOK_NC TRUE
+wait 500ms
+expect FillValve FALSE
+set LevelAboveLow FALSE             # level falls below LSL
+scan
+expect FillValve TRUE
+wait 1s
+set LevelAboveLow TRUE              # filling: level rises past LSL again
+scan
+expect FillValve TRUE               # must stay open: this is the memory
+wait 3s
+expect FillValve TRUE
+set ResetPB TRUE                    # pressing Reset with no fault changes nothing
+wait 300ms
+expect FillValve TRUE
+set ResetPB FALSE
+set HighLevelOK_NC FALSE            # level reaches LSH
+scan
+expect FillValve FALSE
+expect SensorFault FALSE
+wait 500ms
+set HighLevelOK_NC TRUE             # level drops back below LSH as the tank is used
+scan
+expect FillValve FALSE              # must stay closed until LSL
+wait 3s
+expect FillValve FALSE
+set LevelAboveLow FALSE             # level reaches LSL again
+scan
+expect FillValve TRUE
+expect SensorFault FALSE
+
+scenario switching to OFF closes the valve; AUTO does not reopen it between the switches
+set AutoSel TRUE
+set LevelAboveLow FALSE
+set HighLevelOK_NC TRUE
+scan
+expect FillValve TRUE
+set LevelAboveLow TRUE              # filling, level between the switches
+wait 1s
+expect FillValve TRUE
+set AutoSel FALSE                   # operator selects OFF
+scan
+expect FillValve FALSE
+wait 500ms
+set AutoSel TRUE                    # back to AUTO
+wait 1s
+expect FillValve FALSE              # waits for the low switch
+set LevelAboveLow FALSE
+scan
+expect FillValve TRUE
+
+scenario a broken wire on the high switch closes the valve
+set AutoSel TRUE
+set LevelAboveLow FALSE
+set HighLevelOK_NC TRUE
+scan
+set LevelAboveLow TRUE
+wait 1s
+expect FillValve TRUE
+set HighLevelOK_NC FALSE            # wire break reads the same as "high"
+scan
+expect FillValve FALSE
+wait 1s
+expect FillValve FALSE
+
+scenario switches disagree: fault latches and the valve closes (broken low-switch wire)
+set AutoSel TRUE
+set LevelAboveLow TRUE
+set HighLevelOK_NC TRUE
+wait 500ms
+set LevelAboveLow FALSE             # LSL wire breaks: looks like "low"
+scan
+expect FillValve TRUE               # the PLC cannot tell yet, so it fills
+expect SensorFault FALSE
+wait 2s
+set HighLevelOK_NC FALSE            # the level reaches LSH while LSL still says "low"
+scan
+expect SensorFault TRUE
+expect FillValve FALSE              # high always wins
+set HighLevelOK_NC TRUE             # level falls back below LSH, LSL still broken
+scan
+expect SensorFault TRUE             # latched
+expect FillValve FALSE              # and it keeps the valve closed
+wait 2s
+expect SensorFault TRUE
+expect FillValve FALSE
+
+scenario fault is set-dominant: reset has no effect while the switches still disagree
+set AutoSel TRUE
+set LevelAboveLow FALSE
+set HighLevelOK_NC FALSE
+scan
+expect SensorFault TRUE
+expect FillValve FALSE
+set ResetPB TRUE                    # reset pressed while the fault is present
+wait 500ms
+expect SensorFault TRUE
+expect FillValve FALSE
+set ResetPB FALSE
+wait 300ms
+expect SensorFault TRUE
+set LevelAboveLow TRUE              # switch repaired: level between the switches
+set HighLevelOK_NC TRUE
+wait 1s
+expect SensorFault TRUE             # still latched until someone resets it
+expect FillValve FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+scan
+expect SensorFault FALSE
+expect FillValve FALSE              # between the switches: no fill yet
+wait 1s
+expect FillValve FALSE
+set LevelAboveLow FALSE             # normal AUTO rules apply again
+scan
+expect FillValve TRUE
+expect SensorFault FALSE
+
+scenario the switch check also works in OFF, and the latched fault blocks the next fill
+set AutoSel FALSE                   # selector in OFF
+set LevelAboveLow FALSE             # LSL says "low"...
+set HighLevelOK_NC FALSE            # ...while LSH says "high": impossible
+scan
+expect SensorFault TRUE             # a failed switch is a fault in any mode
+expect FillValve FALSE
+set LevelAboveLow TRUE              # switches agree again: level between them
+set HighLevelOK_NC TRUE
+wait 500ms
+set AutoSel TRUE                    # operator selects AUTO without resetting
+wait 500ms
+expect SensorFault TRUE
+expect FillValve FALSE
+set LevelAboveLow FALSE             # level falls to the low switch
+scan
+expect FillValve FALSE              # the latched fault still holds the valve closed
+wait 1s
+expect FillValve FALSE
+expect SensorFault TRUE

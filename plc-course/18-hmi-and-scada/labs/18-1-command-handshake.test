@@ -1,0 +1,477 @@
+# Lab 18-1 acceptance tests: HMI command word, status word and reject codes
+# for transfer pump P-101.
+#
+# The HMI is simulated by writing HmiCmd and SpeedReq with "set", exactly as
+# a real HMI would write the same holding registers over Modbus. The tests
+# check that the PLC:
+#   - acts on each command once and clears the command word in the same scan,
+#   - discards a command that is already waiting at power-up,
+#   - gives Stop priority over everything and never refuses it,
+#   - refuses what is not allowed, with the right reject code,
+#   - validates the speed setpoint against 30..100 % (boundaries included),
+#   - latches overload faults and never restarts on its own,
+#   - reports exactly the specified status bits, and rewrites every
+#     PLC-to-HMI register each scan so outside writes cannot stick.
+# Only interface tags are used, so any correct design passes.
+# Status word values used below:
+#   16#0001 Running  16#0002 Faulted  16#0004 Ready  16#0008 Permissive OK
+#   16#0010 Last command rejected
+
+scenario power-up state: pump off, ready, default speed 50 %
+set OverloadOK_NC TRUE           # healthy NC overload contact reads TRUE
+set SuctionOK TRUE
+scan
+expect PumpRun FALSE
+expect HmiSts 16#000C            # Ready + Permissive OK
+expect RejectCode 0
+expect SpeedSP 50
+expect HmiCmd 16#0000
+wait 1s
+expect PumpRun FALSE             # nothing starts on its own
+
+scenario a stale command found at power-up is discarded, not executed
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+set HmiCmd 16#0001               # Start was already in the register before the first scan
+scan
+expect HmiCmd 16#0000            # cleared...
+expect PumpRun FALSE             # ...but not executed
+expect RejectCode 0
+wait 500ms
+expect PumpRun FALSE
+set HmiCmd 16#0001               # from now on the handshake works normally
+scan
+expect PumpRun TRUE
+
+scenario start command runs the pump and is cleared in the same scan
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001               # operator presses Start on the HMI
+scan
+expect HmiCmd 16#0000            # the PLC has taken the command
+expect PumpRun TRUE
+expect HmiSts 16#0009            # Running + Permissive OK (no longer Ready)
+expect RejectCode 0
+wait 2s
+expect PumpRun TRUE              # a command is a one-shot; the pump stays on
+
+scenario stop command stops the pump
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set HmiCmd 16#0002               # Stop
+scan
+expect HmiCmd 16#0000
+expect PumpRun FALSE
+expect RejectCode 0
+expect HmiSts 16#000C
+wait 1s
+expect PumpRun FALSE
+
+scenario each command is acted on once: no restart after a trip and reset
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set OverloadOK_NC FALSE          # overload trips
+scan
+expect PumpRun FALSE
+expect HmiSts 16#000A            # Faulted + Permissive OK
+set OverloadOK_NC TRUE           # overload relay reset at the starter
+wait 500ms
+expect PumpRun FALSE
+expect HmiSts 16#000A            # the fault stays latched until the HMI resets it
+set HmiCmd 16#0004               # Reset
+scan
+expect HmiCmd 16#0000
+expect RejectCode 0
+expect PumpRun FALSE             # a reset must NOT restart the pump
+expect HmiSts 16#000C
+wait 1s
+expect PumpRun FALSE
+
+scenario an overload trip while stopped also latches the fault
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set OverloadOK_NC FALSE
+scan
+set OverloadOK_NC TRUE
+scan
+expect HmiSts 16#000A
+set HmiCmd 16#0001
+scan
+expect RejectCode 2
+expect PumpRun FALSE
+
+scenario start refused while faulted (code 2)
+set OverloadOK_NC FALSE          # tripped at power-up
+set SuctionOK TRUE
+scan
+set OverloadOK_NC TRUE
+scan
+set HmiCmd 16#0001
+scan
+expect HmiCmd 16#0000            # refused commands are cleared too
+expect PumpRun FALSE
+expect RejectCode 2
+expect HmiSts 16#001A            # Faulted + Permissive OK + Rejected
+wait 500ms
+expect PumpRun FALSE
+
+scenario start refused when the start permissive is missing (code 3)
+set OverloadOK_NC TRUE
+set SuctionOK FALSE
+scan
+expect HmiSts 16#0000            # not Ready, permissive not OK
+set HmiCmd 16#0001
+scan
+expect HmiCmd 16#0000
+expect PumpRun FALSE
+expect RejectCode 3
+expect HmiSts 16#0010
+set SuctionOK TRUE               # the refused Start is NOT remembered
+wait 1s
+expect PumpRun FALSE
+expect HmiSts 16#001C            # Ready + Permissive OK + last command rejected
+
+scenario a fault takes precedence over a missing permissive (code 2, not 3)
+set OverloadOK_NC FALSE
+set SuctionOK FALSE
+scan
+set OverloadOK_NC TRUE
+set HmiCmd 16#0001
+scan
+expect RejectCode 2
+expect PumpRun FALSE
+
+scenario reset refused while the overload is still tripped (code 4)
+set OverloadOK_NC FALSE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0004
+scan
+expect HmiCmd 16#0000
+expect RejectCode 4
+expect HmiSts 16#001A
+set OverloadOK_NC TRUE
+scan
+expect HmiSts 16#001A            # still faulted: a refused Reset is not remembered
+set HmiCmd 16#0004
+scan
+expect RejectCode 0
+expect HmiSts 16#000C
+expect PumpRun FALSE
+
+scenario an accepted command clears the previous reject code
+set OverloadOK_NC TRUE
+set SuctionOK FALSE
+scan
+set HmiCmd 16#0001
+scan
+expect RejectCode 3
+wait 500ms
+expect RejectCode 3              # the code stays until the next command
+set SuctionOK TRUE
+set HmiCmd 16#0001
+scan
+expect RejectCode 0
+expect PumpRun TRUE
+expect HmiSts 16#0009
+
+scenario reset with no fault, and start while running, are accepted without change
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0004
+scan
+expect RejectCode 0
+expect PumpRun FALSE
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set HmiCmd 16#0001
+scan
+expect RejectCode 0
+expect PumpRun TRUE
+
+scenario undefined command bits are refused and nothing is executed (code 1)
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0010
+scan
+expect HmiCmd 16#0000
+expect RejectCode 1
+expect HmiSts 16#001C
+set HmiCmd 16#8001               # Start plus an undefined bit
+scan
+expect HmiCmd 16#0000
+expect RejectCode 1
+expect PumpRun FALSE
+set SpeedReq 80
+set HmiCmd 16#0108               # Apply plus an undefined bit
+scan
+expect RejectCode 1
+expect SpeedSP 50
+wait 500ms
+expect PumpRun FALSE
+
+scenario stop wins over every other bit in the same word
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0003               # Start + Stop together, from idle
+scan
+expect HmiCmd 16#0000
+expect PumpRun FALSE
+expect RejectCode 0
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set HmiCmd 16#0003               # Start + Stop together, while running
+scan
+expect PumpRun FALSE
+expect RejectCode 0
+wait 500ms
+expect PumpRun FALSE
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set HmiCmd 16#8002               # Stop plus an undefined bit: still a Stop
+scan
+expect HmiCmd 16#0000
+expect PumpRun FALSE
+expect RejectCode 0
+
+scenario reset and start in one word: reset is handled first
+set OverloadOK_NC FALSE
+set SuctionOK TRUE
+scan
+set OverloadOK_NC TRUE
+scan
+expect HmiSts 16#000A
+set HmiCmd 16#0005               # Reset + Start
+scan
+expect HmiCmd 16#0000
+expect RejectCode 0
+expect PumpRun TRUE
+expect HmiSts 16#0009
+
+scenario reset refused and start refused in one word: the first refusal (4) is reported
+set OverloadOK_NC FALSE          # overload tripped and still tripped
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0005               # Reset (refused: 4) + Start (refused: 2)
+scan
+expect HmiCmd 16#0000
+expect RejectCode 4              # Reset is handled first, so its code wins
+expect PumpRun FALSE
+expect HmiSts 16#001A
+set SpeedReq 10
+set HmiCmd 16#000D               # Reset (4) + Start (2) + Apply out of range (5)
+scan
+expect RejectCode 4
+expect SpeedSP 50
+
+scenario a refused command does not stop the rest of the word being handled
+set OverloadOK_NC TRUE
+set SuctionOK FALSE              # Start will be refused with 3
+scan
+set SpeedReq 70
+set HmiCmd 16#0009               # Start (refused: 3) + Apply 70 (valid)
+scan
+expect HmiCmd 16#0000
+expect PumpRun FALSE
+expect SpeedSP 70                # Apply was still carried out
+expect RejectCode 3
+set SpeedReq 20
+set HmiCmd 16#0009               # Start (refused: 3) + Apply 20 (refused: 5)
+scan
+expect RejectCode 3              # the FIRST refusal is reported, not the last
+expect SpeedSP 70
+set SuctionOK TRUE
+set SpeedReq 25
+set HmiCmd 16#0009               # Start (accepted) + Apply 25 (refused: 5)
+scan
+expect PumpRun TRUE
+expect RejectCode 5
+expect SpeedSP 70
+
+scenario stop ignores Reset and Apply in the same word
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set SpeedReq 80
+set HmiCmd 16#000A               # Stop + Apply: the Apply is ignored
+scan
+expect HmiCmd 16#0000
+expect SpeedSP 50
+expect RejectCode 0
+set OverloadOK_NC FALSE          # trip, then the overload relay is reset
+scan
+set OverloadOK_NC TRUE
+scan
+expect HmiSts 16#000A
+set HmiCmd 16#0006               # Stop + Reset: the Reset is ignored
+scan
+expect HmiCmd 16#0000
+expect RejectCode 0
+expect HmiSts 16#000A            # still faulted
+set HmiCmd 16#0004               # a Reset on its own clears the fault
+scan
+expect HmiSts 16#000C
+
+scenario while faulted, Stop and Apply are still accepted
+set OverloadOK_NC FALSE          # tripped, and still tripped
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0002               # Stop is never refused
+scan
+expect HmiCmd 16#0000
+expect RejectCode 0
+expect HmiSts 16#000A
+set SpeedReq 65
+set HmiCmd 16#0008               # Apply works whether or not the pump can run
+scan
+expect RejectCode 0
+expect SpeedSP 65
+expect PumpRun FALSE
+
+scenario speed setpoint: values inside 30..100 % are applied
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set SpeedReq 75
+scan
+expect SpeedSP 50                # writing the request alone changes nothing
+set HmiCmd 16#0008               # Apply
+scan
+expect HmiCmd 16#0000
+expect SpeedSP 75
+expect RejectCode 0
+set SpeedReq 30                  # lower limit is allowed
+set HmiCmd 16#0008
+scan
+expect SpeedSP 30
+expect RejectCode 0
+set SpeedReq 100                 # upper limit is allowed
+set HmiCmd 16#0008
+scan
+expect SpeedSP 100
+expect RejectCode 0
+
+scenario speed setpoint: out-of-range values are refused and the old value kept (code 5)
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set SpeedReq 29
+set HmiCmd 16#0008
+scan
+expect HmiCmd 16#0000
+expect SpeedSP 50
+expect RejectCode 5
+expect HmiSts 16#001C
+set SpeedReq 60
+set HmiCmd 16#0008
+scan
+expect SpeedSP 60
+expect RejectCode 0
+set SpeedReq 101
+set HmiCmd 16#0008
+scan
+expect SpeedSP 60
+expect RejectCode 5
+set SpeedReq -5
+set HmiCmd 16#0008
+scan
+expect SpeedSP 60
+expect RejectCode 5
+set SpeedReq 0
+set HmiCmd 16#0008
+scan
+expect SpeedSP 60
+expect RejectCode 5
+
+scenario the setpoint can be changed while running without disturbing the pump
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001
+scan
+set SpeedReq 80
+set HmiCmd 16#0008
+scan
+expect SpeedSP 80
+expect PumpRun TRUE
+expect RejectCode 0
+set HmiCmd 16#0009               # Start + Apply together while running
+set SpeedReq 90
+scan
+expect SpeedSP 90
+expect PumpRun TRUE
+expect RejectCode 0
+
+scenario loss of the suction permissive stops the pump; no restart when it returns
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set SuctionOK FALSE              # level falls below low
+scan
+expect PumpRun FALSE
+expect HmiSts 16#0000            # stopped, not faulted, permissive missing
+set SuctionOK TRUE
+wait 1s
+expect PumpRun FALSE             # no automatic restart
+expect HmiSts 16#000C
+
+scenario commands on consecutive scans are each handled once
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set HmiCmd 16#0002
+scan
+expect PumpRun FALSE
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set HmiCmd 16#0002
+scan
+expect PumpRun FALSE
+wait 500ms
+expect PumpRun FALSE
+
+scenario outside writes into the PLC-to-HMI registers do not stick
+set OverloadOK_NC TRUE
+set SuctionOK TRUE
+scan
+set HmiCmd 16#0001
+scan
+expect PumpRun TRUE
+set SpeedSP 999                  # a faulty HMI or script writes a status register
+set RejectCode 7
+set HmiSts 16#FFFF
+scan
+expect SpeedSP 50                # the PLC rewrites them every scan
+expect RejectCode 0
+expect HmiSts 16#0009
+set SpeedReq 120
+set HmiCmd 16#0008
+scan
+expect RejectCode 5
+set SpeedSP 120                  # trying to force the refused value in directly
+scan
+expect SpeedSP 50
+expect RejectCode 5

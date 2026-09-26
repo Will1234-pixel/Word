@@ -1,0 +1,430 @@
+# Lab 12-2 acceptance tests: event log ring buffer.
+# Tested: the empty log at power-up; one event per request (the request is
+# cleared by the logger); code and time stamp stored in the next slot, the
+# first one in slot 0; Newest, Count and Total; entries never move (a ring,
+# not a shift register); when full, the oldest entry is overwritten and Count
+# stays 10; time stamps in ms (checked with a tolerance); codes <= 0 are
+# ignored; clear empties every slot and restarts at slot 0; the View outputs
+# for every age, including across the wrap from slot 0 back to slot 9, and
+# rejection of ages that are negative or older than the log.
+# Only interface names are used: NewCode, LogReq, ClearCmd, ViewAge,
+# EventLog[0..9].Code/.Stamp, Newest, Count, Total, View.Code/.Stamp,
+# ViewValid. Each event is logged with its own request and scan.
+
+scenario power-up: the log is empty
+scan 2
+expect Count 0
+expect Newest 0
+expect Total 0
+expect ViewValid FALSE
+expect View.Code 0
+expect View.Stamp 0
+expect EventLog[0].Code 0
+expect EventLog[9].Code 0
+
+scenario the first event goes into slot 0 with its time stamp
+scan
+wait 1s
+set NewCode 101
+set LogReq TRUE
+scan
+expect LogReq FALSE                # the logger clears the request
+expect EventLog[0].Code 101
+expect EventLog[0].Stamp >= 970    # logged at about t = 1 s
+expect EventLog[0].Stamp <= 1060
+expect Newest 0
+expect Count 1
+expect Total 1
+scan 2
+expect ViewValid TRUE              # ViewAge is 0: the newest event
+expect View.Code 101
+expect View.Stamp >= 970
+expect View.Stamp <= 1060
+expect EventLog[1].Code 0
+
+scenario one request logs one event, however long you wait
+set NewCode 7
+set LogReq TRUE
+scan
+wait 1s                            # nobody sets LogReq again
+expect Count 1
+expect Total 1
+expect EventLog[1].Code 0
+
+scenario events fill the slots in order and keep their own time stamps
+scan
+set NewCode 201
+set LogReq TRUE
+scan
+wait 500ms
+set NewCode 202
+set LogReq TRUE
+scan
+wait 500ms
+set NewCode 203
+set LogReq TRUE
+scan
+expect EventLog[0].Code 201
+expect EventLog[1].Code 202
+expect EventLog[2].Code 203
+expect EventLog[0].Stamp >= 0
+expect EventLog[0].Stamp <= 50
+expect EventLog[1].Stamp >= 480
+expect EventLog[1].Stamp <= 560
+expect EventLog[2].Stamp >= 990
+expect EventLog[2].Stamp <= 1070
+expect Newest 2
+expect Count 3
+expect Total 3
+wait 2s
+expect EventLog[0].Code 201        # entries stay where they were written
+expect EventLog[2].Stamp <= 1070   # and time stamps never change
+
+scenario the View outputs look back from the newest event
+set NewCode 301
+set LogReq TRUE
+scan
+set NewCode 302
+set LogReq TRUE
+scan
+set NewCode 303
+set LogReq TRUE
+scan
+set ViewAge 0
+scan 2
+expect ViewValid TRUE
+expect View.Code 303
+set ViewAge 1
+scan 2
+expect ViewValid TRUE
+expect View.Code 302
+set ViewAge 2
+scan 2
+expect ViewValid TRUE
+expect View.Code 301
+set ViewAge 3                      # only three events so far
+scan 2
+expect ViewValid FALSE
+expect View.Code 0
+expect View.Stamp 0
+set ViewAge -1                     # never trust an index from the HMI
+scan 2
+expect ViewValid FALSE
+expect View.Code 0
+set ViewAge 10
+scan 2
+expect ViewValid FALSE
+set ViewAge 2000
+scan 2
+expect ViewValid FALSE
+expect View.Code 0
+
+scenario the view follows new events at once
+set ViewAge 0
+set NewCode 401
+set LogReq TRUE
+scan
+scan
+expect View.Code 401
+set NewCode 402
+set LogReq TRUE
+scan
+scan
+expect View.Code 402
+set ViewAge 1
+scan 2
+expect View.Code 401
+
+scenario codes of zero and below are not events
+set NewCode 0
+set LogReq TRUE
+scan
+expect LogReq FALSE
+expect Count 0
+expect Total 0
+expect EventLog[0].Code 0
+set NewCode -5
+set LogReq TRUE
+scan
+expect Count 0
+expect Total 0
+set NewCode 55
+set LogReq TRUE
+scan
+expect Count 1
+expect EventLog[0].Code 55
+set NewCode 0
+set LogReq TRUE
+scan
+expect Count 1
+expect Newest 0
+expect EventLog[1].Code 0
+
+scenario ten events fill the log exactly
+set NewCode 1
+set LogReq TRUE
+scan
+set NewCode 2
+set LogReq TRUE
+scan
+set NewCode 3
+set LogReq TRUE
+scan
+set NewCode 4
+set LogReq TRUE
+scan
+set NewCode 5
+set LogReq TRUE
+scan
+set NewCode 6
+set LogReq TRUE
+scan
+set NewCode 7
+set LogReq TRUE
+scan
+set NewCode 8
+set LogReq TRUE
+scan
+set NewCode 9
+set LogReq TRUE
+scan
+set NewCode 10
+set LogReq TRUE
+scan
+expect Count 10
+expect Total 10
+expect Newest 9
+expect EventLog[0].Code 1
+expect EventLog[9].Code 10
+set ViewAge 9
+scan 2
+expect ViewValid TRUE
+expect View.Code 1                 # the oldest
+set ViewAge 10
+scan 2
+expect ViewValid FALSE
+
+scenario the 11th and 12th events overwrite the oldest, and nothing moves
+set NewCode 1
+set LogReq TRUE
+scan
+set NewCode 2
+set LogReq TRUE
+scan
+set NewCode 3
+set LogReq TRUE
+scan
+set NewCode 4
+set LogReq TRUE
+scan
+set NewCode 5
+set LogReq TRUE
+scan
+set NewCode 6
+set LogReq TRUE
+scan
+set NewCode 7
+set LogReq TRUE
+scan
+set NewCode 8
+set LogReq TRUE
+scan
+set NewCode 9
+set LogReq TRUE
+scan
+set NewCode 10
+set LogReq TRUE
+scan
+wait 1s
+set NewCode 11
+set LogReq TRUE
+scan   # overwrites event 1 in slot 0
+expect Newest 0
+expect Count 10                    # still ten: the log is full
+expect Total 11
+expect EventLog[0].Code 11
+expect EventLog[0].Stamp >= 980
+expect EventLog[1].Code 2          # event 2 has not moved
+expect EventLog[9].Code 10
+set NewCode 12
+set LogReq TRUE
+scan   # overwrites event 2 in slot 1
+expect Newest 1
+expect Count 10
+expect Total 12
+expect EventLog[0].Code 11
+expect EventLog[1].Code 12
+expect EventLog[2].Code 3
+set ViewAge 0
+scan 2
+expect View.Code 12
+set ViewAge 1
+scan 2
+expect View.Code 11
+set ViewAge 2                      # across the wrap: slot 1 -> 0 -> 9
+scan 2
+expect ViewValid TRUE
+expect View.Code 10
+set ViewAge 9
+scan 2
+expect ViewValid TRUE
+expect View.Code 3                 # the oldest event still in the log
+set ViewAge 10
+scan 2
+expect ViewValid FALSE
+
+scenario a long run: 23 events wrap the ring twice
+set NewCode 101
+set LogReq TRUE
+scan
+set NewCode 102
+set LogReq TRUE
+scan
+set NewCode 103
+set LogReq TRUE
+scan
+set NewCode 104
+set LogReq TRUE
+scan
+set NewCode 105
+set LogReq TRUE
+scan
+set NewCode 106
+set LogReq TRUE
+scan
+set NewCode 107
+set LogReq TRUE
+scan
+set NewCode 108
+set LogReq TRUE
+scan
+set NewCode 109
+set LogReq TRUE
+scan
+set NewCode 110
+set LogReq TRUE
+scan
+set NewCode 111
+set LogReq TRUE
+scan
+set NewCode 112
+set LogReq TRUE
+scan
+set NewCode 113
+set LogReq TRUE
+scan
+set NewCode 114
+set LogReq TRUE
+scan
+set NewCode 115
+set LogReq TRUE
+scan
+set NewCode 116
+set LogReq TRUE
+scan
+set NewCode 117
+set LogReq TRUE
+scan
+set NewCode 118
+set LogReq TRUE
+scan
+set NewCode 119
+set LogReq TRUE
+scan
+set NewCode 120
+set LogReq TRUE
+scan
+set NewCode 121
+set LogReq TRUE
+scan
+set NewCode 122
+set LogReq TRUE
+scan
+set NewCode 123
+set LogReq TRUE
+scan
+expect Count 10
+expect Total 23
+expect Newest 2
+expect EventLog[2].Code 123
+expect EventLog[3].Code 114
+expect EventLog[0].Code 121
+expect EventLog[9].Code 120
+set ViewAge 3                      # slot 2 - 3 wraps to slot 9
+scan 2
+expect View.Code 120
+set ViewAge 9
+scan 2
+expect View.Code 114
+
+scenario clear empties every slot, and logging restarts at slot 0
+set NewCode 501
+set LogReq TRUE
+scan
+set NewCode 502
+set LogReq TRUE
+scan
+set NewCode 503
+set LogReq TRUE
+scan
+set NewCode 504
+set LogReq TRUE
+scan
+set NewCode 505
+set LogReq TRUE
+scan
+set NewCode 506
+set LogReq TRUE
+scan
+set NewCode 507
+set LogReq TRUE
+scan
+set NewCode 508
+set LogReq TRUE
+scan
+set NewCode 509
+set LogReq TRUE
+scan
+set NewCode 510
+set LogReq TRUE
+scan
+set NewCode 511
+set LogReq TRUE
+scan
+set NewCode 512
+set LogReq TRUE
+scan
+expect Count 10
+set ClearCmd TRUE
+scan 2
+expect ClearCmd FALSE              # the logger clears the command
+expect Count 0
+expect Total 0
+expect Newest 0
+expect ViewValid FALSE
+expect EventLog[0].Code 0
+expect EventLog[0].Stamp 0
+expect EventLog[1].Code 0
+expect EventLog[5].Code 0
+expect EventLog[9].Code 0
+expect EventLog[9].Stamp 0
+set NewCode 601
+set LogReq TRUE
+scan
+expect Count 1
+expect Total 1
+expect Newest 0
+expect EventLog[0].Code 601
+expect EventLog[1].Code 0
+set NewCode 602
+set LogReq TRUE
+scan
+expect Newest 1
+expect EventLog[1].Code 602
+expect EventLog[2].Code 0
+set ViewAge 1
+scan 2
+expect View.Code 601
+set ViewAge 2
+scan 2
+expect ViewValid FALSE

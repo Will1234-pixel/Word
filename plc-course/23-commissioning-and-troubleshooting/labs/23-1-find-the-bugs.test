@@ -1,0 +1,289 @@
+# Lab 23-1 acceptance tests: transfer conveyor with jog and jam detection.
+# The starter program has three bugs. Each group of scenarios below matches one
+# line of the specification, so a failing check tells you WHICH requirement is
+# broken; finding WHY is your job. Only the I/O from the interface table is used.
+# Every scenario starts from a freshly powered-up PLC with healthy NC inputs.
+
+# ---------------------------------------------------------------- start / stop
+
+scenario power-up: everything off, even with a carton left under the jam eye
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set JamPE TRUE                 # a carton was left under the eye overnight
+scan
+expect ConveyorMotor FALSE
+expect RunLamp FALSE
+expect FaultLamp FALSE
+wait 5s
+expect ConveyorMotor FALSE
+expect FaultLamp FALSE         # a stopped conveyor cannot be jammed
+
+scenario start runs the conveyor, seals in and lights the run lamp
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+expect ConveyorMotor TRUE
+expect RunLamp TRUE
+set StartPB FALSE
+wait 2s
+expect ConveyorMotor TRUE      # seal-in: keeps running after Start is released
+expect RunLamp TRUE
+expect FaultLamp FALSE
+
+scenario stop stops the conveyor and it does not restart on release
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect ConveyorMotor TRUE
+set StopPB_NC FALSE            # press Stop
+scan
+expect ConveyorMotor FALSE
+expect RunLamp FALSE
+set StopPB_NC TRUE             # release Stop
+wait 1s
+expect ConveyorMotor FALSE
+
+scenario stop wins over start, and a broken stop wire stops the conveyor
+set OverloadOK_NC TRUE
+set StopPB_NC FALSE
+set StartPB TRUE               # both pressed
+scan
+expect ConveyorMotor FALSE
+set StartPB FALSE
+set StopPB_NC TRUE
+scan
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+expect ConveyorMotor TRUE
+set StopPB_NC FALSE            # wire break on the stop circuit reads like Stop
+scan
+expect ConveyorMotor FALSE
+
+# ------------------------------------------------------------------------ jog
+
+scenario jog runs the conveyor only while held and never lights the run lamp
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set JogPB TRUE
+scan
+expect ConveyorMotor TRUE
+expect RunLamp FALSE           # the run lamp means "running in automatic"
+wait 2s
+expect ConveyorMotor TRUE
+set JogPB FALSE
+scan
+expect ConveyorMotor FALSE     # jog must not seal in
+wait 1s
+expect ConveyorMotor FALSE
+set JogPB TRUE
+set StopPB_NC FALSE            # Stop wins over Jog too
+scan
+expect ConveyorMotor FALSE
+
+scenario jog while running in automatic does not stop the conveyor
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+scan
+set JogPB TRUE
+scan
+expect ConveyorMotor TRUE
+set JogPB FALSE
+wait 1s
+expect ConveyorMotor TRUE
+expect RunLamp TRUE
+
+# ------------------------------------------------------------- jam detection
+
+scenario cartons passing the eye normally never cause a jam fault
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+set JamPE TRUE                 # carton 1: 2.5 s under the eye
+wait 2500ms
+set JamPE FALSE
+wait 500ms
+set JamPE TRUE                 # carton 2
+wait 2500ms
+set JamPE FALSE
+wait 500ms
+set JamPE TRUE                 # carton 3
+wait 2500ms
+set JamPE FALSE
+wait 1s
+expect ConveyorMotor TRUE
+expect FaultLamp FALSE
+
+scenario a carton stuck under the eye for 3 s trips a jam fault
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set JamPE TRUE                 # carton stops under the eye
+wait 2700ms
+expect ConveyorMotor TRUE      # 90 % of 3 s: still running
+expect FaultLamp FALSE
+wait 600ms
+expect ConveyorMotor FALSE     # 110 %: jam fault, conveyor stopped
+expect RunLamp FALSE
+expect FaultLamp TRUE
+
+scenario stopped with a carton under the eye: the restart is not tripped
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+set JamPE TRUE                 # a carton reaches the eye...
+wait 2s
+set StopPB_NC FALSE            # ...and the operator stops the line with it there
+scan
+set StopPB_NC TRUE
+wait 10s                       # stopped for 10 s, carton still under the eye
+expect FaultLamp FALSE
+set StartPB TRUE               # restart
+scan
+set StartPB FALSE
+wait 1s
+expect ConveyorMotor TRUE      # no instant jam trip on restart
+expect FaultLamp FALSE
+set JamPE FALSE                # the carton moves off normally
+wait 3s
+expect ConveyorMotor TRUE
+expect FaultLamp FALSE
+
+scenario after a restart the jam time is measured from the restart
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+set JamPE TRUE
+wait 2s
+set StopPB_NC FALSE            # stop with the carton under the eye
+scan
+set StopPB_NC TRUE
+wait 5s
+set StartPB TRUE               # restart; this time the carton really is stuck
+scan
+set StartPB FALSE
+wait 2700ms
+expect ConveyorMotor TRUE      # 2.7 s after the restart: not yet a jam
+expect FaultLamp FALSE
+wait 600ms
+expect FaultLamp TRUE          # 3.3 s after the restart: jam
+expect ConveyorMotor FALSE
+
+# ------------------------------------------------------ fault reset behaviour
+
+scenario jam reset: refused while blocked, accepted when clear, no restart
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+set JamPE TRUE
+wait 3500ms
+expect FaultLamp TRUE
+expect ConveyorMotor FALSE
+set ResetPB TRUE               # reset while the jam is still there
+scan
+set ResetPB FALSE
+scan
+expect FaultLamp TRUE          # refused: the cause has not gone
+set JamPE FALSE                # operator clears the jam
+wait 1s
+expect FaultLamp TRUE          # still latched until Reset is pressed
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+scan
+expect FaultLamp FALSE         # reset accepted
+expect ConveyorMotor FALSE     # ...and the conveyor must NOT restart by itself
+expect RunLamp FALSE
+wait 2s
+expect ConveyorMotor FALSE
+expect RunLamp FALSE
+set StartPB TRUE               # a new Start runs it again
+scan
+set StartPB FALSE
+wait 1s
+expect ConveyorMotor TRUE
+expect FaultLamp FALSE
+
+scenario overload trip: stops at once, reset only when healthy, no restart
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set OverloadOK_NC FALSE        # overload relay trips
+scan
+expect ConveyorMotor FALSE
+expect FaultLamp TRUE
+set ResetPB TRUE               # reset while the overload is still tripped
+scan
+set ResetPB FALSE
+scan
+expect FaultLamp TRUE
+set OverloadOK_NC TRUE         # electrician resets the overload relay
+wait 1s
+expect FaultLamp TRUE
+expect ConveyorMotor FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+scan
+expect FaultLamp FALSE
+expect ConveyorMotor FALSE     # no automatic restart after a fault reset
+expect RunLamp FALSE
+wait 2s
+expect ConveyorMotor FALSE
+expect RunLamp FALSE
+
+scenario pressing Reset while running healthy changes nothing
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+set ResetPB TRUE               # Reset is only for faults; it is not a stop button
+scan
+set ResetPB FALSE
+wait 1s
+expect ConveyorMotor TRUE
+expect RunLamp TRUE
+expect FaultLamp FALSE
+
+scenario while a fault is latched, Start and Jog do nothing
+set StopPB_NC TRUE
+set OverloadOK_NC FALSE        # overload trips while stopped
+scan
+expect FaultLamp TRUE
+set OverloadOK_NC TRUE         # relay reset, but the fault has not been reset
+scan
+set StartPB TRUE
+scan
+expect ConveyorMotor FALSE
+set StartPB FALSE
+scan
+set JogPB TRUE
+scan
+expect ConveyorMotor FALSE
+wait 1s
+expect ConveyorMotor FALSE
+expect FaultLamp TRUE

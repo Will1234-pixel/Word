@@ -1,0 +1,287 @@
+# Lab 14-3 acceptance tests: sump pump level control.
+# LT301_Raw: 0..27648 = 4..20 mA = 0.0..4.0 m, so 1 m = 6912 counts.
+#   0.9 m = 6221   1.1 m = 7603   1.5 m = 10368   1.9 m = 13133   2.1 m = 14515
+#   2.5 m = 17280  2.85 m = 19699 2.95 m = 20390  3.1 m = 21427
+# Start level 2.0 m, stop level 1.0 m, high alarm 3.0 m (5 s, 0.1 m deadband),
+# run feedback within 2 s, level fault after 1 s outside 3.6..21 mA.
+# Every scenario starts healthy: float closed (TRUE), overload healthy (TRUE).
+# The test plays the part of the contactor: it sets PumpRunFb after it sees PumpRun.
+
+scenario power-up at a mid level: pump off, no alarms
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 10368             # 1.5 m
+scan
+wait 3s
+expect PumpRun FALSE
+expect HighLevelAlm FALSE
+expect LowLowAlm FALSE
+expect PumpFaultAlm FALSE
+expect LevelFaultAlm FALSE
+expect Level ~ 1.5 0.01
+
+scenario level is scaled to metres and clamped to the range
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 13824             # 12 mA
+wait 200ms
+expect Level ~ 2.0 0.01
+set LT301_Raw 0                 # 4 mA
+wait 200ms
+expect Level ~ 0.0 0.01
+set LT301_Raw 27648             # 20 mA
+wait 200ms
+expect Level ~ 4.0 0.01
+set LT301_Raw 28000             # 20.2 mA: over the range, not a fault
+wait 200ms
+expect Level ~ 4.0 0.01
+set LT301_Raw -300              # 3.83 mA: under the range, not a fault
+wait 200ms
+expect Level ~ 0.0 0.01
+expect LevelFaultAlm FALSE
+
+scenario pump starts at the start level and pumps down to the stop level
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 10368             # 1.5 m
+scan
+set LT301_Raw 13133             # 1.9 m: below the start level
+wait 1s
+expect PumpRun FALSE
+set LT301_Raw 14515             # 2.1 m
+wait 100ms
+expect PumpRun TRUE
+set PumpRunFb TRUE
+set LT301_Raw 10368             # 1.5 m: inside the band, keep pumping
+wait 1s
+expect PumpRun TRUE
+set LT301_Raw 7603              # 1.1 m
+wait 1s
+expect PumpRun TRUE
+set LT301_Raw 6221              # 0.9 m: below the stop level
+wait 100ms
+expect PumpRun FALSE
+set PumpRunFb FALSE
+set LT301_Raw 10368             # sump fills again: inside the band, stay off
+wait 1s
+expect PumpRun FALSE
+set LT301_Raw 13133             # 1.9 m
+wait 1s
+expect PumpRun FALSE
+set LT301_Raw 14515             # 2.1 m: start again
+wait 100ms
+expect PumpRun TRUE
+expect PumpFaultAlm FALSE
+
+scenario high level alarm needs 5 s above 3.0 m and clears below 2.9 m
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 10368
+scan
+set LT301_Raw 21427             # 3.1 m
+wait 100ms
+expect PumpRun TRUE
+set PumpRunFb TRUE
+wait 4300ms                     # 4.4 s above the limit
+expect HighLevelAlm FALSE
+wait 1s                         # 5.4 s
+expect HighLevelAlm TRUE
+set LT301_Raw 20390             # 2.95 m: inside the deadband
+wait 1s
+expect HighLevelAlm TRUE
+set LT301_Raw 19699             # 2.85 m
+wait 100ms
+expect HighLevelAlm FALSE
+expect PumpFaultAlm FALSE
+
+scenario low-low float stops the pump at once even when the transmitter reads high
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 17280             # LT-301 reads 2.5 m (in this story it is stuck)
+wait 100ms
+expect PumpRun TRUE
+set PumpRunFb TRUE
+wait 1s
+set LSLL302_NC FALSE            # the float says the sump is nearly empty
+scan
+expect PumpRun FALSE            # no delay for dry-run protection
+expect LowLowAlm TRUE
+set PumpRunFb FALSE
+wait 2s
+expect PumpRun FALSE            # stays off although the level reads 2.5 m
+set LSLL302_NC TRUE             # water back above the float
+wait 1s
+expect LowLowAlm TRUE           # latched: someone must look first
+expect PumpRun FALSE
+expect PumpFaultAlm FALSE       # stopping on a trip is not a pump fault
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect LowLowAlm FALSE
+expect PumpRun TRUE             # back in automatic: 2.5 m is above the start level
+
+scenario low-low alarm cannot be reset while the float is still open
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 10368
+scan
+set LSLL302_NC FALSE
+scan
+expect LowLowAlm TRUE
+set LT301_Raw 17280             # LT-301 reads 2.5 m
+wait 1s
+expect PumpRun FALSE            # no pumping while the float is open
+set ResetPB TRUE
+scan
+expect LowLowAlm TRUE           # not even for one scan
+expect PumpRun FALSE
+set ResetPB FALSE
+wait 100ms
+expect LowLowAlm TRUE
+expect PumpRun FALSE
+
+scenario overload trip: pump stops, fault latches, reset needs a healthy overload
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 17280             # 2.5 m
+wait 100ms
+expect PumpRun TRUE
+set PumpRunFb TRUE
+wait 1s
+set PumpOL_NC FALSE             # overload relay trips
+scan
+expect PumpRun FALSE
+expect PumpFaultAlm TRUE
+set PumpRunFb FALSE
+set ResetPB TRUE                # reset while the overload is still tripped
+scan
+expect PumpFaultAlm TRUE        # not even for one scan
+expect PumpRun FALSE
+set ResetPB FALSE
+wait 100ms
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+set PumpOL_NC TRUE              # overload reset at the starter
+wait 1s
+expect PumpFaultAlm TRUE        # no automatic reset
+expect PumpRun FALSE
+set LT301_Raw 10368             # meanwhile the level is 1.5 m
+wait 100ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect PumpFaultAlm FALSE
+expect PumpRun FALSE            # the reset does not start the pump inside the band
+wait 1s
+expect PumpRun FALSE
+set LT301_Raw 14515             # 2.1 m
+wait 100ms
+expect PumpRun TRUE
+
+scenario no run feedback within 2 s is a latched pump fault
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 17280
+wait 100ms
+expect PumpRun TRUE             # the contactor never pulls in: PumpRunFb stays FALSE
+wait 1600ms                     # about 1.7 s since the command
+expect PumpFaultAlm FALSE
+expect PumpRun TRUE
+wait 500ms                      # about 2.2 s
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+wait 3s
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+
+scenario late feedback is fine, lost feedback while running is a fault
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 17280
+wait 100ms
+expect PumpRun TRUE
+wait 1s
+set PumpRunFb TRUE              # contactor pulls in after about 1.1 s
+wait 3s
+expect PumpFaultAlm FALSE
+expect PumpRun TRUE
+set PumpRunFb FALSE             # contactor drops out while commanded on
+wait 1700ms
+expect PumpFaultAlm FALSE
+wait 500ms
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+
+scenario a jammed reset button cannot keep clearing faults
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 10368
+wait 100ms
+set ResetPB TRUE                # button jammed in
+wait 500ms
+set LT301_Raw 17280             # 2.5 m: pump starts, but no feedback ever comes
+wait 2300ms
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+wait 100ms
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+wait 1s
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+wait 3s
+expect PumpFaultAlm TRUE
+expect PumpRun FALSE
+set ResetPB FALSE               # button freed...
+scan
+set ResetPB TRUE                # ...and pressed properly
+scan
+set ResetPB FALSE
+wait 100ms
+expect PumpFaultAlm FALSE
+expect PumpRun TRUE             # automatic again: the level is still 2.5 m
+
+scenario level transmitter wire break: fault after 1 s and the pump stops
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 17280             # 2.5 m
+wait 100ms
+expect PumpRun TRUE
+set PumpRunFb TRUE
+wait 1s
+set LT301_Raw -6912             # 0 mA: open circuit
+wait 700ms
+expect LevelFaultAlm FALSE      # not confirmed yet
+wait 500ms
+expect LevelFaultAlm TRUE
+expect PumpRun FALSE
+set PumpRunFb FALSE
+wait 3s
+expect PumpRun FALSE
+expect PumpFaultAlm FALSE
+set LT301_Raw 10368             # repaired, level 1.5 m
+wait 100ms
+expect LevelFaultAlm FALSE      # clears by itself, no reset needed
+expect PumpRun FALSE            # 1.5 m is inside the band: stay off
+wait 1s
+expect PumpRun FALSE
+set LT301_Raw 14515             # 2.1 m
+wait 100ms
+expect PumpRun TRUE
+
+scenario level transmitter over-range (short circuit) is also a level fault
+set LSLL302_NC TRUE
+set PumpOL_NC TRUE
+set LT301_Raw 10368             # 1.5 m
+wait 100ms
+set LT301_Raw 29450             # about 21.04 mA
+wait 700ms
+expect LevelFaultAlm FALSE
+wait 500ms
+expect LevelFaultAlm TRUE
+expect PumpRun FALSE
+wait 3s
+expect PumpRun FALSE
+expect LevelFaultAlm TRUE

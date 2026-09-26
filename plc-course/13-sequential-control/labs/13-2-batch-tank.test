@@ -1,0 +1,526 @@
+# Lab 13-2 acceptance tests: batch tank sequence.
+# Checks every output in every state (Idle, Filling, Mixing, Heating,
+# Draining, Complete, Held, Faulted), the mix time and the three watchdogs
+# (just before and after each preset), the fault codes and reset, Hold and
+# Resume (the mixing already done still counts; watchdogs restart; nothing
+# runs while held), Abort, command priorities, commands that must be
+# ignored, the heater and inlet interlocks, and that a held Start button
+# never starts a second batch.
+# Interface: StartPB, HoldPB, ResumePB, AbortPB, ResetPB, LevelHighLS,
+# LevelLowLS, TankTemp, InletValve, Agitator, Heater, OutletValve, RunLamp,
+# HeldLamp, FaultLamp, CompleteLamp, FaultCode, BatchCount, TempSP (60.0),
+# MixTime (10 s), FillTimeout (30 s), HeatTimeout (60 s), DrainTimeout (30 s).
+# Every scenario lets the PLC run for 100 ms before the first button press.
+
+scenario power-up: everything off, and nothing starts by itself
+set LevelHighLS TRUE
+set LevelLowLS TRUE
+set TankTemp 80.0
+scan
+expect InletValve FALSE
+expect Agitator FALSE
+expect Heater FALSE
+expect OutletValve FALSE
+expect RunLamp FALSE
+expect HeldLamp FALSE
+expect FaultLamp FALSE
+expect CompleteLamp FALSE
+expect FaultCode 0
+expect BatchCount 0
+wait 10s
+expect InletValve FALSE
+expect Agitator FALSE
+expect Heater FALSE
+expect OutletValve FALSE
+expect RunLamp FALSE
+
+scenario a complete batch: fill, mix, heat, drain, complete
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+expect InletValve TRUE         # Filling
+expect Agitator FALSE
+expect Heater FALSE
+expect OutletValve FALSE
+expect RunLamp TRUE
+expect HeldLamp FALSE
+expect FaultLamp FALSE
+expect CompleteLamp FALSE
+wait 5s
+set LevelLowLS TRUE            # liquid reaches the low switch
+wait 5s
+expect InletValve TRUE
+expect Agitator FALSE
+set LevelHighLS TRUE           # tank full
+scan
+expect InletValve FALSE        # the inlet closes in the same scan
+expect Agitator TRUE           # Mixing
+expect Heater FALSE
+expect OutletValve FALSE
+expect RunLamp TRUE
+wait 9s                        # 90 % of the mix time
+expect Agitator TRUE
+expect Heater FALSE
+until Heater = TRUE within 1500ms
+expect Agitator TRUE           # Heating: keep mixing while heating
+expect InletValve FALSE
+expect OutletValve FALSE
+expect RunLamp TRUE
+set TankTemp 45.0
+wait 5s
+expect Heater TRUE
+set TankTemp 59.9              # just below the set point
+wait 1s
+expect Heater TRUE
+expect OutletValve FALSE
+set TankTemp 60.5              # temperature reached
+until OutletValve = TRUE within 50ms
+expect Heater FALSE            # Draining
+expect Agitator FALSE
+expect InletValve FALSE
+expect RunLamp TRUE
+expect CompleteLamp FALSE
+set LevelHighLS FALSE
+wait 5s
+expect OutletValve TRUE
+expect BatchCount 0
+set LevelLowLS FALSE           # tank empty
+until CompleteLamp = TRUE within 50ms
+expect OutletValve FALSE       # Complete
+expect InletValve FALSE
+expect Agitator FALSE
+expect Heater FALSE
+expect RunLamp FALSE
+expect HeldLamp FALSE
+expect FaultLamp FALSE
+wait 50ms                      # count on the transition or on the first scan in Complete
+expect BatchCount 1
+wait 5s
+expect CompleteLamp TRUE
+expect BatchCount 1            # counted once, not once per scan
+expect InletValve FALSE
+
+scenario a second batch starts from Complete and counts again
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+wait 100ms
+expect Agitator TRUE
+until Heater = TRUE within 11s
+set TankTemp 70.0
+until OutletValve = TRUE within 50ms
+set LevelHighLS FALSE
+set LevelLowLS FALSE
+until CompleteLamp = TRUE within 50ms
+wait 50ms
+expect BatchCount 1
+set TankTemp 20.0
+wait 1s
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+expect CompleteLamp FALSE
+expect InletValve TRUE
+expect RunLamp TRUE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+set TankTemp 70.0
+until OutletValve = TRUE within 50ms
+set LevelHighLS FALSE
+set LevelLowLS FALSE
+until CompleteLamp = TRUE within 50ms
+wait 1s
+expect BatchCount 2
+
+scenario a Start button held through the batch does not start another one
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE               # pressed and never released
+wait 100ms
+expect InletValve TRUE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+set TankTemp 70.0
+until OutletValve = TRUE within 50ms
+set LevelHighLS FALSE
+set LevelLowLS FALSE
+until CompleteLamp = TRUE within 50ms
+wait 3s
+expect CompleteLamp TRUE
+expect InletValve FALSE
+expect RunLamp FALSE
+expect BatchCount 1
+
+scenario Start is ignored while a batch is running
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+wait 2s
+expect Agitator TRUE
+set StartPB TRUE               # pressed again during mixing
+wait 100ms
+set StartPB FALSE
+expect Agitator TRUE
+expect InletValve FALSE
+wait 6s                        # 8 s of mixing in all
+expect Agitator TRUE
+expect Heater FALSE
+until Heater = TRUE within 3s  # the mix timer was not restarted
+
+scenario the heater interlock: never heat an uncovered element
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+set LevelHighLS FALSE
+set LevelLowLS FALSE           # a leak: the element is no longer covered
+scan
+expect Heater FALSE            # off in the same scan
+expect Agitator TRUE           # the sequence is still in Heating
+expect RunLamp TRUE
+expect FaultLamp FALSE
+wait 5s
+expect Heater FALSE
+set LevelLowLS TRUE            # level restored
+scan
+expect Heater TRUE
+
+scenario fill watchdog: no high level within 30 s gives fault 1
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+wait 26800ms                   # about 90 % of the fill timeout
+expect InletValve TRUE
+expect FaultLamp FALSE
+expect FaultCode 0
+until FaultLamp = TRUE within 6s
+expect FaultCode 1
+expect InletValve FALSE
+expect Agitator FALSE
+expect Heater FALSE
+expect OutletValve FALSE
+expect RunLamp FALSE
+expect HeldLamp FALSE
+expect CompleteLamp FALSE
+wait 10s                       # stays faulted: no automatic retry
+expect FaultLamp TRUE
+expect FaultCode 1
+expect InletValve FALSE
+
+scenario reset clears the fault and returns to Idle without restarting
+wait 100ms
+set FillTimeout T#5s
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+until FaultLamp = TRUE within 6s
+expect FaultCode 1
+set ResetPB TRUE
+wait 100ms
+set ResetPB FALSE
+expect FaultLamp FALSE
+expect FaultCode 0
+expect InletValve FALSE
+expect RunLamp FALSE
+expect CompleteLamp FALSE
+wait 5s
+expect InletValve FALSE        # a reset never restarts the batch
+expect FaultLamp FALSE
+set StartPB TRUE               # a new Start does
+wait 100ms
+set StartPB FALSE
+expect InletValve TRUE
+expect RunLamp TRUE
+
+scenario the fill timeout is adjustable
+wait 100ms
+set FillTimeout T#10s
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+wait 8800ms
+expect FaultLamp FALSE
+expect InletValve TRUE
+until FaultLamp = TRUE within 2200ms
+expect FaultCode 1
+
+scenario heat watchdog: set point not reached within 60 s gives fault 2
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+wait 54s                       # 90 % of the heat timeout
+expect Heater TRUE
+expect FaultLamp FALSE
+until FaultLamp = TRUE within 12s
+expect FaultCode 2
+expect Heater FALSE
+expect Agitator FALSE
+expect OutletValve FALSE
+expect InletValve FALSE
+expect RunLamp FALSE
+
+scenario drain watchdog: tank not empty within 30 s gives fault 3
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+set TankTemp 70.0
+until OutletValve = TRUE within 50ms
+set LevelHighLS FALSE          # the level falls, but never below the low switch
+wait 27s
+expect OutletValve TRUE
+expect FaultLamp FALSE
+until FaultLamp = TRUE within 6s
+expect FaultCode 3
+expect OutletValve FALSE
+expect CompleteLamp FALSE
+expect BatchCount 0
+
+scenario hold during mixing: everything stops, and the mixing done still counts
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+scan
+expect Agitator TRUE
+wait 4s                        # 4 s of mixing done
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+expect HeldLamp TRUE
+expect Agitator FALSE
+expect Heater FALSE
+expect InletValve FALSE
+expect OutletValve FALSE
+expect RunLamp FALSE
+expect FaultLamp FALSE
+wait 20s                       # a long hold: no progress, no timeout
+expect HeldLamp TRUE
+expect Agitator FALSE
+expect Heater FALSE
+expect FaultLamp FALSE
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect HeldLamp FALSE
+expect Agitator TRUE           # back in Mixing
+expect RunLamp TRUE
+wait 5300ms                    # about 5.4 s since Resume: 6 s of mixing are still due
+expect Agitator TRUE
+expect Heater FALSE
+until Heater = TRUE within 1300ms
+
+scenario hold during filling: the fill watchdog restarts on resume
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+wait 25s                       # 25 s of the 30 s allowed
+expect InletValve TRUE
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+expect InletValve FALSE
+expect HeldLamp TRUE
+wait 10s                       # the watchdog must not run while held
+expect FaultLamp FALSE
+expect HeldLamp TRUE
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect InletValve TRUE
+expect HeldLamp FALSE
+wait 25s                       # a fresh 30 s after the resume
+expect FaultLamp FALSE
+expect InletValve TRUE
+set LevelHighLS TRUE
+scan
+expect InletValve FALSE
+expect Agitator TRUE
+
+scenario hold during heating: heater and agitator stop, then heating continues
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+until Heater = TRUE within 11s
+wait 2s
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+expect Heater FALSE
+expect Agitator FALSE
+expect HeldLamp TRUE
+set TankTemp 70.0              # hot enough, but held: nothing moves on
+wait 3s
+expect OutletValve FALSE
+expect HeldLamp TRUE
+set TankTemp 50.0
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect Heater TRUE
+expect Agitator TRUE
+expect OutletValve FALSE
+set TankTemp 61.0
+until OutletValve = TRUE within 50ms
+expect Heater FALSE
+
+scenario abort during mixing returns to Idle; a new Start re-checks the tank
+set TankTemp 20.0
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set LevelLowLS TRUE
+set LevelHighLS TRUE
+wait 3s
+expect Agitator TRUE
+set AbortPB TRUE
+wait 100ms
+set AbortPB FALSE
+expect Agitator FALSE
+expect Heater FALSE
+expect InletValve FALSE
+expect OutletValve FALSE
+expect RunLamp FALSE
+expect HeldLamp FALSE
+expect FaultLamp FALSE
+expect CompleteLamp FALSE
+expect BatchCount 0
+wait 5s
+expect Agitator FALSE
+set StartPB TRUE               # the tank is still full
+scan
+expect InletValve FALSE        # interlock: never open the inlet on a full tank,
+scan                           # not even for one scan
+expect InletValve FALSE
+wait 100ms
+set StartPB FALSE
+expect InletValve FALSE        # so no filling: straight on to mixing
+expect Agitator TRUE
+expect RunLamp TRUE
+
+scenario abort from Held returns to Idle
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+wait 2s
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+expect HeldLamp TRUE
+set AbortPB TRUE
+wait 100ms
+set AbortPB FALSE
+expect HeldLamp FALSE
+expect RunLamp FALSE
+expect InletValve FALSE
+set ResumePB TRUE              # nothing left to resume
+wait 100ms
+set ResumePB FALSE
+wait 1s
+expect InletValve FALSE
+expect RunLamp FALSE
+expect HeldLamp FALSE
+
+scenario Abort beats Hold when both are pressed together
+wait 100ms
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+wait 2s
+set HoldPB TRUE
+set AbortPB TRUE
+wait 100ms
+set HoldPB FALSE
+set AbortPB FALSE
+expect HeldLamp FALSE
+expect RunLamp FALSE
+expect InletValve FALSE
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+expect InletValve FALSE
+
+scenario commands that do not apply are ignored
+wait 100ms
+set HoldPB TRUE                # Hold in Idle
+wait 100ms
+set HoldPB FALSE
+expect HeldLamp FALSE
+set ResumePB TRUE              # Resume in Idle
+wait 100ms
+set ResumePB FALSE
+expect RunLamp FALSE
+expect InletValve FALSE
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+set ResetPB TRUE               # Reset while running
+wait 100ms
+set ResetPB FALSE
+expect InletValve TRUE
+expect RunLamp TRUE
+set HoldPB TRUE
+wait 100ms
+set HoldPB FALSE
+set StartPB TRUE               # Start while held
+wait 100ms
+set StartPB FALSE
+expect HeldLamp TRUE
+expect InletValve FALSE
+set FillTimeout T#2s
+set ResumePB TRUE
+wait 100ms
+set ResumePB FALSE
+until FaultLamp = TRUE within 3s
+set AbortPB TRUE               # Abort does not clear a fault
+wait 100ms
+set AbortPB FALSE
+set HoldPB TRUE                # neither does Hold
+wait 100ms
+set HoldPB FALSE
+set StartPB TRUE               # and Start does not restart a faulted batch
+wait 100ms
+set StartPB FALSE
+expect FaultLamp TRUE
+expect FaultCode 1
+expect HeldLamp FALSE
+expect InletValve FALSE
+expect RunLamp FALSE

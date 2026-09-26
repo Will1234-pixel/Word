@@ -1,0 +1,359 @@
+# Lab 11-3 acceptance tests: F_InRange, F_Deadband and FB_SampleStats
+# on a two-head check-weigher.
+# Tested: one sample per rising edge of HeadNReady (a held signal counts
+# once), inclusive limits, empty range when Low > High, limits changed at
+# run time, min/max seeded by the first sample after a clear, the mean,
+# both instances updating ONE shared LineStats record (also in the same
+# scan), per-instance Reject outputs and sample counters, clearing, and
+# report-by-exception of the mean with a deadband (including a change of
+# exactly the deadband), a record that stays at zero while ClearPB is held,
+# and a 0 g sample (empty container) as the minimum.
+# Only interface names are used: program I/O and variables, the LineStats
+# fields, and Head1/Head2 .Reject .Samples.
+# A "sample" is: set the weight, raise HeadNReady for one scan, drop it.
+
+scenario statistics are empty at power-up and nothing is counted by itself
+scan
+expect LineStats.Count 0
+expect LineStats.InSpec 0
+expect LineStats.OutSpec 0
+expect LineStats.MinValue ~ 0.0 0.001
+expect LineStats.MaxValue ~ 0.0 0.001
+expect LineStats.Mean ~ 0.0 0.001
+expect ReportedMean ~ 0.0 0.001
+expect Head1Reject FALSE
+expect Head2Reject FALSE
+wait 2s
+expect LineStats.Count 0
+expect Head1.Samples 0
+expect Head2.Samples 0
+
+scenario one good weight from head 1
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect LineStats.Count 1
+expect LineStats.InSpec 1
+expect LineStats.OutSpec 0
+expect LineStats.MinValue ~ 500.0 0.001
+expect LineStats.MaxValue ~ 500.0 0.001
+expect LineStats.Sum ~ 500.0 0.001
+expect LineStats.Mean ~ 500.0 0.001
+expect Head1Reject FALSE
+expect Head1.Samples 1
+expect Head2.Samples 0
+wait 1s
+expect LineStats.Count 1            # nothing more until the next Ready
+
+scenario a Ready signal held on for many scans is counted once
+set Head1Weight 500.0
+set Head1Ready TRUE
+wait 1s
+expect LineStats.Count 1
+expect Head1.Samples 1
+set Head1Ready FALSE
+scan
+set Head1Weight 502.0
+set Head1Ready TRUE
+scan
+expect LineStats.Count 2
+expect LineStats.Mean ~ 501.0 0.001
+
+scenario an out-of-limits weight is rejected by its own head only
+set Head2Weight 490.0               # underweight
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan 2
+expect Head2Reject TRUE
+expect Head1Reject FALSE
+expect LineStats.OutSpec 1
+expect LineStats.InSpec 0
+expect LineStats.Count 1
+set Head1Weight 510.0               # overweight on head 1
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan 2
+expect Head1Reject TRUE
+expect LineStats.OutSpec 2
+set Head1Weight 500.0               # a new value arrives, but Ready has not come yet:
+scan 3
+expect Head1Reject TRUE             # nothing is judged until the Ready edge
+expect LineStats.Count 2
+set Head2Weight 500.0               # head 2's next container is good
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan 2
+expect Head2Reject FALSE
+expect Head1Reject TRUE             # head 1 keeps its own result until its next sample
+expect LineStats.InSpec 1
+expect LineStats.Count 3
+
+scenario the limits are inclusive
+set Head1Weight 495.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject FALSE
+set Head1Weight 505.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject FALSE
+set Head1Weight 494.9
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject TRUE
+set Head1Weight 505.1
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject TRUE
+expect LineStats.Count 4
+expect LineStats.InSpec 2
+expect LineStats.OutSpec 2
+expect LineStats.MinValue ~ 494.9 0.001
+expect LineStats.MaxValue ~ 505.1 0.001
+
+scenario both heads add to the same shared record
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+set Head2Weight 504.0
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan
+set Head1Weight 496.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect LineStats.Count 3
+expect LineStats.InSpec 3
+expect LineStats.OutSpec 0
+expect LineStats.MinValue ~ 496.0 0.001
+expect LineStats.MaxValue ~ 504.0 0.001
+expect LineStats.Sum ~ 1500.0 0.001
+expect LineStats.Mean ~ 500.0 0.001
+expect Head1.Samples 2               # each instance keeps its own count...
+expect Head2.Samples 1               # ...while both update LineStats
+
+scenario samples from both heads in the same scan are both counted
+set Head1Weight 498.0
+set Head2Weight 502.0
+set Head1Ready TRUE
+set Head2Ready TRUE
+scan
+set Head1Ready FALSE
+set Head2Ready FALSE
+scan
+expect LineStats.Count 2
+expect LineStats.MinValue ~ 498.0 0.001
+expect LineStats.MaxValue ~ 502.0 0.001
+expect LineStats.Mean ~ 500.0 0.001
+expect Head1.Samples 1
+expect Head2.Samples 1
+
+scenario clearing empties the shared record but not the per-head counters
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+set Head2Weight 490.0
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan
+set Head1Weight 501.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect LineStats.Count 3
+set ClearPB TRUE
+scan
+set ClearPB FALSE
+scan
+expect LineStats.Count 0
+expect LineStats.InSpec 0
+expect LineStats.OutSpec 0
+expect LineStats.MinValue ~ 0.0 0.001
+expect LineStats.MaxValue ~ 0.0 0.001
+expect LineStats.Sum ~ 0.0 0.001
+expect LineStats.Mean ~ 0.0 0.001
+expect Head1.Samples 2
+expect Head2.Samples 1
+set Head2Weight 503.0               # first sample after the clear seeds min and max
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan
+expect LineStats.Count 1
+expect LineStats.MinValue ~ 503.0 0.001
+expect LineStats.MaxValue ~ 503.0 0.001
+expect LineStats.Mean ~ 503.0 0.001
+expect Head2.Samples 2
+
+scenario while ClearPB is held the record stays at zero, even if a weight arrives
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect LineStats.Count 1
+set ClearPB TRUE                    # clear pressed and held...
+scan 2
+expect LineStats.Count 0
+set Head2Weight 490.0               # ...a container is weighed during the clear
+set Head2Ready TRUE
+scan
+expect LineStats.Count 0            # zero on every scan while the button is held
+set Head2Ready FALSE
+scan 3
+expect LineStats.Count 0            # the weight is not added to the cleared record
+expect LineStats.OutSpec 0
+expect LineStats.MinValue ~ 0.0 0.001
+expect LineStats.Sum ~ 0.0 0.001
+expect Head2Reject TRUE             # but its reject gate still works
+expect Head2.Samples 1
+set ClearPB FALSE
+scan 2
+expect LineStats.Count 0            # releasing the button adds nothing
+set Head1Weight 502.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect LineStats.Count 1            # counting starts again after the release
+expect LineStats.MinValue ~ 502.0 0.001
+expect LineStats.MaxValue ~ 502.0 0.001
+
+scenario an empty container (0 g) is a real sample and becomes the minimum
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+set Head1Weight 0.0                 # nothing was filled
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject TRUE
+set Head1Weight 502.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect LineStats.Count 3
+expect LineStats.OutSpec 1
+expect LineStats.MinValue ~ 0.0 0.001
+expect LineStats.MaxValue ~ 502.0 0.001
+expect LineStats.Mean ~ 334.0 0.001
+
+scenario new limits entered on the HMI apply to the next sample
+set HighLimit 510.0
+set Head1Weight 508.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject FALSE
+expect LineStats.InSpec 1
+set HighLimit 505.0
+set Head1Weight 508.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject TRUE
+expect LineStats.OutSpec 1
+
+scenario limits entered the wrong way round make every sample out of limits
+set LowLimit 505.0
+set HighLimit 495.0
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan
+expect Head1Reject TRUE
+expect LineStats.OutSpec 1
+expect LineStats.InSpec 0
+
+scenario the reported mean only moves when the mean changes by the deadband or more
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan 2
+expect LineStats.Mean ~ 500.0 0.001
+expect ReportedMean ~ 500.0 0.001        # first report
+set Head2Weight 500.6
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan 2
+expect LineStats.Mean ~ 500.3 0.001
+expect ReportedMean ~ 500.0 0.001        # moved 0.3 g: not reported
+set Head1Weight 500.6
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan 2
+expect LineStats.Mean ~ 500.4 0.001
+expect ReportedMean ~ 500.0 0.001        # 0.4 g from the last REPORTED value: not reported
+set Head2Weight 502.0
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan 2
+expect LineStats.Mean ~ 500.8 0.001
+expect ReportedMean ~ 500.8 0.001        # 0.8 g: reported
+set Head1Weight 496.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan 2
+expect LineStats.Mean ~ 499.84 0.001
+expect ReportedMean ~ 499.84 0.001       # 0.96 g downwards: reported
+set Head2Weight 500.2
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan 2
+expect LineStats.Mean ~ 499.9 0.001
+expect ReportedMean ~ 499.84 0.001       # 0.06 g: not reported
+wait 2s
+expect ReportedMean ~ 499.84 0.001       # and it does not creep between samples
+set MeanDeadband 0.0                     # a zero band passes every change
+scan 2
+expect ReportedMean ~ 499.9 0.001
+
+scenario a change of exactly the deadband is reported
+set Head1Weight 500.0
+set Head1Ready TRUE
+scan
+set Head1Ready FALSE
+scan 2
+expect ReportedMean ~ 500.0 0.001
+set Head2Weight 501.0
+set Head2Ready TRUE
+scan
+set Head2Ready FALSE
+scan 2
+expect LineStats.Mean ~ 500.5 0.001
+expect ReportedMean ~ 500.5 0.001        # moved by exactly 0.5 g: "by Band or more"

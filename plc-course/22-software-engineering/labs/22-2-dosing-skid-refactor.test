@@ -1,0 +1,449 @@
+# Lab 22-2 acceptance tests: refactor the dosing-skid legacy program safely.
+#
+# This is a CHARACTERISATION test: it records what the legacy program DOES,
+# including behaviour you might want to change later (no clamping of the
+# level value, different feedback timeouts on the two pumps). A refactor
+# must keep every one of these behaviours. A behaviour change is a separate,
+# approved change with its own test.
+#
+# The legacy starter passes this file (it is marked expect=pass), and so does
+# the refactored solution. Only interface names are used: the located I/O
+# and the HMI tags LevelPct, P1_Starts and P2_Starts.
+#
+# Raw level scale: 0..27648 = 0..100 %. Useful values:
+#   13824 = 50 %    2765 = 10.0007 %   2764 = 9.9971 %
+#   3318 = 12.0009 %   4147 = 14.9993 %   4148 = 15.0029 %
+
+# ------------------------------------------------------------ power-up, scaling
+scenario power-up with a healthy tank level: everything is off
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+scan
+expect P1_Run FALSE
+expect P2_Run FALSE
+expect P1_FaultLamp FALSE
+expect P2_FaultLamp FALSE
+expect LowLevelLamp FALSE
+expect P1_Starts 0
+expect P2_Starts 0
+wait 2s
+expect P1_Run FALSE
+expect P2_Run FALSE
+expect P1_FaultLamp FALSE
+expect P2_FaultLamp FALSE
+
+scenario level is scaled from 0..27648 raw counts to 0..100 %
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set LevelRaw 0
+scan
+expect LevelPct ~ 0.0 0.01
+set LevelRaw 6912
+scan
+expect LevelPct ~ 25.0 0.01
+set LevelRaw 13824
+scan
+expect LevelPct ~ 50.0 0.01
+set LevelRaw 20736
+scan
+expect LevelPct ~ 75.0 0.01
+set LevelRaw 27648
+scan
+expect LevelPct ~ 100.0 0.01
+
+scenario level scaling is NOT clamped (legacy behaviour, pinned on purpose)
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set LevelRaw -1000
+scan
+expect LevelPct ~ -3.617 0.01
+set LevelRaw 30000
+scan
+expect LevelPct ~ 108.507 0.01
+
+# ------------------------------------------------------------ low-level alarm
+scenario low-level alarm sets below 10 % and clears above 15 % (hysteresis)
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set LevelRaw 13824
+scan
+expect LowLevelLamp FALSE
+set LevelRaw 2765                # 10.0007 %: not below 10 %
+wait 1s
+expect LowLevelLamp FALSE
+set LevelRaw 2764                # 9.9971 %: below 10 %
+scan
+expect LowLevelLamp TRUE
+set LevelRaw 3318                # 12 %: inside the band, stays on
+wait 1s
+expect LowLevelLamp TRUE
+set LevelRaw 4147                # 14.9993 %: still not above 15 %
+wait 1s
+expect LowLevelLamp TRUE
+set LevelRaw 4148                # 15.0029 %: clears
+scan
+expect LowLevelLamp FALSE
+set LevelRaw 3318                # back into the band: stays clear
+wait 1s
+expect LowLevelLamp FALSE
+
+scenario an empty tank at power-up shows low level and blocks both pumps
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set LevelRaw 1000                # 3.6 %
+scan
+expect LowLevelLamp TRUE
+set P1_StartPB TRUE
+set P2_StartPB TRUE
+scan
+expect P1_Run FALSE
+expect P2_Run FALSE
+wait 1s
+expect P1_Run FALSE
+expect P2_Run FALSE
+expect P1_Starts 0
+expect P2_Starts 0
+
+scenario low level stops running pumps; they do not restart when the level recovers
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set LevelRaw 13824
+set P1_StartPB TRUE
+set P2_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P2_StartPB FALSE
+set P1_RunFb TRUE
+set P2_RunFb TRUE
+wait 2s
+expect P1_Run TRUE
+expect P2_Run TRUE
+set LevelRaw 2000                # 7.2 %: low level
+scan
+set P1_RunFb FALSE
+set P2_RunFb FALSE
+wait 100ms
+expect P1_Run FALSE
+expect P2_Run FALSE
+expect LowLevelLamp TRUE
+expect P1_FaultLamp FALSE        # a low-level stop is not a pump fault
+expect P2_FaultLamp FALSE
+set LevelRaw 13824               # tank refilled
+wait 2s
+expect LowLevelLamp FALSE
+expect P1_Run FALSE              # no automatic restart
+expect P2_Run FALSE
+set P1_StartPB TRUE              # an operator start works again
+scan
+set P1_StartPB FALSE
+wait 500ms
+expect P1_Run TRUE
+expect P2_Run FALSE
+
+# ------------------------------------------------------------ start and stop
+scenario pump 1 starts, seals in and stops; pump 2 is not affected
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+expect P1_Run TRUE
+expect P2_Run FALSE
+set P1_StartPB FALSE
+set P1_RunFb TRUE
+wait 5s
+expect P1_Run TRUE
+expect P2_Run FALSE
+expect P1_FaultLamp FALSE
+set P1_StopPB_NC FALSE           # press stop
+scan
+set P1_RunFb FALSE
+wait 100ms
+expect P1_Run FALSE
+set P1_StopPB_NC TRUE            # release stop: no restart
+wait 1s
+expect P1_Run FALSE
+expect P1_FaultLamp FALSE
+
+scenario pump 2 starts, seals in and stops; pump 1 is not affected
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P2_StartPB TRUE
+scan
+expect P2_Run TRUE
+expect P1_Run FALSE
+set P2_StartPB FALSE
+set P2_RunFb TRUE
+wait 8s
+expect P2_Run TRUE
+expect P1_Run FALSE
+expect P2_FaultLamp FALSE
+set P2_StopPB_NC FALSE
+scan
+set P2_RunFb FALSE
+wait 100ms
+expect P2_Run FALSE
+set P2_StopPB_NC TRUE
+wait 1s
+expect P2_Run FALSE
+
+scenario stop wins over start on both pumps
+set LevelRaw 13824
+set P1_StopPB_NC FALSE
+set P2_StopPB_NC FALSE
+set P1_StartPB TRUE
+set P2_StartPB TRUE
+scan
+expect P1_Run FALSE
+expect P2_Run FALSE
+wait 1s
+expect P1_Run FALSE
+expect P2_Run FALSE
+
+scenario a broken stop-button wire stops a running pump (fail-safe NC)
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P2_StartPB TRUE
+scan
+set P2_StartPB FALSE
+set P2_RunFb TRUE
+wait 1s
+expect P2_Run TRUE
+set P2_StopPB_NC FALSE           # wire break
+scan
+expect P2_Run FALSE
+
+# ------------------------------------------------------------ feedback faults
+scenario pump 1 without run feedback faults after 3 s
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+wait 2700ms                      # no feedback, still inside 3 s
+expect P1_Run TRUE
+expect P1_FaultLamp FALSE
+until P1_FaultLamp = TRUE within 600ms
+wait 100ms
+expect P1_Run FALSE
+expect P2_FaultLamp FALSE
+
+scenario pump 2 without run feedback faults after 5 s (not 3 s, not 4 s)
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P2_StartPB TRUE
+scan
+set P2_StartPB FALSE
+wait 4700ms                      # no feedback, still inside 5 s
+expect P2_Run TRUE
+expect P2_FaultLamp FALSE
+until P2_FaultLamp = TRUE within 600ms
+wait 100ms
+expect P2_Run FALSE
+expect P1_FaultLamp FALSE
+
+scenario feedback that arrives in time never faults the pumps
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+set P2_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P2_StartPB FALSE
+wait 2500ms
+set P1_RunFb TRUE                # pump 1 proves running after 2.5 s
+wait 2000ms
+set P2_RunFb TRUE                # pump 2 after 4.5 s
+wait 1m
+expect P1_Run TRUE
+expect P2_Run TRUE
+expect P1_FaultLamp FALSE
+expect P2_FaultLamp FALSE
+
+scenario losing feedback while running faults the pump after its timeout
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P1_RunFb TRUE
+wait 10s
+set P1_RunFb FALSE               # contactor drops out / overload trips
+wait 2700ms
+expect P1_Run TRUE
+expect P1_FaultLamp FALSE
+until P1_FaultLamp = TRUE within 600ms
+
+scenario each pump has its own feedback timer
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+set P2_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P2_StartPB FALSE
+set P2_RunFb TRUE                # pump 2 healthy, pump 1 has no feedback
+until P1_FaultLamp = TRUE within 3500ms
+wait 100ms
+expect P1_Run FALSE
+expect P2_Run TRUE
+expect P2_FaultLamp FALSE
+wait 10s
+expect P2_Run TRUE
+expect P2_FaultLamp FALSE
+
+scenario a feedback signal without a run command raises nothing (legacy has no such check)
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_RunFb TRUE
+set P2_RunFb TRUE
+wait 10s
+expect P1_Run FALSE
+expect P2_Run FALSE
+expect P1_FaultLamp FALSE
+expect P2_FaultLamp FALSE
+
+# ------------------------------------------------------------ latching and reset
+scenario a fault stays latched and blocks restarting
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+until P1_FaultLamp = TRUE within 3500ms
+wait 2s
+expect P1_FaultLamp TRUE
+expect P1_Run FALSE
+set P1_StartPB TRUE              # try to restart
+scan
+expect P1_Run FALSE
+wait 1s
+expect P1_Run FALSE
+set P1_StartPB FALSE
+expect P1_FaultLamp TRUE
+
+scenario reset clears the fault but does not restart the pump
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+until P1_FaultLamp = TRUE within 3500ms
+wait 1s
+set ResetPB TRUE                 # a 200 ms press
+wait 200ms
+set ResetPB FALSE
+wait 100ms
+expect P1_FaultLamp FALSE
+expect P1_Run FALSE
+wait 2s
+expect P1_Run FALSE
+set P1_StartPB TRUE              # a new start is accepted
+scan
+set P1_StartPB FALSE
+set P1_RunFb TRUE
+wait 1s
+expect P1_Run TRUE
+expect P1_FaultLamp FALSE
+
+scenario one reset press clears the faults of both pumps
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+set P2_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P2_StartPB FALSE
+wait 6s
+expect P1_FaultLamp TRUE
+expect P2_FaultLamp TRUE
+set ResetPB TRUE
+wait 200ms
+set ResetPB FALSE
+wait 100ms
+expect P1_FaultLamp FALSE
+expect P2_FaultLamp FALSE
+
+scenario reset works on the press, so a held reset button cannot hide a new fault
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set ResetPB TRUE                 # held (or jammed) from the start
+scan
+set P2_StartPB TRUE
+scan
+set P2_StartPB FALSE
+until P2_FaultLamp = TRUE within 5600ms
+wait 2s
+expect P2_FaultLamp TRUE
+expect P2_Run FALSE
+
+# ------------------------------------------------------------ start counters
+scenario each pump counts its own starts, once per start
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P1_RunFb TRUE
+wait 2s
+expect P1_Starts 1               # counted once, not once per scan
+expect P2_Starts 0
+set P1_StartPB TRUE              # pressing start again while running
+scan
+set P1_StartPB FALSE
+wait 1s
+expect P1_Starts 1
+set P1_StopPB_NC FALSE
+scan
+set P1_StopPB_NC TRUE
+set P1_RunFb FALSE
+wait 500ms
+set P1_StartPB TRUE              # second start
+scan
+set P1_StartPB FALSE
+set P1_RunFb TRUE
+wait 500ms
+expect P1_Starts 2
+set P2_StartPB TRUE
+scan
+set P2_StartPB FALSE
+set P2_RunFb TRUE
+wait 500ms
+expect P1_Starts 2
+expect P2_Starts 1
+
+scenario blocked start attempts are not counted
+set LevelRaw 13824
+set P1_StopPB_NC FALSE           # stop held
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+wait 500ms
+expect P1_Starts 0
+set P1_StopPB_NC TRUE
+set P2_StartPB TRUE              # pump 2: start without feedback -> fault
+scan
+set P2_StartPB FALSE
+until P2_FaultLamp = TRUE within 5600ms
+expect P2_Starts 1
+set P2_StartPB TRUE              # blocked by the fault
+scan
+set P2_StartPB FALSE
+wait 500ms
+expect P2_Starts 1
+expect P2_Run FALSE

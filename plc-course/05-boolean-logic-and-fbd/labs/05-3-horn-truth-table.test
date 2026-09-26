@@ -1,0 +1,187 @@
+# Lab 05-3 acceptance tests: wet-well alarm horn from its truth table.
+# Tested: every one of the 16 rows of the recorded truth table, one scenario per
+# row (fresh PLC each time), then all 16 rows again in a single run in Gray-code
+# order (one input changes per step), which proves the horn has no memory.
+# Any correct logic passes, minimal or not; the K-map is how you find the
+# smallest one. Only interface variables are used.
+
+scenario row  0: level normal, no pump -> horn off
+set HighLevel FALSE
+set LowLevel FALSE
+set Pump1Run FALSE
+set Pump2Run FALSE
+scan
+expect Horn FALSE
+
+scenario row  1: level normal, pump 2 running -> horn off
+set HighLevel FALSE
+set LowLevel FALSE
+set Pump1Run FALSE
+set Pump2Run TRUE
+scan
+expect Horn FALSE
+
+scenario row  2: level normal, pump 1 running -> horn off
+set HighLevel FALSE
+set LowLevel FALSE
+set Pump1Run TRUE
+set Pump2Run FALSE
+scan
+expect Horn FALSE
+
+scenario row  3: level normal, both pumps running -> horn off
+set HighLevel FALSE
+set LowLevel FALSE
+set Pump1Run TRUE
+set Pump2Run TRUE
+scan
+expect Horn FALSE
+
+scenario row  4: low level, no pump -> horn off
+set HighLevel FALSE
+set LowLevel TRUE
+set Pump1Run FALSE
+set Pump2Run FALSE
+scan
+expect Horn FALSE
+
+scenario row  5: low level, pump 2 running -> horn ON
+set HighLevel FALSE
+set LowLevel TRUE
+set Pump1Run FALSE
+set Pump2Run TRUE
+scan
+expect Horn TRUE
+
+scenario row  6: low level, pump 1 running -> horn ON
+set HighLevel FALSE
+set LowLevel TRUE
+set Pump1Run TRUE
+set Pump2Run FALSE
+scan
+expect Horn TRUE
+
+scenario row  7: low level, both pumps running -> horn ON
+set HighLevel FALSE
+set LowLevel TRUE
+set Pump1Run TRUE
+set Pump2Run TRUE
+scan
+expect Horn TRUE
+
+scenario row  8: high level, no pump -> horn ON
+set HighLevel TRUE
+set LowLevel FALSE
+set Pump1Run FALSE
+set Pump2Run FALSE
+scan
+expect Horn TRUE
+
+scenario row  9: high level, pump 2 running -> horn off
+set HighLevel TRUE
+set LowLevel FALSE
+set Pump1Run FALSE
+set Pump2Run TRUE
+scan
+expect Horn FALSE
+
+scenario row 10: high level, pump 1 running -> horn off
+set HighLevel TRUE
+set LowLevel FALSE
+set Pump1Run TRUE
+set Pump2Run FALSE
+scan
+expect Horn FALSE
+
+scenario row 11: high level, both pumps running -> horn off
+set HighLevel TRUE
+set LowLevel FALSE
+set Pump1Run TRUE
+set Pump2Run TRUE
+scan
+expect Horn FALSE
+
+scenario row 12: both floats on, no pump -> horn ON
+set HighLevel TRUE
+set LowLevel TRUE
+set Pump1Run FALSE
+set Pump2Run FALSE
+scan
+expect Horn TRUE
+
+scenario row 13: both floats on, pump 2 running -> horn ON
+set HighLevel TRUE
+set LowLevel TRUE
+set Pump1Run FALSE
+set Pump2Run TRUE
+scan
+expect Horn TRUE
+
+scenario row 14: both floats on, pump 1 running -> horn ON
+set HighLevel TRUE
+set LowLevel TRUE
+set Pump1Run TRUE
+set Pump2Run FALSE
+scan
+expect Horn TRUE
+
+scenario row 15: both floats on, both pumps running -> horn ON
+set HighLevel TRUE
+set LowLevel TRUE
+set Pump1Run TRUE
+set Pump2Run TRUE
+scan
+expect Horn TRUE
+
+scenario all 16 rows in one run, in Gray-code order (no memory allowed)
+set HighLevel FALSE
+set LowLevel FALSE
+set Pump1Run FALSE
+set Pump2Run FALSE
+scan
+expect Horn FALSE              # row 0: level normal, no pump
+set Pump2Run TRUE
+scan
+expect Horn FALSE              # row 1: level normal, pump 2 running
+set Pump1Run TRUE
+scan
+expect Horn FALSE              # row 3: level normal, both pumps running
+set Pump2Run FALSE
+scan
+expect Horn FALSE              # row 2: level normal, pump 1 running
+set LowLevel TRUE
+scan
+expect Horn TRUE               # row 6: low level, pump 1 running
+set Pump2Run TRUE
+scan
+expect Horn TRUE               # row 7: low level, both pumps running
+set Pump1Run FALSE
+scan
+expect Horn TRUE               # row 5: low level, pump 2 running
+set Pump2Run FALSE
+scan
+expect Horn FALSE              # row 4: low level, no pump
+set HighLevel TRUE
+scan
+expect Horn TRUE               # row 12: both floats on, no pump
+set Pump2Run TRUE
+scan
+expect Horn TRUE               # row 13: both floats on, pump 2 running
+set Pump1Run TRUE
+scan
+expect Horn TRUE               # row 15: both floats on, both pumps running
+set Pump2Run FALSE
+scan
+expect Horn TRUE               # row 14: both floats on, pump 1 running
+set LowLevel FALSE
+scan
+expect Horn FALSE              # row 10: high level, pump 1 running
+set Pump2Run TRUE
+scan
+expect Horn FALSE              # row 11: high level, both pumps running
+set Pump1Run FALSE
+scan
+expect Horn FALSE              # row 9: high level, pump 2 running
+set Pump2Run FALSE
+scan
+expect Horn TRUE               # row 8: high level, no pump

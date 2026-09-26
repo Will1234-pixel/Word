@@ -1,0 +1,757 @@
+# Lab 20-2 acceptance tests: cause-and-effect matrix for V-301 / P-301.
+# TRAINING EXERCISE ONLY - these tests check teaching logic, not a real safety function.
+#
+# The matrix under test (X = trip). Outputs are de-energise-to-trip, so a
+# tripped effect reads FALSE and every blank cell must stay TRUE.
+#
+#                          E1 XV301_Sol  E2 P301_Permit  E3 XV302_Sol  E4 XV303_Sol   delay
+#   C1 HS300_NC   ESD          X             X              X             X          -
+#   C2 LSHH301_NC level HH     X                                                     -
+#   C3 LSLL301_NC level LL                   X              X                        2 s
+#   C4 PSHH301_NC V-301 PHH    X                                          X          -
+#   C5 PSHH302_NC P-301 PHH                  X                                       -
+#   C6 TSHH303_NC bearing THH                X                                       5 s
+#
+# Part 1 walks the matrix one row at a time, checking every X AND every blank,
+# the latch, the reset and the first-out, like a C&E test sheet. Part 2 tests
+# delays and resets, part 3 first-out, part 4 bypasses (key, 60 s expiry, alarm).
+# Every scenario starts with all trip contacts healthy (TRUE).
+
+# ---------------------------------------------------------------- part 1
+
+scenario all causes healthy: every effect energised, no alarms
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+wait 2s
+expect XV301_Sol TRUE
+expect P301_Permit TRUE
+expect XV302_Sol TRUE
+expect XV303_Sol TRUE
+expect TripAlm FALSE
+expect BypassAlm FALSE
+expect FirstOut 0
+expect CauseLatched[1] FALSE
+expect CauseLatched[2] FALSE
+expect CauseLatched[3] FALSE
+expect CauseLatched[4] FALSE
+expect CauseLatched[5] FALSE
+expect CauseLatched[6] FALSE
+
+scenario row C1 HS-300 ESD: trips E1 E2 E3 E4, latches, resets when healthy
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set HS300_NC FALSE             # cause C1
+wait 50ms
+expect CauseLatched[1] TRUE
+expect CauseLatched[2] FALSE
+expect CauseLatched[3] FALSE
+expect CauseLatched[4] FALSE
+expect CauseLatched[5] FALSE
+expect CauseLatched[6] FALSE
+expect XV301_Sol FALSE         # X
+expect P301_Permit FALSE       # X
+expect XV302_Sol FALSE         # X
+expect XV303_Sol FALSE         # X
+expect TripAlm TRUE
+expect FirstOut 1
+set HS300_NC TRUE              # ESD button released
+wait 1s
+expect CauseLatched[1] TRUE    # latched: nothing comes back by itself
+expect TripAlm TRUE            # the alarm follows the latch, not the contact
+expect XV301_Sol FALSE
+expect P301_Permit FALSE
+expect XV302_Sol FALSE
+expect XV303_Sol FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[1] FALSE
+expect XV301_Sol TRUE
+expect P301_Permit TRUE
+expect XV302_Sol TRUE
+expect XV303_Sol TRUE
+expect TripAlm FALSE
+expect FirstOut 0
+
+scenario row C2 LSHH-301 level HH: trips E1 only
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSHH301_NC FALSE           # cause C2
+wait 50ms
+expect CauseLatched[2] TRUE
+expect CauseLatched[1] FALSE
+expect CauseLatched[3] FALSE
+expect CauseLatched[4] FALSE
+expect CauseLatched[5] FALSE
+expect CauseLatched[6] FALSE
+expect XV301_Sol FALSE         # X
+expect P301_Permit TRUE        # blank
+expect XV302_Sol TRUE          # blank
+expect XV303_Sol TRUE          # blank
+expect TripAlm TRUE
+expect FirstOut 2
+set LSHH301_NC TRUE
+wait 1s
+expect CauseLatched[2] TRUE
+expect XV301_Sol FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[2] FALSE
+expect XV301_Sol TRUE
+expect TripAlm FALSE
+expect FirstOut 0
+
+scenario row C3 LSLL-301 level LL: trips E2 and E3 after 2 s
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSLL301_NC FALSE           # cause C3
+wait 1800ms
+expect CauseLatched[3] FALSE   # 90 % of the delay: not yet
+expect P301_Permit TRUE
+expect XV302_Sol TRUE
+expect TripAlm FALSE
+wait 400ms
+expect CauseLatched[3] TRUE    # 110 %: tripped
+expect CauseLatched[1] FALSE
+expect CauseLatched[2] FALSE
+expect CauseLatched[4] FALSE
+expect CauseLatched[5] FALSE
+expect CauseLatched[6] FALSE
+expect XV301_Sol TRUE          # blank
+expect P301_Permit FALSE       # X
+expect XV302_Sol FALSE         # X
+expect XV303_Sol TRUE          # blank
+expect TripAlm TRUE
+expect FirstOut 3
+set LSLL301_NC TRUE
+wait 1s
+expect CauseLatched[3] TRUE
+expect P301_Permit FALSE
+expect XV302_Sol FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[3] FALSE
+expect P301_Permit TRUE
+expect XV302_Sol TRUE
+expect FirstOut 0
+
+scenario row C4 PSHH-301 V-301 pressure HH: trips E1 and E4
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set PSHH301_NC FALSE           # cause C4
+wait 50ms
+expect CauseLatched[4] TRUE
+expect CauseLatched[1] FALSE
+expect CauseLatched[2] FALSE
+expect CauseLatched[3] FALSE
+expect CauseLatched[5] FALSE
+expect CauseLatched[6] FALSE
+expect XV301_Sol FALSE         # X
+expect P301_Permit TRUE        # blank
+expect XV302_Sol TRUE          # blank
+expect XV303_Sol FALSE         # X: de-energised, the blowdown valve opens
+expect TripAlm TRUE
+expect FirstOut 4
+set PSHH301_NC TRUE
+wait 1s
+expect CauseLatched[4] TRUE
+expect XV303_Sol FALSE
+expect TripAlm TRUE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[4] FALSE
+expect XV301_Sol TRUE
+expect XV303_Sol TRUE
+expect FirstOut 0
+
+scenario row C5 PSHH-302 pump discharge pressure HH: trips E2 only
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set PSHH302_NC FALSE           # cause C5
+wait 50ms
+expect CauseLatched[5] TRUE
+expect CauseLatched[1] FALSE
+expect CauseLatched[2] FALSE
+expect CauseLatched[3] FALSE
+expect CauseLatched[4] FALSE
+expect CauseLatched[6] FALSE
+expect XV301_Sol TRUE          # blank
+expect P301_Permit FALSE       # X
+expect XV302_Sol TRUE          # blank
+expect XV303_Sol TRUE          # blank
+expect TripAlm TRUE
+expect FirstOut 5
+set PSHH302_NC TRUE
+wait 1s
+expect CauseLatched[5] TRUE
+expect P301_Permit FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[5] FALSE
+expect P301_Permit TRUE
+expect FirstOut 0
+
+scenario row C6 TSHH-303 bearing temperature HH: trips E2 after 5 s
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set TSHH303_NC FALSE           # cause C6
+wait 4500ms
+expect CauseLatched[6] FALSE   # 90 %
+expect P301_Permit TRUE
+wait 1000ms
+expect CauseLatched[6] TRUE    # 110 %
+expect CauseLatched[1] FALSE
+expect CauseLatched[2] FALSE
+expect CauseLatched[3] FALSE
+expect CauseLatched[4] FALSE
+expect CauseLatched[5] FALSE
+expect XV301_Sol TRUE          # blank
+expect P301_Permit FALSE       # X
+expect XV302_Sol TRUE          # blank
+expect XV303_Sol TRUE          # blank
+expect TripAlm TRUE
+expect FirstOut 6
+set TSHH303_NC TRUE
+wait 1s
+expect CauseLatched[6] TRUE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[6] FALSE
+expect P301_Permit TRUE
+expect FirstOut 0
+
+# ---------------------------------------------------------------- part 2
+
+scenario a contact that opens for less than the delay does not trip, and the delay starts again
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSLL301_NC FALSE           # 1.5 s low-low...
+wait 1500ms
+set LSLL301_NC TRUE            # ...recovers for 100 ms...
+wait 100ms
+set LSLL301_NC FALSE           # ...and goes again: 3 s in total, but never 2 s in one go
+wait 1500ms
+expect CauseLatched[3] FALSE
+expect P301_Permit TRUE
+wait 700ms                     # now 2.2 s in one go
+expect CauseLatched[3] TRUE
+expect P301_Permit FALSE
+
+scenario reset is refused while the cause is still present
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set PSHH302_NC FALSE
+wait 50ms
+expect CauseLatched[5] TRUE
+set ResetPB TRUE               # reset with the cause still there
+scan
+expect CauseLatched[5] TRUE    # checked on the scan of the press: no one-scan blip
+expect P301_Permit FALSE
+scan
+expect P301_Permit FALSE
+set ResetPB FALSE
+wait 500ms
+expect CauseLatched[5] TRUE
+expect P301_Permit FALSE
+set PSHH302_NC TRUE            # the cause clears
+wait 1s
+expect CauseLatched[5] TRUE    # no automatic reset, and the early press does not count
+expect P301_Permit FALSE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[5] FALSE
+expect P301_Permit TRUE
+
+scenario reset needs the contact healthy, not just the delay not yet run out
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSLL301_NC FALSE           # C3 low-low: trips after 2 s
+wait 2200ms
+expect CauseLatched[3] TRUE
+set LSLL301_NC TRUE            # the level recovers...
+wait 500ms
+set LSLL301_NC FALSE           # ...and falls again: the contact is open, the 2 s has not run out
+wait 500ms
+set ResetPB TRUE               # a reset now must be refused: the contact is not healthy
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[3] TRUE
+expect P301_Permit FALSE
+expect XV302_Sol FALSE
+wait 2s
+expect CauseLatched[3] TRUE
+set LSLL301_NC TRUE
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[3] FALSE
+expect P301_Permit TRUE
+
+scenario reset acts on the press, not on a held button
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSHH301_NC FALSE
+wait 50ms
+set ResetPB TRUE               # held (or stuck) through the recovery
+wait 500ms
+set LSHH301_NC TRUE
+wait 1s
+expect CauseLatched[2] TRUE
+expect XV301_Sol FALSE
+set ResetPB FALSE
+wait 100ms
+expect CauseLatched[2] TRUE
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[2] FALSE
+expect XV301_Sol TRUE
+
+scenario reset clears the causes that are healthy and keeps the others
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSHH301_NC FALSE           # C2 first
+wait 500ms
+set PSHH302_NC FALSE           # then C5
+wait 500ms
+expect CauseLatched[2] TRUE
+expect CauseLatched[5] TRUE
+expect FirstOut 2
+set LSHH301_NC TRUE            # only C2 recovers
+wait 500ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[2] FALSE   # healthy: cleared
+expect CauseLatched[5] TRUE    # still present: stays latched
+expect XV301_Sol TRUE          # only C2 closes XV-301, so it is released
+expect P301_Permit FALSE       # C5 still stops P-301
+expect TripAlm TRUE
+expect FirstOut 2              # first-out held while anything is latched
+set PSHH302_NC TRUE
+wait 500ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[5] FALSE
+expect P301_Permit TRUE
+expect TripAlm FALSE
+expect FirstOut 0
+
+scenario an effect with several causes stays tripped until all of them are reset
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set PSHH301_NC FALSE           # C4: E1 and E4
+wait 50ms
+set LSHH301_NC FALSE           # C2: E1
+wait 50ms
+set PSHH301_NC TRUE            # C4 recovers, C2 does not
+wait 50ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[4] FALSE
+expect XV303_Sol TRUE          # E4 had only C4
+expect XV301_Sol FALSE         # E1 still held by C2
+expect FirstOut 4
+
+# ---------------------------------------------------------------- part 3
+
+scenario first-out keeps the first cause, not later ones
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set PSHH301_NC FALSE           # C4 first
+wait 200ms
+expect FirstOut 4
+set LSHH301_NC FALSE           # then C2
+wait 200ms
+expect FirstOut 4
+set HS300_NC FALSE             # then the ESD
+wait 200ms
+expect FirstOut 4
+expect CauseLatched[1] TRUE
+expect CauseLatched[2] TRUE
+expect CauseLatched[4] TRUE
+set PSHH301_NC TRUE
+set LSHH301_NC TRUE
+set HS300_NC TRUE
+wait 200ms
+expect FirstOut 4
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect TripAlm FALSE
+expect FirstOut 0
+set TSHH303_NC FALSE           # a new event after the full reset
+wait 5500ms
+expect FirstOut 6
+
+scenario first-out: causes that trip in the same scan show the lowest number
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set PSHH302_NC FALSE
+set LSHH301_NC FALSE
+wait 50ms
+expect CauseLatched[2] TRUE
+expect CauseLatched[5] TRUE
+expect FirstOut 2
+
+# ---------------------------------------------------------------- part 4
+
+scenario a bypass request without the key is ignored
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey FALSE
+scan
+set BypReq[2] TRUE
+wait 200ms
+expect Bypassed[2] FALSE
+expect BypassAlm FALSE
+set LSHH301_NC FALSE
+wait 50ms
+expect CauseLatched[2] TRUE
+expect XV301_Sol FALSE
+
+scenario a bypassed cause cannot trip, the bypass alarm is on, other causes still work
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[2] TRUE
+wait 200ms
+expect Bypassed[2] TRUE
+expect Bypassed[1] FALSE
+expect Bypassed[3] FALSE
+expect Bypassed[4] FALSE
+expect Bypassed[5] FALSE
+expect Bypassed[6] FALSE
+expect BypassAlm TRUE
+set LSHH301_NC FALSE           # the bypassed switch is tested by maintenance
+wait 2s
+expect CauseLatched[2] FALSE
+expect XV301_Sol TRUE
+expect TripAlm FALSE
+expect FirstOut 0
+set PSHH302_NC FALSE           # a real trip on another cause
+wait 50ms
+expect CauseLatched[5] TRUE
+expect P301_Permit FALSE
+expect FirstOut 5
+expect XV301_Sol TRUE
+
+scenario a bypass on one cause does not hide another cause of the same effect
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[4] TRUE             # bypass C4 (E1 and E4)...
+wait 200ms
+set PSHH301_NC FALSE           # ...so C4 going active does nothing
+wait 500ms
+expect CauseLatched[4] FALSE
+expect XV301_Sol TRUE
+expect XV303_Sol TRUE
+set LSHH301_NC FALSE           # C2 also closes XV-301, and is not bypassed
+wait 50ms
+expect CauseLatched[2] TRUE
+expect XV301_Sol FALSE
+expect XV303_Sol TRUE
+
+scenario the ESD push-button can never be bypassed
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[1] TRUE
+wait 200ms
+expect Bypassed[1] FALSE
+expect BypassAlm FALSE
+set HS300_NC FALSE
+wait 50ms
+expect CauseLatched[1] TRUE
+expect XV301_Sol FALSE
+expect P301_Permit FALSE
+expect XV302_Sol FALSE
+expect XV303_Sol FALSE
+
+scenario a bypass ends by itself after 60 s, even with the request still on
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[5] TRUE
+wait 54s
+expect Bypassed[5] TRUE        # 90 % of the bypass time
+expect BypassAlm TRUE
+wait 12s
+expect Bypassed[5] FALSE       # 110 %: expired
+expect BypassAlm FALSE
+wait 5s
+expect Bypassed[5] FALSE       # the request is still on, but it must not restart the bypass
+expect BypassAlm FALSE
+set PSHH302_NC FALSE           # the protection is back
+wait 50ms
+expect CauseLatched[5] TRUE
+expect P301_Permit FALSE
+
+scenario a cause still active when its bypass expires trips at the end of the bypass
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[2] TRUE
+wait 1s
+set LSHH301_NC FALSE           # the level switch is left in the trip state
+wait 53s                       # 54 s into the bypass
+expect CauseLatched[2] FALSE
+expect XV301_Sol TRUE
+wait 12s                       # 66 s: the bypass has expired
+expect Bypassed[2] FALSE
+expect CauseLatched[2] TRUE
+expect XV301_Sol FALSE
+expect FirstOut 2
+
+scenario a new request after expiry gives a fresh 60 s
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[3] TRUE
+wait 66s
+expect Bypassed[3] FALSE
+set BypReq[3] FALSE
+wait 100ms
+set BypReq[3] TRUE
+wait 54s
+expect Bypassed[3] TRUE
+wait 12s
+expect Bypassed[3] FALSE
+
+scenario each bypass times out on its own timer
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[4] TRUE             # C4 bypassed at t0
+wait 30s
+set BypReq[6] TRUE             # C6 bypassed 30 s later
+wait 24s
+expect Bypassed[4] TRUE        # C4 at 54 s
+expect Bypassed[6] TRUE
+wait 12s
+expect Bypassed[4] FALSE       # C4 at 66 s: expired
+expect Bypassed[6] TRUE        # C6 at 36 s: still running
+expect BypassAlm TRUE
+wait 18s
+expect Bypassed[6] TRUE        # C6 at 54 s
+wait 12s
+expect Bypassed[6] FALSE       # C6 at 66 s: expired
+expect BypassAlm FALSE
+
+scenario removing the request or turning the key off ends bypasses at once
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[4] TRUE
+wait 1s
+expect Bypassed[4] TRUE
+set BypReq[4] FALSE
+wait 50ms
+expect Bypassed[4] FALSE
+expect BypassAlm FALSE
+set BypReq[4] TRUE
+set BypReq[6] TRUE
+wait 1s
+expect Bypassed[4] TRUE
+expect Bypassed[6] TRUE
+set BypReq[4] FALSE            # one of two removed: the alarm stays on
+wait 50ms
+expect Bypassed[4] FALSE
+expect Bypassed[6] TRUE
+expect BypassAlm TRUE
+set BypReq[4] TRUE
+wait 1s
+expect Bypassed[4] TRUE
+set BypassKey FALSE            # key out: every bypass ends
+wait 50ms
+expect Bypassed[4] FALSE
+expect Bypassed[6] FALSE
+expect BypassAlm FALSE
+set BypassKey TRUE             # key back in, requests still set: no bypass without a new request
+wait 1s
+expect Bypassed[4] FALSE
+expect Bypassed[6] FALSE
+expect BypassAlm FALSE
+set BypReq[4] FALSE            # a new request (with the key in) starts a bypass again
+wait 100ms
+set BypReq[4] TRUE
+wait 100ms
+expect Bypassed[4] TRUE
+expect Bypassed[6] FALSE
+
+scenario a bypass lets maintenance reset a latched cause, but does not clear it by itself
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set TSHH303_NC FALSE           # bearing temperature switch stuck in trip
+wait 5500ms
+expect CauseLatched[6] TRUE
+expect P301_Permit FALSE
+set BypassKey TRUE
+set BypReq[6] TRUE
+wait 1s
+expect Bypassed[6] TRUE
+expect CauseLatched[6] TRUE    # the bypass alone does not clear the trip
+expect P301_Permit FALSE
+set ResetPB TRUE               # a deliberate reset with the bypass in place
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[6] FALSE
+expect P301_Permit TRUE
+expect TripAlm FALSE
+expect BypassAlm TRUE
+wait 10s
+expect CauseLatched[6] FALSE   # still masked
+set BypReq[6] FALSE            # maintenance removes the bypass without fixing the switch
+wait 50ms
+expect Bypassed[6] FALSE
+expect CauseLatched[6] TRUE    # the protection acts again at once: the contact has been open
+expect P301_Permit FALSE       # far longer than its 5 s delay

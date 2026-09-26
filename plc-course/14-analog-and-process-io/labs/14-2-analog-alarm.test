@@ -1,0 +1,267 @@
+# Lab 14-2 acceptance tests: FB_AnalogAlarm.
+# Two instances, set up by the program:
+#   LevelAlm on Level (%):     HH 90, H 80, L 20, LL 10, deadband 2.0, on-delay 3 s
+#   PressAlm on Pressure (bar): HH 8.0, H 7.0, L 2.0, LL 1.0, deadband 0.2, on-delay 0 s
+# The tests write Level and Pressure directly. Every scenario first puts both
+# values in their normal band. Timing checks sit at 90 % and 110 % of the delay.
+
+scenario no alarms while both values are in the normal band
+set Level 50.0
+set Pressure 5.0
+scan
+wait 5s
+expect LevelAlm.HH FALSE
+expect LevelAlm.H FALSE
+expect LevelAlm.L FALSE
+expect LevelAlm.LL FALSE
+expect PressAlm.HH FALSE
+expect PressAlm.H FALSE
+expect PressAlm.L FALSE
+expect PressAlm.LL FALSE
+
+scenario H needs the PV above the limit for the whole on-delay
+set Level 50.0
+set Pressure 5.0
+scan
+set Level 85.0
+wait 2700ms
+expect LevelAlm.H FALSE
+expect LevelAlm.HH FALSE
+wait 600ms
+expect LevelAlm.H TRUE
+expect LevelAlm.HH FALSE
+expect LevelAlm.L FALSE
+expect LevelAlm.LL FALSE
+
+scenario H clears only when the PV is back through the deadband, and then at once
+set Level 50.0
+set Pressure 5.0
+scan
+set Level 85.0
+wait 3300ms
+expect LevelAlm.H TRUE
+set Level 79.0                 # below the limit, inside the 2 % deadband
+wait 5s
+expect LevelAlm.H TRUE
+set Level 78.5                 # still inside (clears below 78)
+wait 5s
+expect LevelAlm.H TRUE
+set Level 77.5                 # through the deadband
+wait 50ms
+expect LevelAlm.H FALSE        # no off-delay
+set Level 79.5                 # coming back up inside the deadband does not re-raise
+wait 5s
+expect LevelAlm.H FALSE
+
+scenario a dip back below the limit restarts the on-delay
+set Level 50.0
+set Pressure 5.0
+scan
+set Level 85.0
+wait 2s
+set Level 75.0                 # drops back for a moment
+wait 200ms
+set Level 85.0
+wait 2s                        # 4 s above the limit in total, but only 2 s in one go
+expect LevelAlm.H FALSE
+wait 700ms                     # 2.7 s since it went back above
+expect LevelAlm.H FALSE
+wait 600ms                     # 3.3 s
+expect LevelAlm.H TRUE
+
+scenario HH has its own delay, and H stays active together with HH
+set Level 50.0
+set Pressure 5.0
+scan
+set Level 85.0
+wait 3300ms
+expect LevelAlm.H TRUE
+expect LevelAlm.HH FALSE
+set Level 95.0
+wait 2700ms
+expect LevelAlm.HH FALSE       # the HH delay starts when the PV passes 90
+expect LevelAlm.H TRUE
+wait 600ms
+expect LevelAlm.HH TRUE
+expect LevelAlm.H TRUE         # both limits are exceeded, both alarms are on
+set Level 89.0                 # inside the HH deadband (clears below 88)
+wait 2s
+expect LevelAlm.HH TRUE
+set Level 87.0
+wait 50ms
+expect LevelAlm.HH FALSE
+expect LevelAlm.H TRUE
+set Level 50.0
+wait 50ms
+expect LevelAlm.H FALSE
+
+scenario a jump straight past HH raises H and HH together after the delay
+set Level 50.0
+set Pressure 5.0
+scan
+set Level 95.0
+wait 2700ms
+expect LevelAlm.H FALSE
+expect LevelAlm.HH FALSE
+wait 600ms
+expect LevelAlm.H TRUE
+expect LevelAlm.HH TRUE
+
+scenario L and LL: the deadband is above the low limits
+set Level 50.0
+set Pressure 5.0
+scan
+set Level 15.0
+wait 2700ms
+expect LevelAlm.L FALSE
+wait 600ms
+expect LevelAlm.L TRUE
+expect LevelAlm.LL FALSE
+expect LevelAlm.H FALSE
+set Level 5.0
+wait 2700ms
+expect LevelAlm.LL FALSE
+wait 600ms
+expect LevelAlm.LL TRUE
+expect LevelAlm.L TRUE
+set Level 11.0                 # above LL, inside its deadband (clears above 12)
+wait 2s
+expect LevelAlm.LL TRUE
+set Level 12.5
+wait 50ms
+expect LevelAlm.LL FALSE
+expect LevelAlm.L TRUE
+set Level 21.0                 # above L, inside its deadband (clears above 22)
+wait 2s
+expect LevelAlm.L TRUE
+set Level 22.5
+wait 50ms
+expect LevelAlm.L FALSE
+
+scenario a noisy level around the limit does not chatter
+set Level 50.0
+set Pressure 5.0
+scan
+# noise: +/- 0.5 % around the H limit, 250 ms each way, for 7 s. The level is
+# above the limit for 3.5 s in total, but never for more than 250 ms in one go.
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+set Level 80.5
+wait 250ms
+set Level 79.5
+wait 250ms
+expect LevelAlm.H FALSE
+set Level 81.0                 # now a real rise
+wait 3300ms
+expect LevelAlm.H TRUE
+# the same noise while the alarm is active: the deadband holds it on
+set Level 79.0
+wait 100ms
+expect LevelAlm.H TRUE
+set Level 80.5
+wait 100ms
+expect LevelAlm.H TRUE
+set Level 79.0
+wait 100ms
+expect LevelAlm.H TRUE
+set Level 80.5
+wait 100ms
+expect LevelAlm.H TRUE
+set Level 79.0
+wait 100ms
+expect LevelAlm.H TRUE
+set Level 80.5
+wait 100ms
+expect LevelAlm.H TRUE
+set Level 79.0
+wait 1s
+expect LevelAlm.H TRUE         # one alarm, not ten
+
+scenario pressure alarms use their own zero delay and 0.2 bar deadband
+set Level 50.0
+set Pressure 5.0
+scan
+set Pressure 7.1
+wait 50ms
+expect PressAlm.H TRUE         # no delay configured
+expect PressAlm.HH FALSE
+set Pressure 6.9               # inside the 0.2 bar deadband
+wait 1s
+expect PressAlm.H TRUE
+set Pressure 6.7
+wait 50ms
+expect PressAlm.H FALSE
+set Pressure 8.3
+wait 50ms
+expect PressAlm.HH TRUE
+expect PressAlm.H TRUE
+set Pressure 5.0
+wait 50ms
+expect PressAlm.HH FALSE
+expect PressAlm.H FALSE
+set Pressure 1.5
+wait 50ms
+expect PressAlm.L TRUE
+expect PressAlm.LL FALSE
+set Pressure 0.9
+wait 50ms
+expect PressAlm.LL TRUE
+set Pressure 1.1               # inside the LL deadband (clears above 1.2)
+wait 1s
+expect PressAlm.LL TRUE
+set Pressure 1.3
+wait 50ms
+expect PressAlm.LL FALSE
+expect PressAlm.L TRUE
+expect LevelAlm.L FALSE        # the other instance is not affected
+expect LevelAlm.LL FALSE

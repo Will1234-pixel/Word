@@ -1,0 +1,137 @@
+# Lab 15-3 acceptance tests: cascade control of a steam heater.
+#
+#   TIC-101 (outer)  outlet temperature  ->  sets FlowSP of
+#   FIC-101 (inner)  steam flow          ->  moves the steam valve
+#
+# Plant (given): valve -> flow 0.05 t/h per %, Tau 1.5 s, dead time 0.5 s;
+#                flow -> temperature 12 degC per t/h, Tau 40 s, dead time 6 s, 20 degC at no flow.
+# At power-up FIC-101 is in MAN with the valve at 50 %: 2.5 t/h and 50 degC, all steady.
+# Modes: MAN (FlowManual), AUTO (local setpoint), CAS (setpoint from TIC-101).
+# The tests use only the interface tags; TempMax/TempMin are monitors in the test bench.
+
+scenario power-up in MAN: steady, and the flow setpoint tracks the measured flow
+scan
+expect ValvePos ~ 50.0 0.01
+expect FlowPV ~ 2.5 0.01
+expect TempPV ~ 50.0 0.05
+set ValveManual 60.0
+wait 10s
+expect ValvePos ~ 60.0 0.01
+expect FlowPV ~ 3.0 0.01            # 0.05 x 60
+expect FlowSP ~ 3.0 0.02            # PV tracking in MAN
+expect FlowSPLocal ~ 3.0 0.02
+
+scenario MAN to AUTO holds the present flow, then AUTO follows the local setpoint
+wait 1s
+set ValveManual 60.0
+wait 10s
+set FlowManual FALSE
+scan
+expect ValvePos ~ 60.0 0.2          # no bump
+wait 2s
+expect ValvePos ~ 60.0 0.5
+expect FlowPV ~ 3.0 0.02            # still 3.0 t/h, not an old setpoint
+set FlowSPLocal 2.0
+until FlowPV <= 2.02 within 10s
+wait 5s
+expect FlowPV ~ 2.0 0.02
+expect ValvePos ~ 40.0 0.5
+set FlowSPLocal 7.0                 # beyond the 0-5 t/h range
+scan
+expect FlowSP ~ 5.0 0.001           # the setpoint in use is limited to the range
+
+scenario AUTO to CAS is bumpless: TIC-101 starts from the flow setpoint in use
+wait 1s
+set FlowManual FALSE
+wait 5s
+set TempSP 56.0                     # the operator enters the new setpoint first...
+wait 1s
+set CascadeMode TRUE                # ...then switches to cascade
+scan
+expect FlowSP ~ 2.5 0.02            # no bump in the flow setpoint
+wait 1s
+expect FlowSP ~ 2.52 0.03           # it moves off smoothly (integral action)
+set TempMax 0.0
+until TempPV >= 55.5 within 150s
+wait 150s
+expect TempPV ~ 56.0 0.1
+expect FlowSP ~ 3.0 0.02            # 20 + 12 x 3.0 = 56 degC
+expect TempMax <= 56.4
+
+scenario CAS setpoint step, then CAS to AUTO keeps the flow (local setpoint tracked)
+wait 1s
+set FlowManual FALSE
+set CascadeMode TRUE
+wait 10s
+expect FlowSP ~ 2.5 0.02
+set TempMax 0.0
+set TempSP 60.0
+until TempPV >= 59.5 within 90s
+wait 120s
+expect TempPV ~ 60.0 0.1
+expect TempMax <= 60.5
+expect FlowSP ~ 3.333 0.02
+expect FlowSPLocal ~ 3.333 0.02     # the local setpoint has followed the cascade setpoint
+set CascadeMode FALSE
+scan
+expect FlowSP ~ 3.333 0.02          # no jump back to an old local setpoint
+wait 30s
+expect FlowSP ~ 3.333 0.02
+expect TempPV ~ 60.0 0.1
+
+scenario steam supply disturbance in CAS: FIC-101 corrects it before the temperature moves much
+wait 1s
+set FlowManual FALSE
+set CascadeMode TRUE
+wait 10s
+set TempMin 1000.0
+set TempMax 0.0
+set SupplyFactor 0.7                # 30 % less steam at the same valve position
+wait 10s
+expect FlowPV ~ 2.5 0.05            # the flow loop has already restored the flow
+wait 200s
+expect TempMin >= 49.0              # a single temperature loop would sag by about 3.5 degC
+expect TempMax <= 51.0
+expect TempPV ~ 50.0 0.1
+expect ValvePos ~ 71.4 0.5          # the valve opened to 2.5 / (0.05 x 0.7) = 71.4 %
+
+scenario CAS to MAN leaves the valve where it is; TIC-101 does not wind up in MAN
+wait 1s
+set FlowManual FALSE
+set CascadeMode TRUE
+wait 10s
+set SupplyFactor 0.7
+wait 200s
+expect ValvePos ~ 71.4 0.5
+set FlowManual TRUE                 # operator takes the flow loop to MAN
+scan
+expect ValvePos ~ 71.4 0.5          # the valve does not move
+wait 10s
+expect ValvePos ~ 71.4 0.5
+set ValveManual 40.0                # cut the steam: 1.4 t/h, temperature falls to 36.8 degC
+wait 60s                            # TempPV is now far below TempSP = 50
+expect FlowSP ~ 1.4 0.02            # PV tracking in MAN
+set FlowManual FALSE                # back to CAS (CascadeMode is still TRUE)
+scan
+expect ValvePos ~ 40.0 0.5          # no bump in the valve...
+expect FlowSP ~ 1.4 0.05            # ...nor in the setpoint: TIC-101 tracked, no windup
+set TempMax 0.0
+until TempPV >= 49.5 within 200s
+wait 100s
+expect TempPV ~ 50.0 0.2
+expect TempMax <= 51.0
+
+scenario an unreachable temperature setpoint drives FlowSP to 5 t/h and never beyond
+wait 1s
+set FlowManual FALSE
+set CascadeMode TRUE
+wait 10s
+set TempSP 100.0                    # the heater can reach at most 20 + 12 x 5 = 80 degC
+wait 300s
+expect FlowSP <= 5.0
+expect FlowSP >= 4.95
+expect ValvePos <= 100.0
+expect TempPV ~ 80.0 0.5
+set TempSP 60.0
+until FlowSP < 4.9 within 2s        # comes off the limit at once (anti-windup in TIC-101)
+until TempPV <= 60.5 within 120s

@@ -1,0 +1,168 @@
+# Lab 05-2 acceptance tests: two-out-of-three (2oo3) high-pressure trip vote.
+# TRAINING EXERCISE ONLY - not a design for a real safety function.
+# Tested: all 8 combinations of the three channels (one scenario per row of the
+# truth table), checking Trip, SDVSolenoid, Discrepancy and DiscA/B/C in each;
+# a broken wire counts as a trip demand (fail-safe); and a rising-then-falling
+# pressure walk through the channels, which also proves there is no memory.
+# The inputs are NC: TRUE = healthy, FALSE = high pressure or broken wire.
+# Only interface variables are used. Each scenario starts from a fresh PLC.
+
+scenario all three channels healthy: no trip, no discrepancy, valve held open
+set PSHH_A_NC TRUE
+set PSHH_B_NC TRUE
+set PSHH_C_NC TRUE
+scan
+expect Trip FALSE
+expect SDVSolenoid TRUE
+expect Discrepancy FALSE
+expect DiscA FALSE
+expect DiscB FALSE
+expect DiscC FALSE
+
+scenario only channel C demands: no trip, discrepancy on C
+set PSHH_A_NC TRUE
+set PSHH_B_NC TRUE
+set PSHH_C_NC FALSE
+scan
+expect Trip FALSE
+expect SDVSolenoid TRUE
+expect Discrepancy TRUE
+expect DiscA FALSE
+expect DiscB FALSE
+expect DiscC TRUE
+
+scenario only channel B demands: no trip, discrepancy on B
+set PSHH_A_NC TRUE
+set PSHH_B_NC FALSE
+set PSHH_C_NC TRUE
+scan
+expect Trip FALSE
+expect SDVSolenoid TRUE
+expect Discrepancy TRUE
+expect DiscA FALSE
+expect DiscB TRUE
+expect DiscC FALSE
+
+scenario B and C demand: trip, discrepancy on A (the one still healthy)
+set PSHH_A_NC TRUE
+set PSHH_B_NC FALSE
+set PSHH_C_NC FALSE
+scan
+expect Trip TRUE
+expect SDVSolenoid FALSE
+expect Discrepancy TRUE
+expect DiscA TRUE
+expect DiscB FALSE
+expect DiscC FALSE
+
+scenario only channel A demands: no trip, discrepancy on A
+set PSHH_A_NC FALSE
+set PSHH_B_NC TRUE
+set PSHH_C_NC TRUE
+scan
+expect Trip FALSE
+expect SDVSolenoid TRUE
+expect Discrepancy TRUE
+expect DiscA TRUE
+expect DiscB FALSE
+expect DiscC FALSE
+
+scenario A and C demand: trip, discrepancy on B (the one still healthy)
+set PSHH_A_NC FALSE
+set PSHH_B_NC TRUE
+set PSHH_C_NC FALSE
+scan
+expect Trip TRUE
+expect SDVSolenoid FALSE
+expect Discrepancy TRUE
+expect DiscA FALSE
+expect DiscB TRUE
+expect DiscC FALSE
+
+scenario A and B demand: trip, discrepancy on C (the one still healthy)
+set PSHH_A_NC FALSE
+set PSHH_B_NC FALSE
+set PSHH_C_NC TRUE
+scan
+expect Trip TRUE
+expect SDVSolenoid FALSE
+expect Discrepancy TRUE
+expect DiscA FALSE
+expect DiscB FALSE
+expect DiscC TRUE
+
+scenario all three channels demand: trip, and no discrepancy because they agree
+set PSHH_A_NC FALSE
+set PSHH_B_NC FALSE
+set PSHH_C_NC FALSE
+scan
+expect Trip TRUE
+expect SDVSolenoid FALSE
+expect Discrepancy FALSE
+expect DiscA FALSE
+expect DiscB FALSE
+expect DiscC FALSE
+
+scenario a single broken wire does not trip the plant but is reported
+set PSHH_A_NC TRUE
+set PSHH_B_NC TRUE
+set PSHH_C_NC TRUE
+scan
+expect SDVSolenoid TRUE
+set PSHH_B_NC FALSE            # wire to PSHH-101B cut: reads the same as a demand
+scan
+expect Trip FALSE
+expect SDVSolenoid TRUE
+expect Discrepancy TRUE
+expect DiscB TRUE
+wait 2s
+expect Trip FALSE              # nothing builds up over time
+expect Discrepancy TRUE
+set PSHH_C_NC FALSE            # a second broken wire: two channels now say trip
+scan
+expect Trip TRUE
+expect SDVSolenoid FALSE
+expect Discrepancy TRUE        # A (healthy wire) is now the odd one out
+expect DiscA TRUE
+expect DiscB FALSE
+expect DiscC FALSE
+
+scenario pressure rises past the three switches, then falls again
+set PSHH_A_NC TRUE
+set PSHH_B_NC TRUE
+set PSHH_C_NC TRUE
+scan
+expect Trip FALSE
+expect Discrepancy FALSE
+set PSHH_A_NC FALSE            # A trips first (slightly lower setting)
+scan
+expect Trip FALSE
+expect SDVSolenoid TRUE
+expect DiscA TRUE
+set PSHH_C_NC FALSE            # C follows: two out of three
+scan
+expect Trip TRUE
+expect SDVSolenoid FALSE
+expect DiscA FALSE
+expect DiscB TRUE              # B is now the odd one out
+expect DiscC FALSE
+set PSHH_B_NC FALSE            # B last: all agree
+scan
+expect Trip TRUE
+expect Discrepancy FALSE
+set PSHH_A_NC TRUE             # pressure falling: A resets first
+scan
+expect Trip TRUE               # B and C still demand
+expect DiscA TRUE
+set PSHH_C_NC TRUE
+scan
+expect Trip FALSE              # only B left: the vote clears (no latch in this lab)
+expect SDVSolenoid TRUE
+expect DiscB TRUE
+set PSHH_B_NC TRUE
+scan
+expect Trip FALSE
+expect Discrepancy FALSE
+expect DiscA FALSE
+expect DiscB FALSE
+expect DiscC FALSE

@@ -1,0 +1,217 @@
+# Lab 13-1 acceptance tests: pedestrian crossing as a state machine.
+# Checks the all-red start-up, red+amber before green, resting on green,
+# the minimum green, every phase duration (just before and just after each
+# preset), the lamps in every phase, the flashing clearance phase, the
+# request latch and WAIT lamp, requests during the walk phase (ignored) and
+# during the clearance phase (kept for the next cycle), and that the
+# pedestrian green never lights together with vehicle green or amber.
+# Interface: PedPB, CarRed, CarAmber, CarGreen, PedRed, PedGreen, WaitLamp,
+# StartupTime (3 s), RedAmberTime (2 s), MinGreen (10 s), AmberTime (3 s),
+# AllRedTime (2 s), WalkTime (6 s), PedClearTime (4 s).
+
+scenario power-up: all red, then red+amber, then green
+scan
+expect CarRed TRUE
+expect CarAmber FALSE
+expect CarGreen FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+expect WaitLamp FALSE
+wait 2700ms                    # 90 % of the 3 s start-up
+expect CarRed TRUE
+expect CarAmber FALSE
+expect CarGreen FALSE
+expect PedRed TRUE
+until CarAmber = TRUE within 600ms
+expect CarRed TRUE             # red + amber together
+expect CarGreen FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+wait 1800ms                    # 90 % of the 2 s red+amber
+expect CarRed TRUE
+expect CarAmber TRUE
+expect CarGreen FALSE
+until CarGreen = TRUE within 500ms
+expect CarRed FALSE
+expect CarAmber FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+
+scenario without a request the crossing rests on vehicle green
+until CarGreen = TRUE within 6s
+wait 60s
+expect CarGreen TRUE
+expect CarAmber FALSE
+expect CarRed FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+expect WaitLamp FALSE
+
+scenario an early request waits for the minimum green, then the full cycle runs
+until CarGreen = TRUE within 6s
+set PedPB TRUE                 # a short press, 100 ms
+wait 100ms
+set PedPB FALSE
+scan
+expect WaitLamp TRUE           # the request is remembered
+expect CarGreen TRUE
+wait 8800ms                    # about 9 s into the green
+expect CarGreen TRUE
+expect CarAmber FALSE
+expect WaitLamp TRUE
+until CarAmber = TRUE within 1500ms
+expect CarGreen FALSE
+expect CarRed FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+expect WaitLamp TRUE
+wait 2700ms                    # 90 % of amber
+expect CarAmber TRUE
+expect CarRed FALSE
+until CarRed = TRUE within 600ms
+expect CarAmber FALSE          # all red
+expect CarGreen FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+expect WaitLamp TRUE
+wait 1800ms                    # 90 % of all red
+expect PedGreen FALSE
+expect PedRed TRUE
+until PedGreen = TRUE within 500ms
+expect PedRed FALSE            # walk
+expect WaitLamp FALSE          # WAIT goes out when the green figure lights
+expect CarRed TRUE
+expect CarAmber FALSE
+expect CarGreen FALSE
+
+scenario walk and clearance last 6 s + 4 s, then red+amber and green again
+until CarGreen = TRUE within 6s
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+until PedGreen = TRUE within 16s
+wait 9600ms                    # 96 % of walk + clearance
+expect CarRed TRUE
+expect CarAmber FALSE
+expect CarGreen FALSE
+expect PedRed FALSE
+until CarAmber = TRUE within 900ms
+expect CarRed TRUE             # red + amber
+expect CarGreen FALSE
+expect PedGreen FALSE
+expect PedRed TRUE
+wait 1800ms
+expect CarGreen FALSE
+until CarGreen = TRUE within 500ms
+expect CarRed FALSE
+expect CarAmber FALSE
+expect PedRed TRUE
+expect PedGreen FALSE
+expect WaitLamp FALSE
+wait 30s                       # the served request is gone: rest on green
+expect CarGreen TRUE
+expect WaitLamp FALSE
+
+scenario steady green figure for the walk time, then it flashes
+until CarGreen = TRUE within 6s
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+until PedGreen = TRUE within 16s
+wait 5400ms                    # 90 % of walk: still steady
+expect PedGreen TRUE
+expect PedRed FALSE
+expect CarRed TRUE
+until PedGreen = FALSE within 1200ms
+expect PedRed FALSE            # clearance: the red figure is not lit yet
+expect CarRed TRUE
+expect CarGreen FALSE
+expect CarAmber FALSE
+until PedGreen = TRUE within 700ms
+expect CarGreen FALSE
+expect CarAmber FALSE
+wait 300ms                     # a flash lasts about half a second
+expect PedGreen TRUE
+until PedGreen = FALSE within 400ms
+wait 300ms
+expect PedGreen FALSE
+expect PedRed FALSE
+until PedGreen = TRUE within 400ms
+expect CarRed TRUE
+
+scenario a request made after the minimum green is served at once
+until CarGreen = TRUE within 6s
+wait 20s
+expect CarGreen TRUE
+set PedPB TRUE
+scan
+set PedPB FALSE
+until CarAmber = TRUE within 200ms
+expect CarGreen FALSE
+expect WaitLamp TRUE
+
+scenario a press during the walk phase is ignored
+until CarGreen = TRUE within 6s
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+until PedGreen = TRUE within 16s
+wait 2s
+set PedPB TRUE                 # pressed while the figure is already green
+wait 100ms
+set PedPB FALSE
+scan
+expect WaitLamp FALSE
+until CarGreen = TRUE within 12s
+wait 30s                       # no second cycle
+expect CarGreen TRUE
+expect PedGreen FALSE
+expect WaitLamp FALSE
+
+scenario a press during the clearance phase is kept for the next cycle
+until CarGreen = TRUE within 6s
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+until PedGreen = TRUE within 16s
+wait 7500ms                    # well into the flashing clearance phase
+expect CarRed TRUE
+expect PedRed FALSE
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+scan
+expect WaitLamp TRUE
+until CarGreen = TRUE within 6s
+expect WaitLamp TRUE
+wait 9s                        # the new green still gets its minimum
+expect CarGreen TRUE
+until CarAmber = TRUE within 1500ms
+expect CarGreen FALSE
+until PedGreen = TRUE within 6s
+expect WaitLamp FALSE
+
+scenario a request during start-up still gets the minimum green first
+wait 1s
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+scan
+expect WaitLamp TRUE
+expect CarGreen FALSE
+until CarGreen = TRUE within 6s
+wait 9s
+expect CarGreen TRUE
+expect WaitLamp TRUE
+until CarAmber = TRUE within 1500ms
+
+scenario the minimum green is adjustable
+set MinGreen T#20s
+until CarGreen = TRUE within 6s
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+wait 18s
+expect CarGreen TRUE
+expect CarAmber FALSE
+until CarAmber = TRUE within 3s

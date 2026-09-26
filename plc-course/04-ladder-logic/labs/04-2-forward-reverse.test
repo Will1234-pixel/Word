@@ -1,0 +1,339 @@
+# Lab 04-2 acceptance tests: forward/reverse motor with interlocks.
+# Tests: seal-in per direction, stop and overload stop both directions,
+# the software interlock (the contactors are never both on, the other
+# direction button is ignored while running, direction change only via Stop),
+# both direction buttons together start nothing, travel limits stop only
+# their own direction and still allow driving away, no automatic restarts,
+# and fail-safe NC wiring. Every check of one contactor is paired with a
+# check of the other, so "both on" is caught wherever it happens.
+# Healthy NC inputs read TRUE, so every scenario sets them first.
+
+scenario power-up with everything healthy: both contactors off
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+scan
+expect FwdK FALSE
+expect RevK FALSE
+wait 1s
+expect FwdK FALSE
+expect RevK FALSE
+
+scenario forward starts and seals in
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+expect FwdK TRUE
+expect RevK FALSE
+set FwdPB FALSE
+wait 2s
+expect FwdK TRUE
+expect RevK FALSE
+
+scenario reverse starts and seals in
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set RevPB TRUE
+scan
+expect RevK TRUE
+expect FwdK FALSE
+set RevPB FALSE
+wait 2s
+expect RevK TRUE
+expect FwdK FALSE
+
+scenario stop stops forward travel and it stays stopped
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+set FwdPB FALSE
+wait 500ms
+set StopPB_NC FALSE
+scan
+expect FwdK FALSE
+expect RevK FALSE
+set StopPB_NC TRUE
+wait 1s
+expect FwdK FALSE
+expect RevK FALSE
+
+scenario stop stops reverse travel and it stays stopped
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set RevPB TRUE
+scan
+set RevPB FALSE
+wait 500ms
+set StopPB_NC FALSE
+scan
+expect RevK FALSE
+expect FwdK FALSE
+set StopPB_NC TRUE
+wait 1s
+expect RevK FALSE
+expect FwdK FALSE
+
+scenario stop wins over either direction button
+set StopPB_NC FALSE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+expect FwdK FALSE
+expect RevK FALSE
+wait 500ms
+expect FwdK FALSE
+set FwdPB FALSE
+set RevPB TRUE
+scan
+expect RevK FALSE
+expect FwdK FALSE
+wait 500ms
+expect RevK FALSE
+
+scenario while running forward, the reverse button is ignored (interlock)
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+set FwdPB FALSE
+wait 500ms
+set RevPB TRUE                      # operator tries to reverse on the fly
+scan
+expect FwdK TRUE                    # forward carries on...
+expect RevK FALSE                   # ...and reverse must never join it
+wait 1s
+expect FwdK TRUE
+expect RevK FALSE
+set RevPB FALSE
+wait 500ms
+expect FwdK TRUE
+expect RevK FALSE
+
+scenario while running in reverse, the forward button is ignored (interlock)
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set RevPB TRUE
+scan
+set RevPB FALSE
+wait 500ms
+set FwdPB TRUE
+scan
+expect RevK TRUE
+expect FwdK FALSE
+wait 1s
+expect RevK TRUE
+expect FwdK FALSE
+set FwdPB FALSE
+wait 500ms
+expect RevK TRUE
+expect FwdK FALSE
+
+scenario direction change is possible via stop
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+set FwdPB FALSE
+wait 1s
+set StopPB_NC FALSE                 # stop first...
+scan
+expect FwdK FALSE
+expect RevK FALSE
+set StopPB_NC TRUE
+wait 500ms
+set RevPB TRUE                      # ...then select the other direction
+scan
+expect RevK TRUE
+expect FwdK FALSE
+set RevPB FALSE
+wait 1s
+expect RevK TRUE
+expect FwdK FALSE
+
+scenario both direction buttons pressed together from standstill start nothing
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+set RevPB TRUE
+scan
+expect FwdK FALSE
+expect RevK FALSE
+wait 1s
+expect FwdK FALSE
+expect RevK FALSE
+
+scenario forward limit stops forward travel; reverse can drive away from it
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+set FwdPB FALSE
+wait 1s
+set FwdLimitOK_NC FALSE             # trolley reaches the forward end: limit opens
+scan
+expect FwdK FALSE
+expect RevK FALSE
+set FwdPB TRUE                      # forward is blocked while the limit is operated
+wait 500ms
+expect FwdK FALSE
+expect RevK FALSE
+set FwdPB FALSE
+scan
+set RevPB TRUE                      # reverse is allowed, to move away
+scan
+expect RevK TRUE
+expect FwdK FALSE
+set RevPB FALSE
+wait 300ms
+set FwdLimitOK_NC TRUE              # the trolley has moved off the limit
+wait 1s
+expect RevK TRUE
+expect FwdK FALSE
+
+scenario reverse limit stops reverse travel; forward can drive away from it
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set RevPB TRUE
+scan
+set RevPB FALSE
+wait 1s
+set RevLimitOK_NC FALSE
+scan
+expect RevK FALSE
+expect FwdK FALSE
+set RevPB TRUE
+wait 500ms
+expect RevK FALSE
+expect FwdK FALSE
+set RevPB FALSE
+scan
+set FwdPB TRUE
+scan
+expect FwdK TRUE
+expect RevK FALSE
+set FwdPB FALSE
+wait 300ms
+set RevLimitOK_NC TRUE
+wait 1s
+expect FwdK TRUE
+expect RevK FALSE
+
+scenario after a limit stop the motor does not restart when the limit releases
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+set FwdPB FALSE
+wait 1s
+set FwdLimitOK_NC FALSE
+scan
+expect FwdK FALSE
+set FwdLimitOK_NC TRUE              # the load coasts back off the switch
+wait 1s
+expect FwdK FALSE                   # no automatic restart
+expect RevK FALSE
+
+scenario power-up parked on the forward limit: forward blocked, reverse allowed
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC FALSE
+set RevLimitOK_NC TRUE
+scan
+set FwdPB TRUE
+wait 500ms
+expect FwdK FALSE
+expect RevK FALSE
+set FwdPB FALSE
+scan
+set RevPB TRUE
+scan
+expect RevK TRUE
+expect FwdK FALSE
+
+scenario power-up parked on the reverse limit: forward runs off it
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC FALSE
+scan
+set FwdPB TRUE
+scan
+expect FwdK TRUE
+expect RevK FALSE
+set FwdPB FALSE
+wait 500ms
+expect FwdK TRUE                    # the reverse limit must not stop forward travel
+set RevLimitOK_NC TRUE
+wait 500ms
+expect FwdK TRUE
+expect RevK FALSE
+
+scenario overload trip stops the motor, blocks both directions, no restart after reset
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set RevPB TRUE
+scan
+set RevPB FALSE
+wait 1s
+set OverloadOK_NC FALSE             # overload trips
+scan
+expect RevK FALSE
+expect FwdK FALSE
+set FwdPB TRUE
+wait 300ms
+expect FwdK FALSE
+set FwdPB FALSE
+set RevPB TRUE
+wait 300ms
+expect RevK FALSE
+set RevPB FALSE
+set OverloadOK_NC TRUE              # overload reset
+wait 1s
+expect FwdK FALSE
+expect RevK FALSE
+
+scenario a broken stop-button wire stops the motor and blocks both directions
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set FwdLimitOK_NC TRUE
+set RevLimitOK_NC TRUE
+set FwdPB TRUE
+scan
+set FwdPB FALSE
+wait 500ms
+set StopPB_NC FALSE                 # wire break reads the same as Stop pressed
+scan
+expect FwdK FALSE
+set RevPB TRUE
+wait 300ms
+expect RevK FALSE
+expect FwdK FALSE

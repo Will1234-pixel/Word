@@ -1,0 +1,999 @@
+# Capstone 24-3 acceptance test (FAT): wastewater pump station.
+#
+# This is the factory acceptance test for the brief 24-3-pump-station.md.
+# It drives the given plant simulation (Sim) and plays the operator
+# (Hand-Off-Auto switches, AckPB, ResetPB) and the SCADA master (Cfg,
+# Scada.Cmd...). It checks behaviour, not internals: it only uses the
+# interface in the brief (the I/O list, Cfg, Scada and Sim).
+#
+# The simulation doubles as an independent referee. Its observer outputs
+# (Sim.Starts1, Sim.MaxPumpsRunning, Sim.DryRunS, Sim.MinLevel ...) record
+# what really happened in the wet well, whatever your program believes.
+#
+# Handy numbers (see the brief): 1 cm of level = 40 L. One pump = 25 L/s,
+# two = 40 L/s. With no inflow one pump takes about 152 s to pump down
+# from 1.55 m to the 0.60 m stop level.
+#
+# Every scenario starts from a freshly powered-up PLC with the level at
+# 1.00 m and no inflow, so each one first puts the HOA switches in Auto.
+# Scenario names start with the brief's milestone (M1-M7), and the line
+# under each one lists the requirements (FS-xx) it verifies.
+#
+# Push-buttons are pressed for 200 ms, like a real hand, so a debounced
+# input also works. One scenario (M5 NE43 limits) switches the simulation
+# off with SimEnable FALSE and writes the input image directly, because the
+# simulated transmitter never produces those currents. A program that reads
+# the I/O variables, not Sim, handles that without any change.
+
+# ======================================================================
+# M1  Measurement, power-up and the SCADA image
+# ======================================================================
+
+scenario M1 power-up: a healthy station idles quietly
+# Requirements: FS-15, FS-19, FS-41, FS-42
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 5s
+expect Pump1Run FALSE
+expect Pump2Run FALSE
+expect Pump3Run FALSE
+expect AlarmBeacon FALSE
+expect Scada.AlmActive 0
+expect Scada.AlmUnack 0
+expect Scada.StationStatus 16#0001          # level control, nothing else
+expect Scada.Pump[1].Status 16#0003         # in Auto + available
+expect Scada.Pump[2].Status 16#0003
+expect Scada.Pump[3].Status 16#0003
+expect Scada.LeadPump 1
+expect Scada.PumpsRunning 0
+expect Scada.LevelMm ~ 1000 20
+wait 1m
+expect Sim.MaxPumpsRunning 0                # nothing starts between the stop and start levels
+expect Scada.AlmUnack 0
+
+scenario M1 level scaling: raw counts to millimetres
+# Requirements: FS-01
+# The HOA switches are left out of Auto so that nothing moves the level.
+# 10 s per step leaves time for a level filter (time constant up to 2 s).
+set Sim.Level 0.50
+scan
+wait 10s
+expect Scada.LevelMm ~ 500 20
+set Sim.Level 1.25
+wait 10s
+expect Scada.LevelMm ~ 1250 20
+set Sim.Level 2.00
+wait 10s
+expect Scada.LevelMm ~ 2000 20
+set Sim.Level 3.10
+wait 10s
+expect Scada.LevelMm ~ 3100 20
+expect Sim.MaxPumpsRunning 0
+
+# ======================================================================
+# M2  Level control: duty, assist, standby
+# ======================================================================
+
+scenario M2 lead pump starts at the duty start level and stops at the duty stop level
+# Requirements: FS-09, FS-20
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.45
+set Sim.InflowLps 10.0
+scan
+until Sim.Level >= 1.48 within 30s
+expect Pump1Run FALSE                       # not yet: below 1.50 m
+until Pump1Run TRUE within 20s
+expect Sim.Level < 1.52
+expect Pump2Run FALSE
+expect Pump3Run FALSE
+wait 30s
+expect Pump1Running TRUE
+expect Scada.PumpsRunning 1
+expect Scada.Pump[1].Status 16#000F         # auto, available, commanded, running
+expect Scada.StationStatus 16#0005          # level control + pumping
+until Sim.Level <= 0.62 within 5m
+expect Pump1Run TRUE                        # still above the stop level
+until Pump1Run FALSE within 20s
+expect Sim.Level ~ 0.60 0.02
+expect Sim.MaxPumpsRunning 1
+wait 20s
+expect Pump1Run FALSE                       # no restart: level far below the start level
+expect Pump2Run FALSE
+expect Pump3Run FALSE
+
+scenario M2 start and stop levels are the SCADA setpoints, not constants
+# Requirements: FS-09, FS-44
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Cfg.DutyStartMm 1200
+set Cfg.DutyStopMm 800
+set Sim.Level 1.15
+set Sim.InflowLps 10.0
+scan
+until Sim.Level >= 1.18 within 30s
+expect Pump1Run FALSE
+until Pump1Run TRUE within 20s
+expect Sim.Level < 1.22
+until Pump1Run FALSE within 5m
+expect Sim.Level ~ 0.80 0.02
+set Cfg.DutyStartMm 1000                    # SCADA writes new setpoints while the station runs
+set Cfg.DutyStopMm 700
+until Sim.Level >= 0.98 within 2m
+expect Scada.PumpsRunning 0
+until Scada.PumpsRunning = 1 within 20s     # the new start level applies at once
+expect Sim.Level < 1.03
+until Scada.PumpsRunning = 0 within 5m
+expect Sim.Level ~ 0.70 0.02                # and the new stop level
+
+scenario M2 assist pump joins at the assist level after the start stagger, and leaves first
+# Requirements: FS-10, FS-16, FS-20, FS-23, FS-24
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.95
+set Sim.InflowLps 20.0
+scan
+until Pump1Run TRUE within 10s              # the lead (pump 1 after power-up)
+expect Pump2Run FALSE
+expect Pump3Run FALSE
+wait 4500ms
+expect Pump2Run FALSE                       # never two starts within 5 s
+until Pump2Run TRUE within 2s               # the assist: next pump in the rotation
+expect Pump1Run TRUE
+expect Pump3Run FALSE                       # the standby stays off
+wait 10s
+expect Scada.PumpsRunning 2
+until Sim.Level <= 0.92 within 10m
+expect Pump2Run TRUE                        # assist still on above its stop level
+until Pump2Run FALSE within 20s
+expect Sim.Level ~ 0.90 0.02
+expect Pump1Run TRUE                        # the lead carries on
+until Pump1Run FALSE within 10m
+expect Sim.Level ~ 0.60 0.02
+expect Sim.MaxPumpsRunning 2
+expect Sim.Starts3 0
+wait 2s
+expect Scada.LeadPump 2                     # one cycle, one rotation (the assist stopping is not the end of a cycle)
+
+scenario M2 standby replaces a pump that is not in Auto
+# Requirements: FS-08, FS-22
+set Pump1Auto TRUE
+set Pump2Auto FALSE
+set Pump3Auto TRUE
+set Sim.Level 1.95
+set Sim.InflowLps 20.0
+scan
+until Pump1Run TRUE within 10s
+until Pump3Run TRUE within 10s
+expect Pump2Run FALSE
+expect Scada.Pump[2].Status 16#0000         # not in Auto, not available
+wait 1m
+expect Scada.PumpsRunning 2
+expect Sim.Starts2 0
+expect Scada.AlmActive 0                    # a pump out of Auto is not an alarm
+
+scenario M2 never more than two pumps, even in a storm at high-high level
+# Requirements: FS-11, FS-14, FS-36, FS-37, FS-43
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 2.40
+set Sim.InflowLps 50.0                      # more than two pumps can handle
+scan
+until Scada.PumpsRunning = 2 within 20s
+until Sim.Level >= 2.85 within 5m
+wait 20s
+expect Scada.PumpsRunning 2
+expect Pump3Run FALSE
+expect Sim.MaxPumpsRunning 2
+expect Scada.AlmActive 16#0007              # high level + high float + high-high float
+expect Scada.AlmUnack 16#0007
+set Sim.InflowLps 0.0                       # the storm passes
+until Scada.AlmActive = 0 within 5m
+expect Scada.AlmUnack 16#0007               # cleared, but nobody has acknowledged them
+set Scada.CmdAck TRUE
+wait 500ms
+expect Scada.CmdAck FALSE                   # the PLC clears the command bit
+expect Scada.AlmUnack 0
+expect AlarmBeacon FALSE
+
+# ======================================================================
+# M3  Alternation and run-time balancing
+# ======================================================================
+
+scenario M3 lead pump rotates 1-2-3-1, one pump per cycle
+# Requirements: FS-15, FS-16, FS-19, FS-29, FS-32
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+scan
+until Pump1Run TRUE within 20s              # cycle 1: pump 1
+expect Pump2Run FALSE
+expect Pump3Run FALSE
+until Pump1Run FALSE within 5m
+wait 2s
+expect Scada.LeadPump 2
+set Sim.Level 1.55
+until Pump2Run TRUE within 20s              # cycle 2: pump 2
+expect Pump1Run FALSE
+expect Pump3Run FALSE
+wait 30s
+expect Pump1Run FALSE
+expect Pump3Run FALSE
+until Pump2Run FALSE within 5m
+wait 2s
+expect Scada.LeadPump 3
+set Sim.Level 1.55
+until Pump3Run TRUE within 20s              # cycle 3: pump 3
+expect Pump1Run FALSE
+expect Pump2Run FALSE
+until Pump3Run FALSE within 5m
+wait 2s
+expect Scada.LeadPump 1
+set Sim.Level 1.55
+until Pump1Run TRUE within 20s              # cycle 4: back to pump 1
+expect Pump2Run FALSE
+expect Pump3Run FALSE
+until Pump1Run FALSE within 5m
+wait 2s
+expect Sim.Starts1 2
+expect Sim.Starts2 1
+expect Sim.Starts3 1
+expect Scada.Pump[1].Starts 2               # the SCADA counters agree with the referee
+expect Scada.Pump[2].Starts 1
+expect Scada.Pump[3].Starts 1
+expect Sim.MaxPumpsRunning 1
+
+scenario M3 a pump that is not available is skipped by the rotation
+# Requirements: FS-16, FS-22
+set Pump1Auto TRUE
+set Pump2Auto FALSE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+scan
+until Pump1Run TRUE within 20s              # cycle 1: pump 1
+until Pump1Run FALSE within 5m
+wait 2s
+expect Scada.LeadPump 3                     # pump 2 is skipped
+set Sim.Level 1.55
+until Pump3Run TRUE within 20s              # cycle 2: pump 3
+expect Pump1Run FALSE
+until Pump3Run FALSE within 5m
+wait 2s
+expect Scada.LeadPump 1
+set Sim.Level 1.55
+until Pump1Run TRUE within 20s              # cycle 3: pump 1
+until Pump1Run FALSE within 5m
+expect Sim.Starts2 0
+
+scenario M3 lead moves off a pump taken out of Auto while the station is idle
+# Requirements: FS-08, FS-18
+set Pump1Auto FALSE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+expect Scada.LeadPump 2
+expect Scada.Pump[1].Status 16#0000
+set Sim.Level 1.55
+until Pump2Run TRUE within 20s
+expect Pump1Run FALSE
+expect Pump3Run FALSE
+
+scenario M3 run-time counter, then balancing by run time
+# Requirements: FS-17, FS-32, FS-33, FS-34
+# Pump 1 alone runs for 10 minutes: the level stays put because the
+# inflow equals one pump's output.
+set Pump1Auto TRUE
+set Pump2Auto FALSE
+set Pump3Auto FALSE
+set Sim.Level 1.55
+set Sim.InflowLps 25.0
+scan
+until Pump1Running TRUE within 20s
+wait 10m
+expect Scada.Pump[1].RunSeconds ~ 600 6      # better than 1 %
+expect Scada.Pump[1].Starts 1
+expect Scada.Pump[1].StartsLastHour 1
+expect Scada.Pump[2].RunSeconds 0
+set Sim.InflowLps 0.0
+until Pump1Run FALSE within 5m
+# Switch to balancing and bring pumps 2 and 3 into service (both 0 s).
+set Cfg.BalanceByHours TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+wait 2s
+expect Scada.LeadPump 2                     # least run time; tie goes to the lower number
+set Sim.Level 1.55
+until Pump2Run TRUE within 20s
+expect Pump1Run FALSE
+expect Pump3Run FALSE
+wait 30s
+expect Scada.LeadPump 2                     # no re-balancing in mid-cycle, although pump 3 now has less time
+until Pump2Run FALSE within 5m
+expect Scada.Pump[2].RunSeconds ~ 152 6
+wait 2s
+expect Scada.LeadPump 3                     # pump 3 still has 0 s
+set Sim.Level 1.55
+until Pump3Run TRUE within 20s
+expect Pump1Run FALSE
+until Pump3Run FALSE within 5m
+wait 2s
+expect Scada.LeadPump <> 1                  # pump 1 has far more hours than 2 and 3
+set Sim.Level 1.55
+until Scada.PumpsRunning = 1 within 20s
+expect Pump1Run FALSE
+until Scada.PumpsRunning = 0 within 5m
+expect Sim.Starts1 1                        # pump 1 was never chosen again
+
+# ======================================================================
+# M4  Pump faults and automatic substitution
+# ======================================================================
+
+scenario M4 overload trip on the running lead: standby takes over, fault latched
+# Requirements: FS-18, FS-22, FS-25, FS-27, FS-40
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+set Sim.InflowLps 20.0
+scan
+until Pump1Running TRUE within 20s
+wait 10s
+set Sim.Trip1 TRUE
+wait 500ms
+expect Pump1Run FALSE                       # command removed at once
+expect Scada.Pump[1].Status 16#0011         # in Auto + overload fault
+until Pump2Running TRUE within 8s           # substitute
+expect Pump3Run FALSE
+expect Scada.AlmActive 16#0020              # pump 1 fault
+expect Scada.AlmUnack 16#0020
+expect Scada.LeadPump 2                     # the lead passed on at once
+until AlarmBeacon FALSE within 1100ms       # flashing: unacknowledged alarm ...
+until AlarmBeacon TRUE within 1100ms
+wait 150ms
+expect AlarmBeacon TRUE                     # ... on for at least 0.25 s ...
+until AlarmBeacon FALSE within 1100ms       # ... and for at most 1 s
+wait 150ms
+expect AlarmBeacon FALSE
+until AlarmBeacon TRUE within 1100ms
+set Sim.Trip1 FALSE                         # the electrician resets the overload relay ...
+wait 10s
+expect Pump1Run FALSE                       # ... but the pump must not restart without a fault reset
+expect Scada.Pump[1].Status 16#0011
+expect Scada.PumpsRunning 1
+set Sim.InflowLps 0.0
+until Pump2Run FALSE within 10m             # end of the cycle
+wait 2s
+expect Scada.LeadPump 3                     # the rotation moves on from pump 2
+set Sim.Level 1.55
+until Pump3Run TRUE within 20s
+expect Pump1Run FALSE
+expect Pump2Run FALSE
+
+scenario M4 a fault stays latched until the cause has gone AND it is reset
+# Requirements: FS-28, FS-39, FS-43
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set Sim.Trip1 TRUE
+wait 1s
+expect Scada.Pump[1].Status 16#0011
+expect Scada.AlmActive 16#0020
+set ResetPB TRUE                            # reset while still tripped: no effect
+wait 200ms
+set ResetPB FALSE
+wait 1s
+expect Scada.Pump[1].Status 16#0011
+set Scada.CmdReset TRUE                     # same from SCADA
+wait 500ms
+expect Scada.CmdReset FALSE
+expect Scada.Pump[1].Status 16#0011
+set ResetPB TRUE                            # button held down (or stuck) ...
+wait 1s
+set Sim.Trip1 FALSE                         # ... while the electrician resets the relay
+wait 2s
+expect Scada.Pump[1].Status 16#0011         # still latched: reset acts on the press, not the level
+set ResetPB FALSE
+wait 200ms
+set ResetPB TRUE                            # a fresh press
+wait 200ms
+set ResetPB FALSE
+wait 1s
+expect Scada.Pump[1].Status 16#0003         # available again
+expect Scada.AlmActive 0
+expect Scada.AlmUnack 16#0020               # still needs acknowledging
+wait 10s
+expect Pump1Run FALSE                       # a reset never starts a pump by itself
+expect Sim.MaxPumpsRunning 0
+
+scenario M4 fail to start: no feedback within 5 s, standby takes over
+# Requirements: FS-22, FS-26, FS-29, FS-33, FS-42
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.NoRun1 TRUE
+set Sim.Level 1.55
+scan
+until Pump1Run TRUE within 20s
+wait 4500ms
+expect Pump1Run TRUE                        # still waiting for feedback
+expect Pump2Run FALSE
+expect Scada.AlmActive 0
+expect Scada.Pump[1].Status 16#0007         # auto, available, commanded - but no feedback
+expect Scada.PumpsRunning 0                 # counts running feedbacks, not commands
+expect Scada.StationStatus 16#0001          # not pumping: no feedback
+wait 1s
+expect Pump1Run FALSE                       # 5.5 s: failed to start
+expect Scada.Pump[1].Status 16#0021         # in Auto + feedback fault
+expect Scada.AlmActive 16#0020
+expect Scada.Pump[1].Starts 0               # a start is a rising edge of the FEEDBACK (FS-29)
+expect Scada.Pump[1].RunSeconds 0           # run time is feedback time, not command time (FS-33)
+until Pump2Running TRUE within 8s
+expect Pump3Run FALSE
+wait 1m
+expect Pump1Run FALSE                       # no retry until reset
+
+scenario M4 pump stops by itself while running: feedback fault, replaced
+# Requirements: FS-26
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+set Sim.InflowLps 20.0
+scan
+until Pump1Running TRUE within 20s
+wait 20s
+set Sim.NoRun1 TRUE                         # contactor drops out, feedback lost
+until Pump2Running TRUE within 13s
+expect Pump1Run FALSE
+expect Scada.Pump[1].Status 16#0021
+expect Pump3Run FALSE
+
+scenario M4 assist fails to start: the standby joins instead, still only two pumps
+# Requirements: FS-14, FS-22, FS-26
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.NoRun2 TRUE
+set Sim.Level 1.95
+set Sim.InflowLps 20.0
+scan
+until Pump1Running TRUE within 20s
+until Pump2Run TRUE within 10s              # assist attempt
+until Pump2Run FALSE within 8s              # ... fails
+until Pump3Running TRUE within 10s          # standby joins
+expect Pump1Running TRUE
+expect Scada.Pump[2].Status 16#0021
+expect Scada.AlmActive 16#0040              # pump 2 fault
+wait 1m
+expect Scada.PumpsRunning 2
+expect Sim.MaxPumpsRunning 2
+expect Pump2Run FALSE
+
+scenario M4 a repaired pump does not displace the standby that replaced it
+# Requirements: FS-21, FS-22, FS-28
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.95
+set Sim.InflowLps 40.0                      # two pumps just hold the level
+scan
+until Scada.PumpsRunning = 2 within 20s     # pumps 1 and 2
+expect Pump3Run FALSE
+set Sim.Trip2 TRUE                          # the assist trips ...
+until Pump3Running TRUE within 8s           # ... and the standby replaces it
+set Sim.Trip2 FALSE                         # overload relay reset in the field
+set ResetPB TRUE                            # and the fault reset on the panel
+wait 200ms
+set ResetPB FALSE
+wait 30s
+expect Scada.Pump[2].Status 16#0003         # pump 2 is ready again ...
+expect Pump2Run FALSE                       # ... but is not started
+expect Pump3Run TRUE                        # and pump 3 is not stopped to make room
+expect Pump1Run TRUE
+expect Sim.Starts2 1
+expect Sim.Starts3 1
+
+scenario M4 pump taken out of Auto while running is replaced (not a fault)
+# Requirements: FS-08, FS-22
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+set Sim.InflowLps 20.0
+scan
+until Pump1Running TRUE within 20s
+wait 10s
+set Pump1Auto FALSE
+wait 500ms
+expect Pump1Run FALSE
+until Pump2Running TRUE within 8s
+expect Scada.Pump[1].Status 16#0000
+expect Scada.AlmActive 0
+
+scenario M4 no pump available alarm
+# Requirements: FS-36
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set Pump1Auto FALSE
+set Pump2Auto FALSE
+set Sim.Trip3 TRUE
+wait 2s
+expect Scada.AlmActive 16#0180              # pump 3 fault + no pump available
+set Pump2Auto TRUE
+wait 1s
+expect Scada.AlmActive 16#0080              # pump 2 is available again
+expect Scada.AlmUnack 16#0180
+
+# ======================================================================
+# M5  Level transmitter faults and float backup control
+# ======================================================================
+
+scenario M5 a short signal glitch is ignored
+# Requirements: FS-03, FS-04
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 2s
+set Sim.XmtrFault XmtrHigh                  # 21.5 mA for half a second
+wait 500ms
+set Sim.XmtrFault XmtrOK
+wait 5s
+expect Sim.MaxPumpsRunning 0                # a bad value is never used for control
+expect Scada.AlmActive 0
+expect Scada.AlmUnack 0
+expect Scada.StationStatus 16#0001
+
+scenario M5 transmitter fails high while idle: no false start, float backup after 2 s
+# Requirements: FS-02, FS-03, FS-04, FS-07
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 2s
+set Sim.XmtrFault XmtrHigh
+wait 1500ms
+expect Scada.AlmActive 0                    # not yet
+expect Pump1Run FALSE
+wait 1500ms
+expect Scada.AlmActive 16#0010              # transmitter fault
+expect Scada.StationStatus 16#001A          # float backup + alarm active + unacknowledged
+wait 30s
+expect Sim.MaxPumpsRunning 0                # the well is at 1.0 m: nothing to do
+
+scenario M5 wire break while pumping: pump carries on to the low float, no false alarms
+# Requirements: FS-03, FS-12, FS-36
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+scan
+until Pump1Running TRUE within 20s
+until Sim.Level <= 1.20 within 5m
+set Sim.XmtrFault XmtrWireBreak
+wait 1s
+expect Pump1Run TRUE                        # last good value held, not "level = 0"
+wait 3s
+expect Pump1Run TRUE
+expect Scada.AlmActive 16#0010              # transmitter fault only, no low-level alarm
+until Pump1Run FALSE within 5m
+expect Sim.Level ~ 0.35 0.03                # float backup stops at the low float
+expect Sim.DryRunS 0
+expect Scada.AlmUnack 16#0010
+
+scenario M5 frozen transmitter while filling: high float starts a pump and exposes the fault
+# Requirements: FS-05, FS-11, FS-12, FS-16
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set Sim.XmtrFault XmtrFrozen                # stuck at 1.00 m
+set Sim.InflowLps 20.0
+until Sim.Level >= 1.60 within 5m
+expect Pump1Run FALSE                       # the PLC cannot know yet
+until HighFloat_NC FALSE within 10m         # 2.50 m
+wait 3s
+expect Pump1Run TRUE                        # float override (FS-11) ...
+expect Scada.AlmActive 16#0002              # ... before the discrepancy is confirmed
+until Scada.AlmActive = 16#0012 within 8s   # transmitter fault after 5 s of disagreement
+set Sim.InflowLps 0.0
+until Sim.Level <= 0.55 within 10m
+expect Pump1Run TRUE                        # float backup runs on past the duty stop level
+until Pump1Run FALSE within 5m
+expect Sim.Level ~ 0.35 0.03
+wait 1s
+expect Sim.DryRunS 0
+expect Scada.StationStatus 16#001A          # float backup, fault still active and unacknowledged
+expect Scada.LeadPump 2                     # rotation carries on in float backup
+expect Sim.MaxLevel < 2.60
+
+scenario M5 frozen transmitter while pumping down: the low float saves the pump
+# Requirements: FS-05, FS-13
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 1.55
+scan
+until Pump1Running TRUE within 20s
+until Sim.Level <= 1.20 within 5m
+set Sim.XmtrFault XmtrFrozen                # stuck at 1.20 m while the level falls
+until LowFloatWet FALSE within 5m           # 0.35 m
+wait 1s
+expect Pump1Run FALSE                       # dry-run cut-out
+expect Sim.DryRunS 0
+expect Sim.MinLevel > 0.30
+until Scada.AlmActive = 16#0010 within 8s   # discrepancy: transmitter fault
+expect Scada.StationStatus 16#001A
+
+scenario M5 float backup: high float one pump, high-high float two, both to the low float
+# Requirements: FS-12, FS-14
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set Sim.XmtrFault XmtrWireBreak
+wait 3s
+expect Scada.StationStatus 16#001A
+set Sim.Level 2.45
+set Sim.InflowLps 30.0
+until Pump1Run TRUE within 1m               # high float at 2.50 m
+expect Pump2Run FALSE
+until Sim.Level >= 2.76 within 5m
+expect Pump2Run FALSE                       # below the high-high float
+until Pump2Run TRUE within 1m               # high-high float at 2.80 m
+expect Pump3Run FALSE
+set Sim.InflowLps 0.0
+until Sim.Level <= 0.55 within 10m
+expect Scada.PumpsRunning 2                 # both run on to the low float
+until Scada.PumpsRunning = 0 within 2m
+expect Sim.Level ~ 0.35 0.03
+expect Sim.DryRunS 0
+expect Sim.MaxPumpsRunning 2
+
+scenario M5 transmitter fault stays latched until the signal is good AND it is reset
+# Requirements: FS-06, FS-07, FS-37, FS-38, FS-39
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set Sim.XmtrFault XmtrLow                   # 3.5 mA
+wait 3s
+expect Scada.AlmActive 16#0010
+set AckPB TRUE                              # the operator acknowledges ...
+wait 200ms
+set AckPB FALSE
+wait 300ms
+expect Scada.AlmUnack 0
+expect Scada.StationStatus 16#000A          # float backup + alarm active, acknowledged
+set ResetPB TRUE                            # ... and resets while the signal is still bad: no effect
+wait 200ms
+set ResetPB FALSE
+wait 1s
+expect Scada.AlmActive 16#0010
+expect Scada.AlmUnack 0                     # the fault never cleared, not even for a scan
+expect Scada.StationStatus 16#000A
+set Sim.XmtrFault XmtrOK                    # signal healthy again ...
+wait 5s
+expect Scada.AlmActive 16#0010              # ... but the fault is latched
+expect Scada.StationStatus 16#000A
+set ResetPB TRUE
+wait 200ms
+set ResetPB FALSE
+wait 1s
+expect Scada.AlmActive 0
+expect Scada.AlmUnack 0
+expect Scada.StationStatus 16#0001          # back to level control
+set Sim.Level 1.55
+until Pump1Run TRUE within 20s              # and it controls again
+
+scenario M5 transmitter frozen below the stop level: a tripped float still wins
+# Requirements: FS-05, FS-07, FS-11, FS-12
+# The transmitter sticks at 0.55 m, below the duty stop level. When the high
+# float trips, level control must still start a pump (the float wins over the
+# stop level), and float backup must keep it running after the float resets.
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 0.55
+scan
+wait 5s
+expect Scada.LevelMm ~ 550 20
+expect Scada.AlmActive 0
+set Sim.XmtrFault XmtrFrozen                # stuck at 0.55 m
+set Sim.Level 2.40
+set Sim.InflowLps 20.0
+until HighFloat_NC FALSE within 1m          # 2.50 m
+wait 3s
+expect Pump1Run TRUE                        # FS-11: a tripped float always wins over a stop level
+until Scada.AlmActive = 16#0012 within 8s   # discrepancy: transmitter fault
+until HighFloat_NC TRUE within 2m           # the float resets at 2.45 m ...
+wait 5s
+expect Pump1Run TRUE                        # ... but float backup pumps on (FS-12)
+set Sim.InflowLps 0.0
+until Pump1Run FALSE within 10m
+expect Sim.Level ~ 0.35 0.03                # to the low float
+expect Sim.DryRunS 0
+expect Sim.MaxPumpsRunning 1
+
+scenario M5 transmitter fails in a storm: level alarms suppressed, both pumps run on
+# Requirements: FS-03, FS-07, FS-12, FS-36, FS-37
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 2.30
+set Sim.InflowLps 30.0
+scan
+until Scada.AlmActive = 16#0001 within 4s   # high-level alarm
+until Scada.PumpsRunning = 2 within 10s
+set Sim.XmtrFault XmtrWireBreak
+wait 3s
+expect Scada.AlmActive 16#0010              # float backup: the level alarm is suppressed
+expect Scada.AlmUnack 16#0011               # ... but it still needs acknowledging
+expect Scada.PumpsRunning 2                 # the existing demand carries on
+set Sim.InflowLps 0.0
+until Sim.Level <= 0.60 within 10m
+expect Scada.PumpsRunning 2                 # the assist does not stop at its stop level
+until Scada.PumpsRunning = 0 within 2m
+expect Sim.Level ~ 0.35 0.03                # both run on to the low float
+expect Sim.DryRunS 0
+expect Scada.AlmActive 16#0010
+
+scenario M5 NE43 limits: the saturation band is a good reading, beyond it is a fault
+# Requirements: FS-01, FS-02, FS-04, FS-06, FS-36
+# The simulated transmitter never produces these currents, so this scenario
+# switches the simulation off (SimEnable FALSE) and plays the field itself,
+# like a loop calibrator on the input terminals. The HOA switches stay off,
+# so "no pump available" (16#0100) is active throughout.
+set SimEnable FALSE
+set LowFloatWet TRUE
+set HighFloat_NC TRUE
+set HHFloat_NC TRUE
+set Pump1OverloadOK_NC TRUE
+set Pump2OverloadOK_NC TRUE
+set Pump3OverloadOK_NC TRUE
+set LevelRaw 6912                           # 8.0 mA = 1.00 m
+scan
+wait 10s
+expect Scada.LevelMm ~ 1000 20
+expect Scada.AlmActive 16#0100
+set LevelRaw -600                           # 3.65 mA: NE43 saturation, a valid reading of -0.09 m
+wait 10s
+expect Scada.LevelMm ~ 0 20                 # shown as 0 mm (limited to 0-4000)
+expect Scada.AlmActive 16#0108              # low level, NOT a transmitter fault
+set LevelRaw -700                           # 3.59 mA: failure signal
+wait 3s
+expect Scada.AlmActive 16#0110              # transmitter fault; level alarm suppressed
+expect Scada.StationStatus 16#001A
+set LevelRaw 6912
+wait 1s
+set ResetPB TRUE
+wait 200ms
+set ResetPB FALSE
+wait 10s
+expect Scada.StationStatus 16#0019          # level control again (alarms not yet acknowledged)
+expect Scada.AlmActive 16#0100
+set LevelRaw 29000                          # 20.78 mA: NE43 saturation, a valid reading of 4.20 m
+wait 10s
+expect Scada.LevelMm ~ 4000 20              # shown as 4000 mm
+expect Scada.AlmActive 16#0101              # high level, NOT a transmitter fault
+set LevelRaw 29400                          # 21.01 mA: failure signal
+wait 3s
+expect Scada.AlmActive 16#0110
+expect Scada.StationStatus 16#001A
+
+scenario M5 low-level cut-out in level control protects the pumps from a bad setpoint
+# Requirements: FS-13, FS-36
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Cfg.DutyStopMm 300                      # below the low-level setpoint (450 mm)
+set Sim.Level 1.55
+scan
+until Pump1Running TRUE within 20s
+until Pump1Run FALSE within 5m
+expect Sim.Level ~ 0.45 0.03                # stopped at the low-level setpoint
+expect Sim.MinLevel > 0.40                  # not left to the low float
+wait 5s
+expect Scada.AlmActive 16#0008              # low-level alarm
+expect Pump1Run FALSE
+
+# ======================================================================
+# M6  Starts per hour
+# ======================================================================
+
+scenario M6 start limit blocks a normal start; the high float overrides it
+# Requirements: FS-30, FS-31, FS-34, FS-36
+set Pump1Auto TRUE
+set Pump2Auto FALSE
+set Pump3Auto FALSE
+set Cfg.MaxStartsPerHour 3
+set Cfg.DutyStartMm 1000
+set Cfg.DutyStopMm 800
+set Sim.Level 0.95
+set Sim.InflowLps 10.0
+scan
+until Sim.Starts1 = 3 within 10m            # three short cycles
+wait 1s
+expect Scada.Pump[1].Status 16#004F         # running AND start-limited: it may run on (FS-30)
+expect Scada.Pump[1].StartsLastHour 3
+expect Scada.AlmActive 16#0200
+until Pump1Run FALSE within 5m
+wait 1s
+expect Scada.Pump[1].Status 16#0043         # auto + available + start-limited
+expect Scada.Pump[1].StartsLastHour 3
+expect Scada.AlmActive 16#0200              # starts-limit alarm
+until Sim.Level >= 1.30 within 5m
+expect Pump1Run FALSE                       # would have started at 1.00 m
+expect Sim.Starts1 3
+until HighFloat_NC FALSE within 20m
+until Pump1Run TRUE within 3s               # overflow is worse than an extra start
+until Pump1Run FALSE within 15m
+expect Sim.Level ~ 0.80 0.02                # then the normal stop level applies
+expect Sim.Starts1 4
+
+scenario M6 a start-limited lead is passed over for another available pump
+# Requirements: FS-22, FS-30
+set Pump1Auto TRUE
+set Pump2Auto FALSE
+set Pump3Auto FALSE
+set Cfg.MaxStartsPerHour 1
+set Sim.Level 1.55
+scan
+until Pump1Run TRUE within 20s
+until Pump1Run FALSE within 5m
+wait 1s
+expect Scada.Pump[1].Status 16#0043
+set Pump2Auto TRUE
+wait 1s
+set Sim.Level 1.55
+until Pump2Run TRUE within 20s
+expect Pump1Run FALSE
+expect Sim.Starts1 1
+
+scenario M6 the limit is a rolling 60-minute window, not a clock-hour count
+# Requirements: FS-30
+set Pump1Auto TRUE
+set Pump2Auto FALSE
+set Pump3Auto FALSE
+set Cfg.MaxStartsPerHour 1
+scan
+wait 30m                                    # start in the middle of an "hour"
+set Sim.Level 1.55
+until Pump1Run TRUE within 20s
+until Pump1Run FALSE within 5m
+wait 1s
+expect Scada.Pump[1].Status 16#0043
+set Sim.Level 1.55
+wait 57m                                    # 59.5 min after the start
+expect Pump1Run FALSE
+expect Scada.Pump[1].Status 16#0043
+expect Scada.Pump[1].StartsLastHour 1
+until Pump1Run TRUE within 2m               # 60 min after the start (up to 61 min is accepted)
+wait 1s
+expect Sim.Starts1 2
+expect Sim.MaxStartsInHour 1                # the referee: never two starts within 60 minutes
+
+# ======================================================================
+# M7  Alarms, acknowledge and the beacon
+# ======================================================================
+
+scenario M7 high-level alarm: on-delay, flashing, acknowledge, return to normal
+# Requirements: FS-36, FS-37, FS-38, FS-40
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+set Sim.Level 2.30
+set Sim.InflowLps 40.0                      # two pumps just hold the level
+scan
+wait 1s
+expect Scada.AlmActive 0                    # 2 s on-delay
+until Scada.AlmActive = 16#0001 within 3s
+expect Scada.AlmUnack 16#0001
+until Scada.PumpsRunning = 2 within 10s
+expect Scada.StationStatus 16#001D          # level + pumping + active + unacknowledged
+until AlarmBeacon FALSE within 1100ms       # flashing
+until AlarmBeacon TRUE within 1100ms
+wait 150ms
+expect AlarmBeacon TRUE
+until AlarmBeacon FALSE within 1100ms
+until AlarmBeacon TRUE within 1100ms
+set AckPB TRUE
+wait 200ms
+set AckPB FALSE
+wait 100ms
+expect Scada.AlmUnack 0
+expect Scada.AlmActive 16#0001
+expect AlarmBeacon TRUE                     # steady: active but acknowledged
+wait 300ms
+expect AlarmBeacon TRUE
+wait 300ms
+expect AlarmBeacon TRUE
+wait 300ms
+expect AlarmBeacon TRUE
+wait 300ms
+expect AlarmBeacon TRUE
+set Sim.InflowLps 0.0
+until Scada.AlmActive = 0 within 2m
+expect Sim.Level < 2.16                     # cleared only below the setpoint - 0.05 m
+wait 1s
+expect AlarmBeacon FALSE
+expect Scada.AlmUnack 0                     # acknowledged before it cleared
+
+scenario M7 acknowledge acts on the press: a held button does not hide new alarms
+# Requirements: FS-37, FS-38, FS-40
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set AckPB TRUE                              # button held down (or stuck)
+wait 1s
+set Pump1Auto FALSE
+set Pump2Auto FALSE
+set Pump3Auto FALSE
+wait 2s
+expect Scada.AlmActive 16#0100              # no pump available
+expect Scada.AlmUnack 16#0100               # NOT silently acknowledged
+set Pump1Auto TRUE
+wait 1s
+expect Scada.AlmActive 0
+expect Scada.AlmUnack 16#0100               # cleared but still unacknowledged
+until AlarmBeacon FALSE within 1100ms
+until AlarmBeacon TRUE within 1100ms
+set AckPB FALSE
+wait 200ms
+set AckPB TRUE                              # a fresh press
+wait 200ms
+set AckPB FALSE
+wait 500ms
+expect Scada.AlmUnack 0
+expect AlarmBeacon FALSE
+
+scenario M7 SCADA acknowledge and reset commands, and the command handshake
+# Requirements: FS-28, FS-37, FS-39, FS-43
+set Pump1Auto TRUE
+set Pump2Auto TRUE
+set Pump3Auto TRUE
+scan
+wait 1s
+set Sim.Trip3 TRUE
+wait 1s
+expect Scada.AlmActive 16#0080
+expect Scada.AlmUnack 16#0080
+set Scada.CmdAck TRUE
+wait 500ms
+expect Scada.CmdAck FALSE
+expect Scada.AlmUnack 0
+expect Scada.AlmActive 16#0080
+set Scada.CmdReset TRUE                     # reset while the relay is still tripped ...
+wait 500ms
+expect Scada.CmdReset FALSE
+expect Scada.Pump[3].Status 16#0011         # ... does nothing: the fault stays latched
+expect Scada.AlmUnack 0                     # (and never clears for a scan, so no new alarm)
+set Sim.Trip3 FALSE                         # the electrician resets the relay
+set Scada.CmdAck TRUE                       # an acknowledge is not a reset
+wait 500ms
+expect Scada.Pump[3].Status 16#0011
+set Scada.CmdReset TRUE
+wait 500ms
+expect Scada.CmdReset FALSE
+wait 1s
+expect Scada.AlmActive 0
+expect Scada.Pump[3].Status 16#0003
+expect Scada.AlmUnack 0

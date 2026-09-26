@@ -1,0 +1,211 @@
+# Lab 23-3 acceptance tests: I/O simulation layer for transfer pump P-101.
+# Uses only the names in the interface table. Level raw counts used below
+# (0..27648 = 0..100 %): 0 = 0 %, 6912 = 25 %, 13824 = 50 %, 20736 = 75 %.
+# The HMI protocol the tests follow: first write Enable, let the PLC load the
+# live value (one scan), THEN write the simulated Value.
+
+# ------------------------------------------------------------- no simulation
+
+scenario without simulation the processed values follow the field
+set SimKeySW TRUE              # key on, but nothing put into simulation
+set LSL101_NC TRUE
+set P101RunFB TRUE
+set LT101Raw 13824
+scan
+expect LSL101_OK TRUE
+expect P101Running TRUE
+expect LT101_Pct ~ 50.0 0.05
+expect SimActive FALSE
+expect SimCount 0
+expect SimLamp FALSE
+set LSL101_NC FALSE
+set P101RunFB FALSE
+set LT101Raw 6912
+scan
+expect LSL101_OK FALSE
+expect P101Running FALSE
+expect LT101_Pct ~ 25.0 0.05
+set LT101Raw 0
+scan
+expect LT101_Pct ~ 0.0 0.05
+
+scenario the pump logic works on live values (the layer must not break it)
+set LSL101_NC TRUE
+set P101RunFB TRUE             # healthy pump: feedback follows at once
+set LT101Raw 20736             # 75 %: above the 60 % start level
+wait 1s
+expect P101Run TRUE
+wait 3s
+expect P101Fault FALSE
+set LSL101_NC FALSE            # real low level: dry-run protection
+scan
+expect P101Run FALSE
+
+# ----------------------------------------------------------- the key switch
+
+scenario key switch off: a simulation request is refused and cleared
+set SimKeySW FALSE
+set LSL101_NC TRUE
+set P101RunFB TRUE
+set LT101Raw 6912              # 25 %
+scan
+set SimLT101.Enable TRUE       # someone tries to simulate 90 % from the HMI
+set SimLT101.Value 90.0
+scan
+expect SimLT101.Enable FALSE   # the PLC cleared the request
+expect LT101_Pct ~ 25.0 0.05   # the logic still sees the field
+expect SimActive FALSE
+expect SimCount 0
+expect SimLamp FALSE
+set SimLSL101.Enable TRUE
+scan
+expect SimLSL101.Enable FALSE
+expect SimActive FALSE
+wait 1s
+expect P101Run FALSE           # 25 %: no pump demand
+
+scenario turning the key off ends every simulation at once
+set SimKeySW TRUE
+set LSL101_NC TRUE
+set P101RunFB TRUE
+set LT101Raw 6912
+scan
+set SimLSL101.Enable TRUE
+set SimP101FB.Enable TRUE
+set SimLT101.Enable TRUE
+scan
+expect SimCount 3
+expect SimActive TRUE
+expect SimLamp TRUE
+expect SimLSL101.Value TRUE    # bumpless on every point: each Value is loaded
+expect SimP101FB.Value TRUE    # from its live field value...
+expect SimLT101.Value ~ 25.0 0.05
+expect LSL101_OK TRUE          # ...so the logic sees no change
+expect P101Running TRUE
+expect LT101_Pct ~ 25.0 0.05
+set SimLSL101.Value FALSE
+set SimP101FB.Value FALSE
+set SimLT101.Value 90.0
+scan
+expect LSL101_OK FALSE
+expect P101Running FALSE
+expect LT101_Pct ~ 90.0 0.05
+set SimKeySW FALSE             # key switched off and removed
+scan
+expect LSL101_OK TRUE          # all three back to the field values
+expect P101Running TRUE
+expect LT101_Pct ~ 25.0 0.05
+expect SimActive FALSE
+expect SimCount 0
+expect SimLamp FALSE
+expect SimLSL101.Enable FALSE
+expect SimP101FB.Enable FALSE
+expect SimLT101.Enable FALSE
+set SimKeySW TRUE              # key back on: nothing comes back by itself
+scan
+expect SimActive FALSE
+expect SimCount 0
+expect LT101_Pct ~ 25.0 0.05
+expect LSL101_OK TRUE
+
+# ------------------------------------------------ simulating single points
+
+scenario analog simulation starts bumpless, then follows the HMI value
+set SimKeySW TRUE
+set LSL101_NC TRUE
+set P101RunFB TRUE
+set LT101Raw 6912              # 25 %
+scan
+set SimLT101.Enable TRUE
+scan
+expect SimLT101.Value ~ 25.0 0.05   # loaded from the live value
+expect LT101_Pct ~ 25.0 0.05        # so the logic saw no jump
+expect SimActive TRUE
+expect SimCount 1
+expect SimLamp TRUE
+set SimLT101.Value 70.0        # tester types 70 %
+scan
+expect LT101_Pct ~ 70.0 0.05
+set LT101Raw 0                 # the field value changes: ignored while simulated
+wait 1s
+expect LT101_Pct ~ 70.0 0.05
+expect SimLT101.Value ~ 70.0 0.05   # not overwritten once simulation is running
+expect P101Run TRUE            # the simulated level drives the pump logic
+set SimLT101.Value 15.0        # simulate the tank draining below 20 %
+scan
+wait 100ms
+expect P101Run FALSE
+
+scenario digital simulation tests the dry-run trip without draining the tank
+set SimKeySW TRUE
+set LSL101_NC TRUE
+set P101RunFB TRUE
+set LT101Raw 20736             # 75 %: pump runs
+wait 1s
+expect P101Run TRUE
+set SimLSL101.Enable TRUE
+scan
+expect SimLSL101.Value TRUE    # loaded from the live value...
+expect LSL101_OK TRUE
+expect P101Run TRUE            # ...so enabling simulation did NOT trip the pump
+wait 500ms
+expect P101Run TRUE
+expect SimCount 1
+set SimLSL101.Value FALSE      # simulate low level
+scan
+expect LSL101_OK FALSE
+wait 100ms
+expect P101Run FALSE           # dry-run protection proven
+set SimLSL101.Value TRUE
+scan
+expect LSL101_OK TRUE
+
+scenario feedback simulation lets a FAT run without a motor
+set SimKeySW TRUE
+set LSL101_NC TRUE
+set P101RunFB FALSE            # no motor connected in the factory test
+set LT101Raw 0
+scan
+set SimP101FB.Enable TRUE
+set SimLT101.Enable TRUE
+scan
+expect SimP101FB.Value FALSE   # loaded from the live value
+expect SimCount 2
+set SimP101FB.Value TRUE       # tester simulates "running"
+set SimLT101.Value 80.0        # and a high tank level
+scan
+wait 3s
+expect P101Run TRUE
+expect P101Running TRUE
+expect P101Fault FALSE
+set SimP101FB.Enable FALSE     # end the feedback simulation only
+scan
+expect P101Running FALSE       # back to the live value
+expect SimCount 1
+expect SimActive TRUE
+expect SimLamp TRUE
+wait 2500ms
+expect P101Fault TRUE          # no feedback for 2 s: start failure detected
+expect P101Run FALSE
+
+scenario re-enabling a point loads the CURRENT live value again
+set SimKeySW TRUE
+set LSL101_NC TRUE
+set P101RunFB TRUE
+set LT101Raw 6912              # 25 %
+scan
+set SimLT101.Enable TRUE
+scan
+set SimLT101.Value 90.0
+scan
+expect LT101_Pct ~ 90.0 0.05
+set SimLT101.Enable FALSE      # end simulation
+scan
+expect LT101_Pct ~ 25.0 0.05
+expect SimActive FALSE
+set LT101Raw 13824             # field level is now 50 %
+scan
+set SimLT101.Enable TRUE       # simulate again
+scan
+expect SimLT101.Value ~ 50.0 0.05
+expect LT101_Pct ~ 50.0 0.05

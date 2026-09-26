@@ -1,0 +1,405 @@
+# Lab 16-2 acceptance tests: first-out annunciator for compressor K-401.
+# Eight NC trip inputs Trip1_NC..Trip8_NC (TRUE = healthy). Every scenario
+# first makes all eight healthy. Status arrays Latched[], Unacked[] and
+# FirstOut[] are indexed 1..8.
+# "Flashing" is checked by waiting for the lamp to go off, on and off again
+# (each within 700 ms). "Steady" is checked by sampling the lamp every
+# 200 ms for 1.2 s. A button "press" is TRUE for one scan, then FALSE.
+
+scenario all healthy at power-up: lamps off, horn off, compressor may run
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+expect RunPermit TRUE
+expect Horn FALSE
+wait 1s
+expect RunPermit TRUE
+expect Horn FALSE
+expect Lamp1 FALSE
+expect Lamp2 FALSE
+expect Lamp3 FALSE
+expect Lamp4 FALSE
+expect Lamp5 FALSE
+expect Lamp6 FALSE
+expect Lamp7 FALSE
+expect Lamp8 FALSE
+expect Latched[1] FALSE
+expect Latched[8] FALSE
+
+scenario a single trip latches, sounds the horn, removes the permit and is the first-out
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip3_NC FALSE
+scan
+expect Latched[3] TRUE
+expect Unacked[3] TRUE
+expect FirstOut[3] TRUE
+expect Horn TRUE
+expect RunPermit FALSE             # on the same scan as the trip
+expect Latched[2] FALSE
+expect Latched[4] FALSE
+until Lamp3 = FALSE within 700ms   # Lamp3 flashes
+until Lamp3 = TRUE within 700ms
+until Lamp3 = FALSE within 700ms
+until Lamp3 = TRUE within 700ms
+expect Lamp1 FALSE
+expect Lamp2 FALSE
+expect Lamp4 FALSE
+expect Lamp8 FALSE
+
+scenario a trip stays latched after its input returns to healthy
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip4_NC FALSE
+wait 200ms
+set Trip4_NC TRUE                  # a short dip in lube oil pressure
+wait 2s
+expect Latched[4] TRUE
+expect FirstOut[4] TRUE
+expect Horn TRUE
+expect RunPermit FALSE
+until Lamp4 = FALSE within 700ms
+until Lamp4 = TRUE within 700ms
+until Lamp4 = FALSE within 700ms
+
+scenario later trips are subsequent; after acknowledge the first-out keeps flashing and the others go steady
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip3_NC FALSE                 # discharge temperature trips first
+wait 2s
+set Trip5_NC FALSE                 # vibration follows
+scan
+expect FirstOut[3] TRUE
+expect FirstOut[5] FALSE
+expect Latched[5] TRUE
+expect Unacked[5] TRUE
+until Lamp5 = FALSE within 700ms   # unacknowledged: flashing too
+until Lamp5 = TRUE within 700ms
+until Lamp5 = FALSE within 700ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+scan
+expect Horn FALSE
+expect Unacked[3] FALSE
+expect Unacked[5] FALSE
+expect Latched[3] TRUE
+expect Latched[5] TRUE
+expect FirstOut[3] TRUE            # acknowledge does not remove the first-out mark
+until Lamp3 = FALSE within 700ms   # first-out still flashing
+until Lamp3 = TRUE within 700ms
+until Lamp3 = FALSE within 700ms
+expect Lamp5 TRUE                  # subsequent, acknowledged: steady
+wait 200ms
+expect Lamp5 TRUE
+wait 200ms
+expect Lamp5 TRUE
+wait 200ms
+expect Lamp5 TRUE
+wait 200ms
+expect Lamp5 TRUE
+wait 200ms
+expect Lamp5 TRUE
+wait 200ms
+expect Lamp5 TRUE
+expect RunPermit FALSE
+
+scenario trips in the same scan are all first-outs; a later trip is not
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip2_NC FALSE
+set Trip7_NC FALSE
+scan
+expect FirstOut[2] TRUE
+expect FirstOut[7] TRUE
+wait 1s
+set Trip1_NC FALSE
+set Trip8_NC FALSE
+scan
+expect Latched[1] TRUE
+expect Latched[8] TRUE
+expect FirstOut[1] FALSE
+expect FirstOut[8] FALSE
+expect FirstOut[2] TRUE
+expect FirstOut[7] TRUE
+
+scenario acknowledge acts on the press: a held button does not silence a new trip
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip6_NC FALSE
+wait 500ms
+set AckPB TRUE                     # pressed and held down
+wait 200ms
+expect Horn FALSE
+expect Unacked[6] FALSE
+set Trip4_NC FALSE                 # a new trip while Ack is held
+wait 1s
+expect Unacked[4] TRUE
+expect Horn TRUE
+set AckPB FALSE
+wait 200ms
+expect Horn TRUE                   # releasing does not acknowledge
+set AckPB TRUE                     # a new press does
+wait 50ms
+expect Horn FALSE
+expect Unacked[4] FALSE
+
+scenario reset clears only channels that are acknowledged and healthy
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip3_NC FALSE
+wait 1s
+set Trip5_NC FALSE
+wait 1s
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+set Trip3_NC TRUE                  # channel 3 healthy again, channel 5 still tripped
+wait 100ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect Latched[3] FALSE
+expect FirstOut[3] FALSE
+expect Latched[5] TRUE             # still tripped: stays latched
+expect FirstOut[5] FALSE           # the first-out mark never moves to another channel
+expect RunPermit FALSE
+expect Lamp3 FALSE
+wait 200ms
+expect Lamp3 FALSE
+expect Lamp5 TRUE                  # steady
+wait 200ms
+expect Lamp5 TRUE
+set Trip2_NC FALSE                 # a new trip while channel 5 is still latched
+scan
+expect Latched[2] TRUE
+expect FirstOut[2] FALSE           # not armed: it is a subsequent trip
+set Trip5_NC TRUE
+set Trip2_NC TRUE
+wait 100ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect Latched[2] FALSE
+expect Latched[5] FALSE
+expect RunPermit TRUE
+expect Horn FALSE
+expect Lamp2 FALSE
+expect Lamp5 FALSE
+
+scenario reset does nothing until the trip has been acknowledged
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip6_NC FALSE
+wait 500ms
+set Trip6_NC TRUE
+wait 500ms
+set ResetPB TRUE                   # healthy, but not acknowledged
+scan
+set ResetPB FALSE
+wait 100ms
+expect Latched[6] TRUE
+expect Unacked[6] TRUE
+expect Horn TRUE
+expect RunPermit FALSE
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect Latched[6] FALSE
+expect RunPermit TRUE
+
+scenario a jammed reset button cannot clear a channel that recovers later
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip1_NC FALSE
+wait 500ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+set ResetPB TRUE                   # held down while channel 1 is still tripped
+wait 200ms
+set Trip1_NC TRUE
+wait 1s
+expect Latched[1] TRUE
+expect RunPermit FALSE
+set ResetPB FALSE
+wait 100ms
+set ResetPB TRUE                   # a real press
+wait 50ms
+expect Latched[1] FALSE
+expect RunPermit TRUE
+
+scenario after a full reset the panel re-arms and the next trip is a first-out again
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip2_NC FALSE
+wait 500ms
+set Trip2_NC TRUE
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 100ms
+expect Latched[2] FALSE
+expect RunPermit TRUE
+set Trip8_NC FALSE
+scan
+expect FirstOut[8] TRUE
+expect Horn TRUE
+expect RunPermit FALSE
+
+scenario a latched channel that trips again does not re-alarm
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip4_NC FALSE
+wait 500ms
+set AckPB TRUE
+scan
+set AckPB FALSE
+wait 100ms
+set Trip4_NC TRUE
+wait 500ms
+set Trip4_NC FALSE                 # trips again before anyone reset it
+wait 500ms
+expect Unacked[4] FALSE
+expect Horn FALSE
+expect Latched[4] TRUE
+expect FirstOut[4] TRUE
+
+scenario lamp test lights every lamp and changes nothing else
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC TRUE
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+scan
+set Trip3_NC FALSE
+wait 1s
+set Trip5_NC FALSE
+wait 500ms
+set LampTestPB TRUE
+scan
+expect Lamp1 TRUE
+expect Lamp2 TRUE
+expect Lamp3 TRUE
+expect Lamp4 TRUE
+expect Lamp5 TRUE
+expect Lamp6 TRUE
+expect Lamp7 TRUE
+expect Lamp8 TRUE
+wait 300ms
+expect Lamp3 TRUE
+expect Lamp5 TRUE
+expect Lamp1 TRUE
+wait 300ms
+expect Lamp3 TRUE
+expect Lamp8 TRUE
+wait 300ms
+expect Lamp3 TRUE
+expect Lamp5 TRUE
+expect Horn TRUE                   # lamp test does not acknowledge
+set LampTestPB FALSE
+wait 50ms
+expect Lamp1 FALSE
+expect Lamp8 FALSE
+expect Latched[1] FALSE
+expect Latched[3] TRUE
+expect Unacked[3] TRUE
+expect FirstOut[3] TRUE
+until Lamp3 = FALSE within 700ms
+until Lamp3 = TRUE within 700ms

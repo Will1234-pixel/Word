@@ -1,0 +1,491 @@
+# Lab 11-1 acceptance tests: FB_Motor used for Pump1, Pump2 and Fan1.
+# Tested: start/stop with stop priority, NC stop wire break, interlocks
+# (fan proven running, tank low-low) with no automatic restart, feedback
+# discrepancy faults in both directions with each instance's own timeout
+# (pumps 2 s, fan 5 s), fault latching, reset without restart, a reset that
+# cannot clear a fault whose cause is still present, the common fault lamp,
+# and independence of the three instances.
+# Only interface names are used: the program I/O plus the instance outputs
+# Pump1/Pump2/Fan1 .RunCmd .Running .Fault. RunSeconds is an optional
+# extension and is not tested.
+# Every scenario starts with the stop buttons and the tank switch healthy
+# (NC inputs TRUE). Checks after a change allow two scans (or more), so the
+# order in which you call the instances does not matter.
+
+scenario everything is off at power-up and nothing starts by itself
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+scan
+expect Pump1Contactor FALSE
+expect Pump2Contactor FALSE
+expect Fan1Contactor FALSE
+expect FaultLamp FALSE
+wait 6s
+expect Pump1Contactor FALSE
+expect Pump2Contactor FALSE
+expect Fan1Contactor FALSE
+expect Pump1.Fault FALSE
+expect Pump2.Fault FALSE
+expect Fan1.Fault FALSE
+expect FaultLamp FALSE
+
+scenario the fan starts, seals in, and is proven running by its airflow switch
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+scan 2
+expect Fan1Contactor TRUE
+expect Fan1.RunCmd TRUE
+expect Fan1.Running FALSE           # commanded, but no airflow yet
+set Fan1StartPB FALSE
+wait 1s
+expect Fan1Contactor TRUE           # seal-in
+set Fan1AirflowSw TRUE
+scan 2
+expect Fan1.Running TRUE
+wait 10s
+expect Fan1Contactor TRUE
+expect Fan1.Fault FALSE
+expect FaultLamp FALSE
+
+scenario a pump cannot start until the fan is proven running
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+scan 2
+set Fan1StartPB FALSE
+scan
+expect Fan1Contactor TRUE           # fan told to run, airflow not proven yet
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+wait 200ms
+expect Pump1Contactor FALSE         # fan contactor on is not enough
+set Fan1AirflowSw TRUE
+wait 500ms
+expect Fan1.Running TRUE
+expect Pump1Contactor FALSE         # the earlier Start press is not remembered
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+expect Pump1Contactor TRUE
+expect Pump1.RunCmd TRUE
+
+scenario each pump starts and stops on its own buttons
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+set Pump1RunFb TRUE
+scan 2
+expect Pump1Contactor TRUE
+expect Pump1.Running TRUE
+expect Pump2Contactor FALSE         # separate instance, separate memory
+set Pump2StartPB TRUE
+scan 2
+set Pump2StartPB FALSE
+set Pump2RunFb TRUE
+wait 1s
+expect Pump1Contactor TRUE
+expect Pump2Contactor TRUE
+expect Pump2.Running TRUE
+set Pump1StopPB_NC FALSE            # stop pump 1 only
+scan 2
+expect Pump1Contactor FALSE
+expect Pump1.Running FALSE
+expect Pump2Contactor TRUE
+set Pump1RunFb FALSE                # its contactor drops out
+set Pump1StopPB_NC TRUE             # stop released: no restart
+wait 3s
+expect Pump1Contactor FALSE
+expect Pump2Contactor TRUE
+expect Pump1.Fault FALSE
+expect Pump2.Fault FALSE
+
+scenario stop wins when start and stop are pressed together
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump2StopPB_NC FALSE
+set Pump2StartPB TRUE
+scan 2
+expect Pump2Contactor FALSE
+wait 500ms
+expect Pump2Contactor FALSE
+set Fan1StopPB_NC FALSE
+set Fan1StartPB TRUE
+scan 2
+expect Fan1Contactor FALSE
+
+scenario a broken wire on a stop button stops that motor
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump2StartPB TRUE
+scan 2
+set Pump2StartPB FALSE
+set Pump2RunFb TRUE
+wait 1s
+expect Pump2Contactor TRUE
+set Pump2StopPB_NC FALSE            # wire break reads the same as a pressed stop
+scan 2
+expect Pump2Contactor FALSE
+expect Fan1Contactor TRUE
+
+scenario losing the fan stops both pumps, and they do not restart by themselves
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+set Pump2StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+set Pump2StartPB FALSE
+set Pump1RunFb TRUE
+set Pump2RunFb TRUE
+wait 1s
+expect Pump1Contactor TRUE
+expect Pump2Contactor TRUE
+set Fan1StopPB_NC FALSE             # operator stops the fan
+scan 3
+expect Fan1Contactor FALSE
+expect Pump1Contactor FALSE         # interlock: no proven ventilation
+expect Pump2Contactor FALSE
+set Fan1AirflowSw FALSE
+set Pump1RunFb FALSE
+set Pump2RunFb FALSE
+set Fan1StopPB_NC TRUE
+wait 500ms
+set Fan1StartPB TRUE                # fan restarted...
+scan 2
+set Fan1StartPB FALSE
+set Fan1AirflowSw TRUE
+wait 3s
+expect Fan1.Running TRUE
+expect Pump1Contactor FALSE         # ...but the pumps wait for a new Start
+expect Pump2Contactor FALSE
+expect Pump1.Fault FALSE
+expect Pump2.Fault FALSE
+expect FaultLamp FALSE
+
+scenario tank low-low stops the pumps but not the fan, with no restart when the level returns
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+set Pump1RunFb TRUE
+wait 1s
+expect Pump1Contactor TRUE
+set TankLowLow_NC FALSE             # low-low (or a broken wire to the switch)
+scan 2
+expect Pump1Contactor FALSE
+expect Fan1Contactor TRUE
+set Pump1RunFb FALSE
+set Pump1StartPB TRUE               # start is refused while the level is low
+scan 2
+set Pump1StartPB FALSE
+expect Pump1Contactor FALSE
+set TankLowLow_NC TRUE
+wait 2s
+expect Pump1Contactor FALSE
+expect Pump1.Fault FALSE
+
+scenario a pump that does not prove running faults after its 2 s timeout
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump2StartPB TRUE
+scan 2
+set Pump2StartPB FALSE
+set Pump2RunFb TRUE                 # pump 2 is healthy and running
+scan
+set Pump1StartPB TRUE               # pump 1 is started but its contactor never pulls in
+scan
+set Pump1StartPB FALSE
+wait 1700ms
+expect Pump1Contactor TRUE          # still inside its 2 s allowance
+expect Pump1.Fault FALSE
+expect FaultLamp FALSE
+wait 600ms
+expect Pump1.Fault TRUE
+expect Pump1Contactor FALSE
+expect FaultLamp TRUE
+expect Pump2.Fault FALSE            # the other instances are not affected
+expect Pump2Contactor TRUE
+expect Pump2.Running TRUE
+expect Fan1.Fault FALSE
+expect Fan1Contactor TRUE
+
+scenario the fan has its own, longer 5 s feedback timeout
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+scan
+set Fan1StartPB FALSE               # airflow switch never makes
+wait 4500ms
+expect Fan1Contactor TRUE
+expect Fan1.Fault FALSE
+expect FaultLamp FALSE
+wait 1000ms
+expect Fan1.Fault TRUE
+expect Fan1Contactor FALSE
+expect FaultLamp TRUE
+expect Pump1.Fault FALSE
+expect Pump2.Fault FALSE
+
+scenario losing airflow stops the pumps at once and trips the fan after 5 s
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+set Pump1RunFb TRUE
+wait 1s
+expect Pump1Contactor TRUE
+set Fan1AirflowSw FALSE             # broken fan belt: motor runs, no air moves
+scan 3
+expect Fan1.Running FALSE
+expect Pump1Contactor FALSE         # pumps stop immediately on the interlock
+set Pump1RunFb FALSE
+wait 4000ms
+expect Fan1Contactor TRUE           # fan still inside its 5 s allowance
+expect Fan1.Fault FALSE
+wait 1500ms
+expect Fan1.Fault TRUE
+expect Fan1Contactor FALSE
+expect FaultLamp TRUE
+expect Pump1.Fault FALSE
+
+scenario losing run feedback while running trips the pump after 2 s
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump2StartPB TRUE
+scan 2
+set Pump2StartPB FALSE
+set Pump2RunFb TRUE
+wait 3s
+expect Pump2.Running TRUE
+set Pump2RunFb FALSE                # overload trips, contactor drops out
+scan
+wait 1700ms
+expect Pump2.Fault FALSE
+expect Pump2.Running FALSE
+wait 600ms
+expect Pump2.Fault TRUE
+expect Pump2Contactor FALSE
+expect FaultLamp TRUE
+
+scenario a short feedback flicker does not add up to a fault
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+set Pump1RunFb TRUE
+wait 1s
+set Pump1RunFb FALSE                # 1.5 s drop-out...
+wait 1500ms
+set Pump1RunFb TRUE                 # ...feedback back for 0.5 s...
+wait 500ms
+set Pump1RunFb FALSE                # ...another 1.5 s drop-out
+wait 1500ms
+expect Pump1.Fault FALSE            # the timeout is for one continuous disagreement
+expect Pump1Contactor TRUE
+set Pump1RunFb TRUE
+wait 3s
+expect Pump1.Fault FALSE
+expect Pump1.Running TRUE
+
+scenario a motor running without a command is faulted (welded contactor)
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+scan
+set Pump2RunFb TRUE                 # feedback with no command
+wait 1700ms
+expect Pump2.Fault FALSE
+expect FaultLamp FALSE
+wait 600ms
+expect Pump2.Fault TRUE
+expect FaultLamp TRUE
+expect Pump2Contactor FALSE
+expect Pump1.Fault FALSE
+set ResetPB TRUE                    # reset while the contactor is still welded in:
+scan 3
+expect Pump2.Fault TRUE             # the cause is still there, so the fault stays on,
+expect FaultLamp TRUE               # even while the reset button is held
+set ResetPB FALSE
+wait 500ms
+expect Pump2.Fault TRUE             # (not cleared for a fresh 2 s allowance either)
+expect Pump2Contactor FALSE
+set Pump2RunFb FALSE                # contactor repaired: the feedback drops
+wait 500ms
+expect Pump2.Fault TRUE             # still latched until someone resets it
+set ResetPB TRUE
+scan 2
+set ResetPB FALSE
+wait 500ms
+expect Pump2.Fault FALSE
+expect FaultLamp FALSE
+expect Pump2Contactor FALSE
+
+scenario after a stop the fan's airflow switch gets the fan's 5 s, then it is an uncommanded run
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+wait 1s
+expect Fan1.Running TRUE
+set Fan1StopPB_NC FALSE             # fan stopped, but the airflow switch stays made
+scan
+set Fan1StopPB_NC TRUE
+wait 4500ms
+expect Fan1Contactor FALSE
+expect Fan1.Fault FALSE             # a long run-down is still inside the fan's 5 s
+wait 1000ms
+expect Fan1.Fault TRUE              # stuck airflow switch, or the fan run from elsewhere
+expect FaultLamp TRUE
+expect Fan1Contactor FALSE
+
+scenario a fault stays latched and blocks starting until it is reset
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+wait 2500ms                         # no feedback: fault
+expect Pump1.Fault TRUE
+expect Pump1Contactor FALSE
+wait 3s
+expect Pump1.Fault TRUE             # latched: stays on with the cause gone
+expect FaultLamp TRUE
+set Pump1StartPB TRUE               # start is refused while faulted
+scan 3
+set Pump1StartPB FALSE
+scan 2
+expect Pump1Contactor FALSE
+expect Pump1.RunCmd FALSE
+wait 1s
+expect Pump1Contactor FALSE
+
+scenario reset clears the fault but does not restart the motor
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+set Fan1AirflowSw TRUE
+scan 2
+set Fan1StartPB FALSE
+set Pump1StartPB TRUE
+scan 2
+set Pump1StartPB FALSE
+wait 2500ms
+expect Pump1.Fault TRUE
+set ResetPB TRUE
+scan 2
+set ResetPB FALSE
+wait 500ms
+expect Pump1.Fault FALSE
+expect FaultLamp FALSE
+expect Pump1Contactor FALSE         # reset must never start equipment
+wait 3s
+expect Pump1Contactor FALSE
+expect Pump1.Fault FALSE            # cause is gone, so no new fault
+set Pump1StartPB TRUE               # a new Start after the reset works
+scan 2
+set Pump1StartPB FALSE
+set Pump1RunFb TRUE
+wait 3s
+expect Pump1Contactor TRUE
+expect Pump1.Running TRUE
+expect Pump1.Fault FALSE
+
+scenario a fan fault is reset from the common reset button
+set Pump1StopPB_NC TRUE
+set Pump2StopPB_NC TRUE
+set Fan1StopPB_NC TRUE
+set TankLowLow_NC TRUE
+set Fan1StartPB TRUE
+scan
+set Fan1StartPB FALSE
+wait 6s
+expect Fan1.Fault TRUE
+set ResetPB TRUE
+scan 2
+set ResetPB FALSE
+wait 500ms
+expect Fan1.Fault FALSE
+expect Fan1Contactor FALSE
+expect FaultLamp FALSE

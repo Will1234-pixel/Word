@@ -1,0 +1,214 @@
+# Lab 09-1 acceptance tests: the F_Scale function and the four places the program uses it.
+# The tests can only see program variables, so they check F_Scale through its uses:
+#   Level_m   = F_Scale(LevelRaw, RawAt4mA, RawAt20mA, 0.5, 4.5, Clamp FALSE)
+#   LevelPct  = F_Scale(LevelRaw, RawAt4mA, RawAt20mA, 0.0, 100.0, Clamp TRUE)
+#   SpeedAO   = F_Scale(SpeedRef_Hz, DriveMinHz, DriveMaxHz, 0.0, 27648.0, Clamp TRUE), as INT
+#   ValveAO   = F_Scale(ValveCmd_Pct, 0.0, 100.0, 27648.0, 0.0, Clamp TRUE), as INT
+# Raw convention: 0..27648 = 4..20 mA, so 1728 counts per mA.
+# REAL values are checked to +/-0.001 m or +/-0.01 %. Raw outputs may be off by one count,
+# so REAL_TO_INT and TRUNC are both accepted.
+
+scenario level: straight-line scaling with the default card range
+set LevelRaw 0
+scan
+expect Level_m ~ 0.5 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw 13824             # 12 mA
+scan
+expect Level_m ~ 2.5 0.001
+expect LevelPct ~ 50.0 0.01
+set LevelRaw 20736             # 16 mA
+scan
+expect Level_m ~ 3.5 0.001
+expect LevelPct ~ 75.0 0.01
+set LevelRaw 27648             # 20 mA
+scan
+expect Level_m ~ 4.5 0.001
+expect LevelPct ~ 100.0 0.01
+set LevelRaw 1000              # small values keep their fraction (no integer division)
+scan
+expect Level_m ~ 0.644676 0.001
+expect LevelPct ~ 3.6169 0.01
+
+scenario level: Level_m is not clamped, LevelPct is clamped to 0..100
+set LevelRaw 29376             # 21 mA: over-range
+scan
+expect Level_m ~ 4.75 0.001
+expect LevelPct ~ 100.0 0.01
+set LevelRaw -1728             # 3 mA: under-range
+scan
+expect Level_m ~ 0.25 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw -6912             # 0 mA: open circuit
+scan
+expect Level_m ~ -0.5 0.001
+expect LevelPct ~ 0.0 0.01
+
+scenario level: a card with a different raw range (4000 at 4 mA, 20000 at 20 mA)
+set RawAt4mA 4000.0
+set RawAt20mA 20000.0
+set LevelRaw 12000             # 12 mA
+scan
+expect Level_m ~ 2.5 0.001
+expect LevelPct ~ 50.0 0.01
+set LevelRaw 4000              # 4 mA
+scan
+expect Level_m ~ 0.5 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw 20000             # 20 mA
+scan
+expect Level_m ~ 4.5 0.001
+expect LevelPct ~ 100.0 0.01
+set LevelRaw 3000              # 3 mA
+scan
+expect Level_m ~ 0.25 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw 21000             # 21 mA
+scan
+expect Level_m ~ 4.75 0.001
+expect LevelPct ~ 100.0 0.01
+
+scenario level: a reverse-acting input range (20 mA = empty) still scales and clamps
+set RawAt4mA 27648.0
+set RawAt20mA 0.0
+set LevelRaw 20736
+scan
+expect Level_m ~ 1.5 0.001
+expect LevelPct ~ 25.0 0.01
+set LevelRaw 30000             # beyond the "4 mA" end
+scan
+expect Level_m ~ 0.159722 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw -1000             # beyond the "20 mA" end
+scan
+expect Level_m ~ 4.644676 0.001
+expect LevelPct ~ 100.0 0.01
+
+scenario level: zero input span gives OutMin (0.5 m), never NaN or infinity
+set RawAt4mA 4000.0
+set RawAt20mA 4000.0
+set LevelRaw 12000
+scan
+expect Level_m ~ 0.5 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw 3000
+scan
+expect Level_m ~ 0.5 0.001
+expect LevelPct ~ 0.0 0.01
+set LevelRaw 4000              # 0 / 0 without protection
+scan
+expect Level_m ~ 0.5 0.001
+expect LevelPct ~ 0.0 0.01
+set RawAt4mA 0.0               # both settings left at zero
+set RawAt20mA 0.0
+set LevelRaw 0
+scan
+expect Level_m ~ 0.5 0.001
+expect LevelPct ~ 0.0 0.01
+set RawAt4mA 0.0               # and scaling recovers when the setting is corrected
+set RawAt20mA 27648.0
+set LevelRaw 13824
+scan
+expect Level_m ~ 2.5 0.001
+
+scenario speed reference: 0..50 Hz to 0..27648, clamped
+set SpeedRef_Hz 0.0
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+set SpeedRef_Hz 25.0
+scan
+expect SpeedAO >= 13823
+expect SpeedAO <= 13825
+set SpeedRef_Hz 12.5
+scan
+expect SpeedAO >= 6911
+expect SpeedAO <= 6913
+set SpeedRef_Hz 50.0
+scan
+expect SpeedAO >= 27647
+expect SpeedAO <= 27648
+set SpeedRef_Hz 60.0           # above the drive range: clamped to 20 mA
+scan
+expect SpeedAO >= 27647
+expect SpeedAO <= 27648
+set SpeedRef_Hz 500.0          # a typing error must not overflow the INT
+scan
+expect SpeedAO >= 27647
+expect SpeedAO <= 27648
+set SpeedRef_Hz -5.0           # below the range: clamped to 4 mA
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+
+scenario speed reference: the drive range does not start at zero (10..50 Hz)
+set DriveMinHz 10.0
+set DriveMaxHz 50.0
+set SpeedRef_Hz 30.0
+scan
+expect SpeedAO >= 13823
+expect SpeedAO <= 13825
+set SpeedRef_Hz 20.0
+scan
+expect SpeedAO >= 6911
+expect SpeedAO <= 6913
+set SpeedRef_Hz 10.0
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+set SpeedRef_Hz 5.0            # below the drive minimum: clamped
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+
+scenario speed reference: zero drive range gives 4 mA (raw 0), never full speed
+set DriveMinHz 50.0
+set DriveMaxHz 50.0
+set SpeedRef_Hz 60.0
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+set SpeedRef_Hz 50.0
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+set SpeedRef_Hz 30.0
+scan
+expect SpeedAO >= 0
+expect SpeedAO <= 1
+
+scenario reverse-acting valve: 0 % open = 20 mA, 100 % open = 4 mA
+set ValveCmd_Pct 0.0
+scan
+expect ValveAO >= 27647
+expect ValveAO <= 27648
+set ValveCmd_Pct 25.0
+scan
+expect ValveAO >= 20735
+expect ValveAO <= 20737
+set ValveCmd_Pct 50.0
+scan
+expect ValveAO >= 13823
+expect ValveAO <= 13825
+set ValveCmd_Pct 75.0
+scan
+expect ValveAO >= 6911
+expect ValveAO <= 6913
+set ValveCmd_Pct 100.0
+scan
+expect ValveAO >= 0
+expect ValveAO <= 1
+
+scenario reverse-acting valve: out-of-range demands are clamped the right way round
+set ValveCmd_Pct 110.0
+scan
+expect ValveAO >= 0
+expect ValveAO <= 1
+set ValveCmd_Pct -10.0
+scan
+expect ValveAO >= 27647
+expect ValveAO <= 27648
+set ValveCmd_Pct 60.0
+scan
+expect ValveAO >= 11058
+expect ValveAO <= 11060

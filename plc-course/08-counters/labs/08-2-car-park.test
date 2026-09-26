@@ -1,0 +1,324 @@
+# Lab 08-2 acceptance tests: car park up/down counter.
+# Tested: one count per car on each loop, however long it stays on the loop;
+# the count never goes below 0 and does not "owe" phantom cars afterwards;
+# the FULL sign at exactly Capacity; counting goes on ABOVE Capacity when
+# drivers ignore the sign, and the sign and SpacesFree stay right on the
+# way back down; an entry and an exit in the same scan are both counted;
+# Capacity changes take effect at once; PresetPB loads PresetValue (negative
+# values as 0, values above Capacity allowed), cars are not counted while it
+# is held and a car on a loop when it is released is not counted late.
+# Only interface variables are used. Each scenario starts from a fresh PLC.
+
+scenario at power-up the car park is empty and the FULL sign is off
+scan
+expect CarCount 0
+expect SpacesFree 50           # default Capacity is 50
+expect FullSign FALSE
+wait 1s
+expect CarCount 0
+expect FullSign FALSE
+
+scenario each car counts once in and once out, however long it stays on the loop
+scan
+set EntryLoop TRUE             # a car drives onto the entry loop...
+scan
+expect CarCount 1              # ...counted in the same scan
+expect SpacesFree 49
+wait 5s                        # the barrier is slow: the car waits on the loop
+expect CarCount 1
+set EntryLoop FALSE
+scan
+expect CarCount 1              # driving off the loop is not another car
+wait 500ms
+set ExitLoop TRUE              # the car leaves
+scan
+expect CarCount 0
+expect SpacesFree 50
+wait 3s
+set ExitLoop FALSE
+scan
+expect CarCount 0
+
+scenario a stream of cars is counted exactly
+scan
+set EntryLoop TRUE
+wait 300ms
+set EntryLoop FALSE
+wait 200ms
+set EntryLoop TRUE
+wait 300ms
+set EntryLoop FALSE
+wait 200ms
+set EntryLoop TRUE             # three quick cars: one scan on, one scan off
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 5
+expect SpacesFree 45
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 3
+
+scenario the count never goes below zero, and owes no phantom cars afterwards
+scan
+set ExitLoop TRUE              # a car leaves that was never counted in
+scan
+set ExitLoop FALSE
+scan
+set ExitLoop TRUE              # and another
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 0
+expect SpacesFree 50
+expect FullSign FALSE
+set EntryLoop TRUE             # the next car in makes the count 1, not -1
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 1
+expect SpacesFree 49
+
+scenario the FULL sign comes on at exactly Capacity and goes off one car below it
+set Capacity 3
+scan
+expect SpacesFree 3
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 2
+expect FullSign FALSE          # 2 of 3: one space left
+expect SpacesFree 1
+set EntryLoop TRUE
+scan
+expect CarCount 3
+expect FullSign TRUE           # 3 of 3: full, in the same scan
+expect SpacesFree 0
+set EntryLoop FALSE
+scan
+set ExitLoop TRUE
+scan
+expect CarCount 2
+expect FullSign FALSE
+expect SpacesFree 1
+
+scenario cars that ignore the FULL sign are still counted, and the sign stays right on the way down
+set Capacity 3
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+expect FullSign TRUE
+set EntryLoop TRUE             # 4th car: the driver ignores the sign
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE             # 5th car
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 5              # the count goes on above Capacity
+expect FullSign TRUE
+expect SpacesFree 0            # never negative
+set ExitLoop TRUE              # one car leaves: 4 in a 3-space car park
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 4
+expect FullSign TRUE           # still over-full: the sign must stay on
+expect SpacesFree 0
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 3
+expect FullSign TRUE
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 2
+expect FullSign FALSE          # now there really is a space
+expect SpacesFree 1
+
+scenario an entry and an exit in the same scan are both counted
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 2
+set EntryLoop TRUE             # one car in and one car out, in the same scan
+set ExitLoop TRUE
+scan
+expect CarCount 2              # +1 -1 = no change
+set EntryLoop FALSE
+set ExitLoop FALSE
+scan
+set EntryLoop TRUE             # and the counters still work separately afterwards
+scan
+expect CarCount 3
+set ExitLoop TRUE
+scan
+expect CarCount 2
+
+scenario a change of Capacity takes effect at once
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 2
+expect FullSign FALSE
+expect SpacesFree 48
+set Capacity 2                 # half the car park is closed for resurfacing
+scan
+expect FullSign TRUE
+expect SpacesFree 0
+expect CarCount 2              # the count itself does not change
+set Capacity 10
+scan
+expect FullSign FALSE
+expect SpacesFree 8
+
+scenario the preset loads the attendant's count, and counting carries on from it
+scan
+set PresetValue 37
+set PresetPB TRUE
+scan
+expect CarCount 37
+expect SpacesFree 13
+set EntryLoop TRUE             # a car on the entry loop while the button is held...
+wait 200ms
+set EntryLoop FALSE
+scan
+expect CarCount 37             # ...is not counted: the preset has priority
+set PresetPB FALSE
+scan
+expect CarCount 37             # releasing the button keeps the preset value
+wait 500ms
+expect CarCount 37
+set EntryLoop TRUE
+scan
+expect CarCount 38             # counting carries on from the preset
+set EntryLoop FALSE
+scan
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 37
+
+scenario a car on the loop when the preset is released is not counted late
+scan
+set PresetValue 10
+set PresetPB TRUE
+scan
+set EntryLoop TRUE             # car arrives while the button is held
+wait 300ms
+set PresetPB FALSE             # button released, car still on the loop
+scan
+expect CarCount 10
+wait 1s
+expect CarCount 10
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE             # the next car is counted
+scan
+expect CarCount 11
+
+scenario a preset of zero empties the car park, a negative preset counts as zero
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+set EntryLoop TRUE
+scan
+set EntryLoop FALSE
+scan
+expect CarCount 2
+set PresetValue 0              # the car park is empty after closing time
+set PresetPB TRUE
+scan
+set PresetPB FALSE
+scan
+expect CarCount 0
+expect SpacesFree 50
+set PresetValue -5             # a typing mistake on the HMI
+set PresetPB TRUE
+scan
+expect CarCount 0              # a negative number of cars makes no sense
+set PresetPB FALSE
+scan
+expect CarCount 0
+set EntryLoop TRUE
+scan
+expect CarCount 1
+
+scenario a preset above Capacity is allowed and turns the FULL sign on
+set Capacity 50
+scan
+set PresetValue 53
+set PresetPB TRUE
+scan
+set PresetPB FALSE
+scan
+expect CarCount 53
+expect FullSign TRUE
+expect SpacesFree 0
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+set ExitLoop TRUE
+scan
+set ExitLoop FALSE
+scan
+expect CarCount 50
+expect FullSign TRUE
+set ExitLoop TRUE
+scan
+expect CarCount 49
+expect FullSign FALSE
+expect SpacesFree 1

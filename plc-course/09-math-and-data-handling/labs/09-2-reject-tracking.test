@@ -1,0 +1,623 @@
+# Lab 09-2 acceptance tests: conveyor reject tracking with a bit shift register.
+# Interface: EncoderPulse, InspectFail, ResetPB, RejectGate, RejectPos (default 5),
+# TrackWord (bit n = the part n pitches past the camera is bad), RejectCount.
+# A camera result and an encoder pulse never change in the same scan, and every
+# change is followed by two scans, so the order of your statements does not matter.
+# "pulse" below means: EncoderPulse TRUE for two scans, then FALSE for two scans.
+
+scenario power-up: nothing is tracked and good parts are never rejected
+scan 2
+expect TrackWord 16#0000
+expect RejectGate FALSE
+expect RejectCount 0
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 8
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 9
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 10
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+expect TrackWord 16#0000
+expect RejectCount 0
+
+scenario one bad part travels down the belt and is rejected at position 5, for one pitch only
+set InspectFail TRUE          # camera: the part at position 0 is bad
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0001
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0002
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0004
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0008
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0010
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 5: the bad part reaches the gate
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0020
+expect RejectGate TRUE
+expect RejectCount 1
+wait 1s                         # belt stopped: the gate stays on, and counts once
+expect RejectGate TRUE
+expect RejectCount 1
+set EncoderPulse TRUE         # pulse 6: the part has left the gate
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0040
+expect RejectGate FALSE
+expect RejectCount 1
+
+scenario a pulse that stays on shifts the word only once
+set InspectFail TRUE
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE
+wait 500ms
+expect TrackWord 16#0002
+set EncoderPulse FALSE
+wait 500ms
+expect TrackWord 16#0002
+set EncoderPulse TRUE
+wait 300ms
+set EncoderPulse FALSE
+wait 300ms
+expect TrackWord 16#0004
+
+scenario a long camera signal, or two results for the same part, marks only bit 0
+set InspectFail TRUE
+wait 500ms
+expect TrackWord 16#0001
+set InspectFail FALSE
+scan 2
+set InspectFail TRUE          # a second fail result for the same part
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0001
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 1
+
+scenario two bad parts in a row: the gate stays on for two pitches and counts two rejects
+set InspectFail TRUE          # part A is bad
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set InspectFail TRUE          # part B, right behind A, is bad too
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0003
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0006
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 5: A at the gate
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 1
+set EncoderPulse TRUE         # pulse 6: B at the gate
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 2
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+expect RejectCount 2
+
+scenario bad, good, bad: the gate fires for the bad parts only
+set InspectFail TRUE          # part A is bad
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1: part B (good) arrives at the camera
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set InspectFail TRUE          # part C is bad
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0005
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE              # A at the gate
+expect RejectCount 1
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE             # B, good, at the gate
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE              # C at the gate
+expect RejectCount 2
+set EncoderPulse TRUE         # pulse 8
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+
+scenario the gate position is a setting: RejectPos 3
+set RejectPos 3
+set InspectFail TRUE
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 1
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+
+scenario RejectPos 15, the last bit; the bad bit then falls off the end
+set RejectPos 15
+set InspectFail TRUE
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 8
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 9
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 10
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 11
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 12
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 13
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 14
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+expect TrackWord 16#4000
+set EncoderPulse TRUE         # pulse 15
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect TrackWord 16#8000
+expect RejectCount 1
+set EncoderPulse TRUE         # pulse 16
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+expect TrackWord 16#0000
+
+scenario a bit shifted out of the word is gone for good (shift, not rotate)
+set InspectFail TRUE
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 8
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 9
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 10
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 11
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 12
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 13
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 14
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 15
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 16
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0000
+set EncoderPulse TRUE         # pulse 17
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 18
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 19
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 20
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 21
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 22
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+expect RejectCount 1
+
+scenario a RejectPos outside 1..15 is limited to the word, so the gate still works
+set RejectPos 40                  # treated as 15
+set InspectFail TRUE
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 8
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 9
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 10
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 11
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 12
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 13
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 14
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 15
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 1
+set RejectPos 0                   # treated as 1
+set EncoderPulse TRUE         # pulse 16
+scan 2
+set EncoderPulse FALSE
+scan 2
+set InspectFail TRUE
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 17
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 2
+set EncoderPulse TRUE         # pulse 18
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+
+scenario reset clears the tracking (and the gate) but keeps the reject count
+set InspectFail TRUE          # part A is bad
+scan 2
+set InspectFail FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 1
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate TRUE
+expect RejectCount 1
+set InspectFail TRUE          # part F is bad as well
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0021
+set ResetPB TRUE                  # the operator empties the belt and presses reset
+scan 2
+expect TrackWord 16#0000
+expect RejectGate FALSE
+set ResetPB FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 7
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 8
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 9
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 10
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 11
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+set EncoderPulse TRUE         # pulse 12
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0000
+expect RejectCount 1

@@ -1,0 +1,297 @@
+# Lab 04-3 acceptance tests: jog/run selector.
+# Tests: continuous run seals in only in RUN; jog runs only while the button
+# is held and never seals in, however long it is held; jog and start are
+# ignored in the wrong mode; changing the selector stops the motor and never
+# restarts it; stop and overload win in every mode, also over a held Start;
+# RunLamp shows continuous running only; fail-safe NC wiring.
+# Healthy NC inputs read TRUE, so every scenario sets them first.
+
+scenario power-up in RUN: motor off
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 1s
+expect Motor FALSE
+
+scenario power-up in JOG: motor off
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 1s
+expect Motor FALSE
+
+scenario RUN mode: start seals in and lights the run lamp
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE
+scan
+expect Motor TRUE
+expect RunLamp TRUE
+set StartPB FALSE
+wait 2s
+expect Motor TRUE
+expect RunLamp TRUE
+
+scenario RUN mode: stop stops the motor and it stays stopped
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+set StopPB_NC FALSE
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+set StopPB_NC TRUE
+wait 1s
+expect Motor FALSE
+expect RunLamp FALSE
+
+scenario RUN mode: stop wins over start, whether start is pressed or held
+set StopPB_NC FALSE                 # Stop held...
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE                    # ...while Start is pressed
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 500ms
+expect Motor FALSE
+set StartPB FALSE
+scan
+set StopPB_NC TRUE                  # releasing Stop restarts nothing
+wait 500ms
+expect Motor FALSE
+set StartPB TRUE                    # now run, and keep Start held down...
+scan
+expect Motor TRUE
+wait 500ms
+set StopPB_NC FALSE                 # ...while Stop is pressed
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 1s
+expect Motor FALSE                  # stays off for as long as Stop is held
+expect RunLamp FALSE
+
+scenario RUN mode: an overload trip wins over a held start
+set StopPB_NC TRUE
+set OverloadOK_NC FALSE             # overload already tripped
+set RunSel TRUE
+set StartPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+set OverloadOK_NC TRUE              # overload reset, Start released first
+set StartPB FALSE
+wait 300ms
+set StartPB TRUE                    # run with Start held down...
+scan
+expect Motor TRUE
+wait 500ms
+set OverloadOK_NC FALSE             # ...when the overload trips
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 1s
+expect Motor FALSE
+expect RunLamp FALSE
+
+scenario RUN mode: the jog button does not start the motor
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set JogPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+set JogPB FALSE
+wait 500ms
+expect Motor FALSE
+expect RunLamp FALSE
+
+scenario RUN mode: the jog button does not disturb a running motor
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+set JogPB TRUE
+wait 500ms
+expect Motor TRUE
+set JogPB FALSE
+wait 500ms
+expect Motor TRUE
+expect RunLamp TRUE
+
+scenario JOG mode: motor runs only while jog is held, and never seals in
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+set JogPB TRUE
+scan
+expect Motor TRUE
+expect RunLamp FALSE                # jogging is not "running"
+wait 3s                             # a long jog...
+expect Motor TRUE
+expect RunLamp FALSE
+set JogPB FALSE                     # ...stops the moment the button is released
+scan
+expect Motor FALSE
+wait 1s
+expect Motor FALSE
+expect RunLamp FALSE
+
+scenario JOG mode: repeated short jogs, none of them latches
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+set JogPB TRUE
+scan
+expect Motor TRUE
+set JogPB FALSE
+scan
+expect Motor FALSE
+wait 200ms
+set JogPB TRUE
+wait 300ms
+expect Motor TRUE
+set JogPB FALSE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+
+scenario JOG mode: the start button does nothing
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+set StartPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+expect RunLamp FALSE
+
+scenario JOG mode: holding start does not turn a jog into a run
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+set StartPB TRUE
+set JogPB TRUE
+scan
+expect Motor TRUE
+wait 500ms
+set JogPB FALSE                     # start is still held
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+set StartPB FALSE
+wait 500ms
+expect Motor FALSE
+
+scenario switching from RUN to JOG stops the motor; back to RUN does not restart it
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 1s
+expect Motor TRUE
+set RunSel FALSE                    # selector turned to JOG while running
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+wait 500ms
+set RunSel TRUE                     # and back to RUN
+wait 1s
+expect Motor FALSE                  # a new Start is needed
+expect RunLamp FALSE
+set StartPB TRUE
+scan
+expect Motor TRUE
+
+scenario switching from JOG to RUN while jogging stops the motor and nothing latches
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+set JogPB TRUE
+scan
+expect Motor TRUE
+set RunSel TRUE                     # selector turned to RUN, jog still held
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+set JogPB FALSE
+wait 500ms
+expect Motor FALSE
+expect RunLamp FALSE
+
+scenario JOG mode: stop wins over jog
+set StopPB_NC FALSE
+set OverloadOK_NC TRUE
+set RunSel FALSE
+set JogPB TRUE
+scan
+expect Motor FALSE
+wait 500ms
+expect Motor FALSE
+set StopPB_NC TRUE                  # stop released while jog held: jog resumes
+scan
+expect Motor TRUE
+set StopPB_NC FALSE                 # stop pressed during a jog
+scan
+expect Motor FALSE
+
+scenario overload trip stops a run, blocks jog, and nothing restarts after reset
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+set OverloadOK_NC FALSE
+scan
+expect Motor FALSE
+expect RunLamp FALSE
+set OverloadOK_NC TRUE
+wait 1s
+expect Motor FALSE                  # no automatic restart
+set RunSel FALSE
+set OverloadOK_NC FALSE
+set JogPB TRUE
+wait 500ms
+expect Motor FALSE                  # no jogging with a tripped overload
+
+scenario a broken stop-button wire stops a run and blocks jogging
+set StopPB_NC TRUE
+set OverloadOK_NC TRUE
+set RunSel TRUE
+set StartPB TRUE
+scan
+set StartPB FALSE
+wait 500ms
+set StopPB_NC FALSE                 # wire break reads the same as Stop pressed
+scan
+expect Motor FALSE
+set RunSel FALSE
+set JogPB TRUE
+wait 500ms
+expect Motor FALSE

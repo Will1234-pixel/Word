@@ -1,0 +1,136 @@
+# Lab 09-3 acceptance tests: flow totaliser.
+# Interface: FlowRate (REAL, m3/h), ResetPB, PresetPB, PresetValue_m3 (DINT), TaskCycle (TIME,
+# T#10ms), Total_m3 (LREAL), TotalWhole_m3 (DINT), TotalReal_m3 (REAL, the naive total).
+# Arithmetic reminder: 36 m3/h = 0.01 m3/s, so 36 m3/h for 170 s = 1.7 m3.
+# Checks avoid whole-number boundaries, so TotalWhole_m3 must be cut off (7.7 -> 7), not rounded.
+# The test sets FlowRate directly; in a plant it would come from a scaled analog input.
+
+scenario power-up: everything reads zero and nothing counts without flow
+scan
+expect Total_m3 ~ 0.0 0.0001
+expect TotalWhole_m3 0
+expect TotalReal_m3 ~ 0.0 0.0001
+wait 1m
+expect Total_m3 ~ 0.0 0.0001
+expect TotalWhole_m3 0
+expect TotalReal_m3 ~ 0.0 0.0001
+
+scenario steady flow is integrated in m3/h over the task time
+set FlowRate 36.0
+wait 170s
+expect Total_m3 ~ 1.7 0.002
+expect TotalWhole_m3 1
+expect TotalReal_m3 ~ 1.7 0.01
+wait 10m                       # 770 s at 0.01 m3/s
+expect Total_m3 ~ 7.7 0.002
+expect TotalWhole_m3 7
+expect TotalReal_m3 ~ 7.7 0.01
+set FlowRate 0.0
+wait 5m
+expect Total_m3 ~ 7.7 0.002
+expect TotalWhole_m3 7
+
+scenario the total follows changes in flow
+set FlowRate 120.0
+wait 90s                       # 3.0 m3
+set FlowRate 12.0
+wait 60s                       # + 0.2 m3
+expect Total_m3 ~ 3.2 0.002
+expect TotalWhole_m3 3
+set FlowRate 1.8
+wait 20m                       # + 0.6 m3
+expect Total_m3 ~ 3.8 0.002
+expect TotalWhole_m3 3
+
+scenario negative flow readings are not totalised
+set FlowRate 36.0
+wait 130s
+expect Total_m3 ~ 1.3 0.002
+set FlowRate -20.0             # noise below zero, or a transmitter fault
+wait 100s
+expect Total_m3 ~ 1.3 0.002
+expect TotalWhole_m3 1
+expect TotalReal_m3 ~ 1.3 0.01
+set FlowRate -0.3
+wait 100s
+expect Total_m3 ~ 1.3 0.002
+
+scenario one hour at 50 m3/h is 50 m3 (better than 0.05 %)
+set FlowRate 50.0
+wait 1h
+expect Total_m3 ~ 50.0 0.02
+wait 5m                        # + 4.167 m3
+expect Total_m3 ~ 54.1667 0.02
+expect TotalWhole_m3 54
+
+scenario reset clears the totals, holds them at zero while pressed, and counting restarts from zero
+set FlowRate 36.0
+wait 90s
+expect Total_m3 ~ 0.9 0.002
+set ResetPB TRUE
+scan
+expect Total_m3 ~ 0.0 0.0001
+expect TotalWhole_m3 0
+expect TotalReal_m3 ~ 0.0 0.0001
+wait 10s                       # still flowing, but held at zero
+expect Total_m3 ~ 0.0 0.0001
+expect TotalReal_m3 ~ 0.0 0.0001
+set ResetPB FALSE
+wait 50s
+expect Total_m3 ~ 0.5 0.002    # 0.9 + 0.5 would be 1.4 if part of the old total survived
+expect TotalWhole_m3 0
+expect TotalReal_m3 ~ 0.5 0.01
+
+scenario preset loads a meter reading, and counting continues from there
+set PresetValue_m3 20000
+set FlowRate 36.0
+wait 10s                       # changing the setting alone does nothing
+expect Total_m3 ~ 0.1 0.002
+set FlowRate 0.0
+set PresetPB TRUE
+scan 2
+set PresetPB FALSE
+scan 2
+expect Total_m3 ~ 20000.0 0.001
+expect TotalWhole_m3 20000
+expect TotalReal_m3 ~ 20000.0 0.001
+set FlowRate 10.0
+wait 612s                      # + 1.7 m3
+expect Total_m3 ~ 20001.7 0.005
+expect TotalWhole_m3 20001
+
+scenario the naive REAL total stops counting near 20000 m3 (this is the point of the lab)
+set PresetValue_m3 20000
+set PresetPB TRUE
+scan 2
+set PresetPB FALSE
+set FlowRate 10.0
+wait 612s
+expect Total_m3 ~ 20001.7 0.005
+expect TotalReal_m3 ~ 20000.0 0.001   # 10 m3/h adds 0.0000278 m3 per scan: rounded away
+
+scenario a very large total still counts accurately
+set PresetValue_m3 5000000
+set PresetPB TRUE
+scan 2
+set PresetPB FALSE
+set FlowRate 100.0
+wait 280s                      # + 7.78 m3
+expect Total_m3 ~ 5000007.778 0.01
+expect TotalWhole_m3 5000007
+expect TotalReal_m3 ~ 5000000.0 0.5
+
+scenario reset wins over preset
+set PresetValue_m3 1000
+set PresetPB TRUE
+scan 2
+set PresetPB FALSE
+set FlowRate 36.0
+wait 100s
+expect Total_m3 ~ 1001.0 0.002
+set ResetPB TRUE
+set PresetPB TRUE
+scan 2
+expect Total_m3 ~ 0.0 0.0001
+expect TotalWhole_m3 0
+expect TotalReal_m3 ~ 0.0 0.0001

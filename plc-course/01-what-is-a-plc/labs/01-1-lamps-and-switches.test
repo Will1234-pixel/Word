@@ -1,0 +1,153 @@
+# Lab 01-1 acceptance tests: lamps and switches.
+# Checks every row of the truth table (both switches, lamp test off), the
+# lamp-test button in every switch combination, and that no lamp latches when
+# the switches or the lamp test change over time (including with switch B held
+# on). Only interface variables are used, so any
+# correct solution passes. Each scenario starts from a freshly powered-up PLC.
+
+scenario truth table row 1: A off, B off
+set SwitchA FALSE
+set SwitchB FALSE
+scan
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither FALSE
+
+scenario truth table row 2: A off, B on
+set SwitchA FALSE
+set SwitchB TRUE
+scan
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither TRUE
+
+scenario truth table row 3: A on, B off
+set SwitchA TRUE
+set SwitchB FALSE
+scan
+expect LampFollow TRUE
+expect LampInverse FALSE
+expect LampBoth FALSE
+expect LampEither TRUE
+
+scenario truth table row 4: A on, B on
+set SwitchA TRUE
+set SwitchB TRUE
+scan
+expect LampFollow TRUE
+expect LampInverse FALSE
+expect LampBoth TRUE
+expect LampEither TRUE
+
+scenario lamp test lights every lamp with both switches off
+set LampTestPB TRUE
+scan
+expect LampFollow TRUE
+expect LampInverse TRUE
+expect LampBoth TRUE
+expect LampEither TRUE
+
+scenario lamp test lights every lamp with A off, B on
+set SwitchB TRUE
+set LampTestPB TRUE
+scan
+expect LampFollow TRUE
+expect LampInverse TRUE
+expect LampBoth TRUE
+expect LampEither TRUE
+
+scenario lamp test lights every lamp with A on, B off
+set SwitchA TRUE
+set LampTestPB TRUE
+scan
+expect LampFollow TRUE
+expect LampInverse TRUE             # the "inverse" lamp too: its bulb needs testing as well
+expect LampBoth TRUE
+expect LampEither TRUE
+
+scenario lamp test lights every lamp with both switches on
+set SwitchA TRUE
+set SwitchB TRUE
+set LampTestPB TRUE
+scan
+expect LampFollow TRUE
+expect LampInverse TRUE
+expect LampBoth TRUE
+expect LampEither TRUE
+
+scenario releasing lamp test returns every lamp to its normal state
+set SwitchA TRUE
+set SwitchB FALSE
+set LampTestPB TRUE
+wait 500ms
+expect LampBoth TRUE
+set LampTestPB FALSE                # operator lets go of the button
+scan
+expect LampFollow TRUE
+expect LampInverse FALSE
+expect LampBoth FALSE
+expect LampEither TRUE
+wait 1s
+expect LampInverse FALSE            # still off: the lamp test left nothing behind
+expect LampBoth FALSE
+
+scenario lamps follow the switches over time and nothing latches
+set SwitchA TRUE
+wait 300ms
+expect LampFollow TRUE
+expect LampInverse FALSE
+expect LampEither TRUE
+set SwitchB TRUE
+wait 300ms
+expect LampBoth TRUE
+set SwitchA FALSE                   # A off again, B still on
+wait 300ms
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither TRUE
+set SwitchB FALSE                   # both off: back to the power-up picture
+wait 300ms
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither FALSE
+
+scenario with B held on, switch A and the lamp test still control every lamp
+set SwitchB TRUE
+scan
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither TRUE
+set SwitchA TRUE                    # A on while B stays on
+scan
+expect LampFollow TRUE
+expect LampInverse FALSE            # must go off: nothing may hold it on
+expect LampBoth TRUE
+expect LampEither TRUE
+set LampTestPB TRUE
+scan
+expect LampInverse TRUE
+set LampTestPB FALSE                # released with both switches on
+scan
+expect LampFollow TRUE
+expect LampInverse FALSE
+expect LampBoth TRUE
+expect LampEither TRUE
+set SwitchA FALSE                   # A off, B still on
+scan
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither TRUE
+set LampTestPB TRUE
+scan
+set LampTestPB FALSE                # released with only B on
+scan
+expect LampFollow FALSE
+expect LampInverse TRUE
+expect LampBoth FALSE
+expect LampEither TRUE

@@ -1,0 +1,295 @@
+# Lab 15-2 acceptance tests: FB_PID, positional PID with limits, anti-windup,
+# direct/reverse action and bumpless manual-to-auto transfer.
+#
+# Part A drives the spare instance Bench on its own (open loop): the tests write its
+# inputs directly and check how Out responds. These checks pin down what the
+# parameters MEAN (ideal form, Kc in % per unit, Ti and Td in seconds), not how the
+# block is coded, so a velocity-form or back-calculation design passes too.
+#
+# Part B runs the controller Loop against the simulated heater Plant
+# (K = 0.8 degC/%, Tau = 20 s, dead time 3 s, 20 degC with the heater off) with the
+# lambda tuning Kc = 2.5 %/degC, Ti = 20 s. PVMax/PVMin are monitors in the test
+# bench; a test writes them to start a fresh measurement.
+
+# ---------------------------------------------------------------------------------
+# Part A - open-loop tests of the function block (instance Bench)
+# ---------------------------------------------------------------------------------
+
+scenario A1 manual mode: Out follows ManualOut, limited to OutMin..OutMax
+set Bench.Manual TRUE
+set Bench.ManualOut 37.5
+scan
+expect Bench.Out ~ 37.5 0.001
+set Bench.ManualOut 150.0
+scan
+expect Bench.Out ~ 100.0 0.001      # default OutMax = 100
+set Bench.ManualOut -20.0
+scan
+expect Bench.Out ~ 0.0 0.001        # default OutMin = 0
+set Bench.OutMin 10.0
+set Bench.OutMax 80.0
+set Bench.ManualOut 95.0
+scan
+expect Bench.Out ~ 80.0 0.001
+set Bench.ManualOut 5.0
+scan
+expect Bench.Out ~ 10.0 0.001
+
+scenario A2 manual to auto is bumpless, then the integral ramps at Kc x E / Ti
+set Bench.Kc 2.0
+set Bench.Ti 5.0                    # seconds
+set Bench.Td 1.0                    # derivative on as well: it must not kick at the switch
+set Bench.SP 50.0
+set Bench.PV 40.0                   # reverse acting: error = SP - PV = +10
+set Bench.Manual TRUE
+set Bench.ManualOut 30.0
+wait 1s
+expect Bench.Out ~ 30.0 0.001
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 30.0 0.2         # no bump (P alone would be 2 x 10 = 20)
+wait 1s
+expect Bench.Out ~ 34.0 0.3         # integral: 2 x 10 / 5 = 4 % per second
+wait 4s
+expect Bench.Out ~ 50.0 0.5         # after Ti = 5 s the integral has repeated the P action (20 %)
+
+scenario A3 bumpless even when the error is bigger than the output range
+set Bench.Kc 2.0
+set Bench.Ti 5.0
+set Bench.SP 50.0
+set Bench.PV 90.0                   # error -40: P alone would be 2 x -40 = -80 %
+set Bench.Manual TRUE
+set Bench.ManualOut 30.0
+wait 1s
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 30.0 0.3         # still no bump: the integral part must hold +110 % here
+wait 1s
+expect Bench.Out ~ 14.0 0.5         # integral: 2 x -40 / 5 = -16 % per second
+
+scenario A4 proportional action: a PV step moves Out at once by Kc x step
+set Bench.Kc 2.0
+set Bench.Ti 5.0
+set Bench.SP 50.0
+set Bench.PV 40.0
+set Bench.Manual TRUE
+set Bench.ManualOut 30.0
+scan
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 30.0 0.2
+set Bench.PV 45.0                   # error falls from 10 to 5
+scan
+expect Bench.Out ~ 20.0 0.3         # 30 - 2 x 5
+wait 5s
+expect Bench.Out ~ 30.0 0.5         # integral now adds 2 x 5 / 5 = 2 % per second
+
+scenario A5 Ti = 0 switches integral action off and keeps the bias from the transfer
+set Bench.Kc 2.0
+set Bench.Ti 0.0
+set Bench.SP 50.0
+set Bench.PV 40.0
+set Bench.Manual TRUE
+set Bench.ManualOut 30.0
+scan
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 30.0 0.01        # bumpless: bias = 30 - 20 = 10
+wait 10s
+expect Bench.Out ~ 30.0 0.01        # constant error, no integral: the output stays put
+set Bench.PV 45.0
+scan
+expect Bench.Out ~ 20.0 0.01        # P-only: 10 + 2 x 5
+
+scenario A6 derivative acts on PV only: no kick on a setpoint step, a kick against PV
+set Bench.Kc 1.0
+set Bench.Ti 0.0
+set Bench.Td 2.0
+set Bench.SP 50.0
+set Bench.PV 50.0
+set Bench.Manual TRUE
+set Bench.ManualOut 50.0
+wait 1s
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 50.0 0.01
+set Bench.SP 55.0                   # setpoint step of +5
+scan
+expect Bench.Out ~ 55.0 0.3         # only the proportional step, 1 x 5
+wait 2s
+expect Bench.Out ~ 55.0 0.3
+set Bench.PV 52.0                   # PV jumps up 2 degC in one sample
+scan
+expect Bench.Out <= 48.0            # P alone would give 53; D must push well below that
+wait 3s
+expect Bench.Out ~ 53.0 0.3         # PV steady again: the derivative part has died away
+
+scenario A7 direct action: Out rises when PV is above SP
+set Bench.DirectAction TRUE
+set Bench.Kc 2.0
+set Bench.Ti 5.0
+set Bench.SP 50.0
+set Bench.PV 60.0                   # direct acting: error = PV - SP = +10
+set Bench.Manual TRUE
+set Bench.ManualOut 30.0
+scan
+set Bench.Manual FALSE
+scan
+expect Bench.Out ~ 30.0 0.2
+wait 5s
+expect Bench.Out ~ 50.0 0.5         # rising at 2 x 10 / 5 = 4 % per second
+set Bench.PV 65.0
+scan
+expect Bench.Out ~ 60.0 0.5         # PV up 5: Out up 2 x 5 at once
+
+scenario A8 output limits hold in automatic
+set Bench.Kc 2.0
+set Bench.Ti 5.0
+set Bench.OutMin 10.0
+set Bench.OutMax 80.0
+set Bench.SP 50.0
+set Bench.PV 0.0                    # error +50
+set Bench.Manual TRUE
+set Bench.ManualOut 50.0
+scan
+set Bench.Manual FALSE
+until Bench.Out >= 80.0 within 3s
+wait 20s
+expect Bench.Out ~ 80.0 0.001       # held at OutMax, never above
+set Bench.PV 100.0                  # error -50
+wait 2s
+expect Bench.Out ~ 10.0 0.001       # held at OutMin, never below
+wait 20s
+expect Bench.Out ~ 10.0 0.001
+
+scenario A9 anti-windup at the high limit: Out leaves the limit as soon as the error reverses
+set Bench.Kc 1.0
+set Bench.Ti 2.0
+set Bench.SP 50.0
+set Bench.PV 0.0                    # error +50: drives the output to 100 %
+set Bench.Manual TRUE
+set Bench.ManualOut 0.0
+scan
+set Bench.Manual FALSE
+until Bench.Out >= 100.0 within 10s
+wait 60s                            # a wound-up integral would now be worth > 1000 %
+expect Bench.Out ~ 100.0 0.001
+set Bench.PV 60.0                   # error -10
+until Bench.Out < 95.0 within 1s
+
+scenario A10 anti-windup at the low limit
+set Bench.Kc 1.0
+set Bench.Ti 2.0
+set Bench.SP 50.0
+set Bench.PV 100.0                  # error -50: drives the output to 0 %
+set Bench.Manual TRUE
+set Bench.ManualOut 100.0
+scan
+set Bench.Manual FALSE
+until Bench.Out <= 0.0 within 10s
+wait 60s
+expect Bench.Out ~ 0.0 0.001
+set Bench.PV 40.0                   # error +10
+until Bench.Out > 5.0 within 1s
+
+# ---------------------------------------------------------------------------------
+# Part B - closed loop: Loop controls the simulated heater
+# ---------------------------------------------------------------------------------
+
+scenario B1 manual: CV follows ManualOut and the plant settles where it puts it
+set ManualOut 30.0
+set PlantInit TRUE                  # jump the plant to steady state for the new output
+wait 100ms
+set PlantInit FALSE
+expect CV ~ 30.0 0.001
+expect PV ~ 44.0 0.01               # 20 + 0.8 x 30
+wait 10s
+expect PV ~ 44.0 0.01
+
+scenario B2 manual to auto with PV away from SP: no bump, then PV moves to SP
+set ManualOut 30.0
+set PlantInit TRUE                  # jump the plant to steady state for the new output
+wait 100ms
+set PlantInit FALSE
+set SP 50.0                         # 6 degC above the present PV
+wait 2s
+set Manual FALSE
+scan
+expect CV ~ 30.0 0.2                # no bump: P alone would be 2.5 x 6 = 15
+wait 1s
+expect CV ~ 30.75 0.3               # integral: 2.5 x 6 / 20 = 0.75 % per second
+set PVMax 0.0
+until PV >= 49.5 within 60s
+wait 60s
+expect PV ~ 50.0 0.2
+expect PVMax <= 50.6
+
+scenario B3 setpoint step in auto: fast, little overshoot, no offset
+wait 1s                             # power-up: manual, 25 %, plant steady at 40 degC, SP 40
+set Manual FALSE
+wait 5s
+expect PV ~ 40.0 0.05
+expect CV ~ 25.0 0.1
+set PVMax 0.0
+set SP 60.0
+scan
+expect CV ~ 75.0 1.0                # proportional acts on the error at once: 25 + 2.5 x 20
+until PV >= 59.0 within 30s
+wait 20s
+expect PV ~ 60.0 0.3
+wait 60s
+expect PV ~ 60.0 0.1                # integral action: no steady-state offset
+expect CV ~ 50.0 0.3                # 20 + 0.8 x 50 = 60 degC
+expect PVMax <= 60.6
+
+scenario B4 load disturbance: integral action removes the offset
+set ManualOut 50.0
+set SP 60.0
+set PlantInit TRUE                  # jump the plant to steady state for the new output
+wait 100ms
+set PlantInit FALSE
+wait 1s                             # a while in manual first, as an operator would
+set Manual FALSE
+wait 5s
+expect PV ~ 60.0 0.05
+set PVMin 1000.0
+set Load -15.0                      # extra heat loss worth 15 % of heater power
+wait 30s
+until PV >= 59.7 within 60s
+wait 30s
+expect PV ~ 60.0 0.2
+expect CV ~ 65.0 0.5                # the controller now supplies the extra 15 %
+expect PVMin >= 55.5
+
+scenario B5 saturation and recovery: anti-windup in the closed loop
+wait 1s                             # power-up: manual, steady at 40 degC
+set Manual FALSE
+wait 5s
+set OutMax 50.0                     # heater limited to 50 %: at most 20 + 0.8 x 50 = 60 degC
+set SP 75.0                         # unreachable
+wait 60s
+expect CV ~ 50.0 0.001              # sitting on the limit, never above it
+wait 60s
+expect CV ~ 50.0 0.001
+expect PV ~ 60.0 0.2
+set PVMin 1000.0
+set SP 50.0
+until CV < 49.0 within 1s           # leaves the limit at once: nothing wound up to unwind
+until PV <= 51.0 within 30s
+wait 90s
+expect PV ~ 50.0 0.5
+expect PVMin >= 44.0
+
+scenario B6 PID with derivative in closed loop stays well damped
+set Kc 4.0
+set Ti 20.0
+set Td 1.5
+wait 1s                             # power-up: manual, steady at 40 degC
+set Manual FALSE
+wait 5s
+set PVMax 0.0
+set SP 50.0
+until PV >= 49.0 within 20s
+wait 60s
+expect PV ~ 50.0 0.2
+expect PVMax <= 50.8

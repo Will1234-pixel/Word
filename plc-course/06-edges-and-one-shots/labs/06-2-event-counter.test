@@ -1,0 +1,197 @@
+# Lab 06-2 acceptance tests: carton counter and product-change counter.
+# Tested: PartCount counts ARRIVALS (rising edges of PartPE) - once per carton,
+# however long it blocks the beam, and not when it leaves; SelChanges counts
+# every change of ProductSel, including a big jump and changes on consecutive
+# scans; the values present at power-up are not events; ResetPB holds both
+# counts at zero on every scan, discards events while held and must not cause
+# a "late" count when it is released.
+# Only interface variables are used. Each scenario starts from a fresh PLC.
+
+scenario counts are zero at power-up and nothing counts by itself
+set ProductSel 1
+scan
+expect PartCount 0
+expect SelChanges 0
+wait 1s
+expect PartCount 0
+expect SelChanges 0
+
+scenario a carton is counted once, on arrival, however long it blocks the beam
+set ProductSel 1
+scan
+set PartPE TRUE                # carton arrives
+scan
+expect PartCount 1             # counted on arrival, in the same scan
+wait 3s
+expect PartCount 1             # a carton stuck in the beam for 3 s is still one carton
+set PartPE FALSE               # carton leaves
+scan
+expect PartCount 1             # leaving is not a new carton
+wait 500ms
+expect PartCount 1
+
+scenario a stream of cartons is counted exactly
+set ProductSel 1
+scan
+set PartPE TRUE
+wait 200ms
+set PartPE FALSE
+wait 100ms
+set PartPE TRUE
+wait 200ms
+set PartPE FALSE
+wait 100ms
+set PartPE TRUE
+wait 50ms
+set PartPE FALSE
+wait 50ms
+expect PartCount 3
+set PartPE TRUE                # three very short cartons: one scan in the beam,
+scan                           # one scan clear
+set PartPE FALSE
+scan
+set PartPE TRUE
+scan
+set PartPE FALSE
+scan
+set PartPE TRUE
+scan
+set PartPE FALSE
+scan
+expect PartCount 6
+expect SelChanges 0            # cartons do not touch the other count
+
+scenario every change of the product selector counts once
+set ProductSel 1
+scan
+set ProductSel 2
+scan
+expect SelChanges 1
+wait 1s
+expect SelChanges 1            # staying on 2 is not another change
+set ProductSel 4               # a jump of two positions is still ONE change
+scan
+expect SelChanges 2
+set ProductSel 1
+wait 200ms
+expect SelChanges 3
+expect PartCount 0             # selector changes do not touch the carton count
+
+scenario changes on consecutive scans are each counted
+set ProductSel 1
+scan
+set ProductSel 2
+scan
+set ProductSel 3
+scan
+set ProductSel 4
+scan
+expect SelChanges 3            # three changes in three scans
+set ProductSel 3
+scan
+set ProductSel 4
+scan
+expect SelChanges 5            # moved away and straight back: two changes
+
+scenario the power-up values are not events
+set ProductSel 3               # selector already on 3 at power-up
+set PartPE TRUE                # a carton already blocking the beam at power-up
+scan
+expect SelChanges 0
+expect PartCount 0
+wait 500ms
+expect SelChanges 0
+expect PartCount 0
+set PartPE FALSE               # that carton leaves...
+scan
+set PartPE TRUE                # ...and the next one arrives: counted normally
+scan
+expect PartCount 1
+set ProductSel 2
+scan
+expect SelChanges 1
+
+scenario reset clears both counts at once and holds them at zero
+set ProductSel 1
+scan
+set PartPE TRUE
+scan
+set PartPE FALSE
+scan
+set PartPE TRUE
+scan
+set PartPE FALSE
+scan
+set ProductSel 2
+scan
+expect PartCount 2
+expect SelChanges 1
+set ResetPB TRUE
+scan
+expect PartCount 0
+expect SelChanges 0
+set PartPE TRUE                # events while reset is held are discarded...
+scan
+expect PartCount 0             # ...not counted, not even for one scan
+set PartPE FALSE
+scan
+set ProductSel 3
+scan
+expect SelChanges 0
+wait 500ms
+expect PartCount 0
+expect SelChanges 0
+set ResetPB FALSE
+scan
+expect PartCount 0             # nothing counted late on release
+expect SelChanges 0
+wait 500ms
+expect PartCount 0
+expect SelChanges 0
+set PartPE TRUE                # counting resumes normally
+scan
+set ProductSel 4
+scan
+expect PartCount 1
+expect SelChanges 1
+
+scenario releasing reset while a carton blocks the beam does not count it
+set ProductSel 1
+scan
+set ResetPB TRUE
+scan
+set PartPE TRUE                # carton arrives while reset is held
+scan
+expect PartCount 0
+wait 300ms
+set ResetPB FALSE              # reset released, carton still in the beam
+scan
+expect PartCount 0             # it arrived during the reset: not counted
+wait 1s
+expect PartCount 0
+set PartPE FALSE
+scan
+set PartPE TRUE                # the next carton is counted
+scan
+expect PartCount 1
+
+scenario a selector moved during reset is not counted when reset is released
+set ProductSel 2
+scan
+set ProductSel 3
+scan
+expect SelChanges 1
+set ResetPB TRUE
+scan
+set ProductSel 4               # changed while reset is held
+scan
+expect SelChanges 0
+wait 300ms
+set ResetPB FALSE
+scan
+expect SelChanges 0            # the change happened during the reset: not counted
+wait 500ms
+expect SelChanges 0
+set ProductSel 1
+scan
+expect SelChanges 1

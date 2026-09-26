@@ -1,0 +1,299 @@
+# Lab 10-2 acceptance tests: five-sample median filter.
+# A sample is taken on each rising edge of SampleTrig. Every sample below
+# holds SampleTrig TRUE for 50 ms (five scans) and then FALSE for 50 ms, like
+# a 10 Hz sample clock, so a filter that samples while the trigger is TRUE,
+# instead of on its rising edge, takes too many samples and fails.
+# Only FilteredLevel and Ready are checked: how you store and sort the
+# samples is up to you.
+
+scenario power-up: no samples, not ready, output 0.0
+scan
+expect Ready FALSE
+expect FilteredLevel ~ 0.0 0.001
+set RawLevel 55.0                   # the input moves, but nothing is sampled without a trigger
+wait 1s
+expect Ready FALSE
+expect FilteredLevel ~ 0.0 0.001
+
+scenario warming up: the newest sample passes straight through until five are stored
+set RawLevel 50.0   # first sample
+set SampleTrig TRUE
+wait 50ms
+expect FilteredLevel ~ 50.0 0.001   # taken on the rising edge, not when the trigger falls
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 50.0 0.001
+expect Ready FALSE
+set RawLevel 52.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 52.0 0.001
+set RawLevel 99.0                   # no trigger: the output must not follow the live input
+wait 500ms
+expect FilteredLevel ~ 52.0 0.001
+set RawLevel 49.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 49.0 0.001
+set RawLevel 51.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 51.0 0.001
+expect Ready FALSE                  # four samples are not enough
+set RawLevel 60.0   # fifth sample
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect Ready TRUE
+expect FilteredLevel ~ 51.0 0.001   # median of 50, 52, 49, 51, 60
+set RawLevel 48.5   # sixth sample: the 50.0 drops out
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 51.0 0.001   # median of 52, 49, 51, 60, 48.5
+expect Ready TRUE
+
+scenario one spike is rejected, two in a row are rejected, three in a row get through
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect Ready TRUE
+expect FilteredLevel ~ 50.0 0.001
+set RawLevel 95.0   # one spike (agitator blade in the radar beam)
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 50.0 0.001
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 50.0 0.001   # window 95, 50, 50, 50, 50: the spike is now the oldest
+set RawLevel 95.0   # two spikes in a row (the old spike drops out)
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 96.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 50.0 0.001   # window 50, 50, 50, 95, 96
+set RawLevel 97.0   # a third high sample
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 95.0 0.001   # window 50, 50, 95, 96, 97: most samples are high now
+
+scenario a genuine step change appears after three samples
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 40.0 0.001
+set RawLevel 70.0   # the level really rises
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 40.0 0.001
+set RawLevel 70.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 40.0 0.001
+set RawLevel 70.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 70.0 0.001
+
+scenario the oldest sample is discarded, not the smallest (history kept in time order)
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 10.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 20.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 30.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 30.0 0.001   # median of 50, 10, 20, 30, 40
+set RawLevel 5.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 20.0 0.001   # window 10, 20, 30, 40, 5: the 50 was the oldest
+
+scenario the oldest sample is discarded, not the largest, and the sort is complete
+set RawLevel 10.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 40.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 30.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 20.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 30.0 0.001   # median of 10, 50, 40, 30, 20
+set RawLevel 60.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 40.0 0.001   # window 50, 40, 30, 20, 60
+
+scenario holding the trigger TRUE takes only one sample
+set RawLevel 50.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 51.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 52.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 53.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+set RawLevel 54.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 52.0 0.001
+set RawLevel 90.0
+set SampleTrig TRUE
+wait 500ms                          # trigger held TRUE for 50 scans
+expect FilteredLevel ~ 53.0 0.001   # window 51, 52, 53, 54, 90
+set RawLevel 91.0                   # the input changes while the trigger is still held
+wait 200ms
+expect FilteredLevel ~ 53.0 0.001
+set SampleTrig FALSE
+wait 100ms
+expect FilteredLevel ~ 53.0 0.001
+set RawLevel 92.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 54.0 0.001   # window 52, 53, 54, 90, 92
+set RawLevel 93.0
+set SampleTrig TRUE
+wait 50ms
+set SampleTrig FALSE
+wait 50ms
+expect FilteredLevel ~ 90.0 0.001   # window 53, 54, 90, 92, 93
