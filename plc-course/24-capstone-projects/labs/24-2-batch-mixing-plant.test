@@ -160,6 +160,10 @@ set Hmi.CmdStart TRUE
 scan
 expect Hmi.RejectCode 2
 set Recipes[1].QtyA 400.0
+set Recipes[1].QtyB 450.0                   # 850 L is a valid size, but more B than MaxQtyB
+set Hmi.CmdStart TRUE
+scan
+expect Hmi.RejectCode 2
 set Recipes[1].QtyB -5.0                    # negative quantity
 set Hmi.CmdStart TRUE
 scan
@@ -355,12 +359,16 @@ set Cfg.SettleTime T#6s
 set Hmi.RecipeNo 3
 set Hmi.CmdStart TRUE
 scan
-until Hmi.Phase = PhaseChargeB within 2m
+until InletAValve TRUE within 1s
+until InletAValve FALSE within 2m
+wait 5s
+expect Hmi.Phase PhaseChargeA               # still settling: SettleTime is 6 s now
+until Hmi.Phase = PhaseChargeB within 3s
 expect Sim.DeliveredA ~ 262.0 1.0
 until InletBValve TRUE within 1s
 until InletBValve FALSE within 1m
 wait 5s
-expect Hmi.Phase PhaseChargeB               # still settling: SettleTime is 6 s now
+expect Hmi.Phase PhaseChargeB
 until Hmi.Phase = PhaseHeat within 3s
 expect Sim.DeliveredB ~ 20.5 0.5            # closes at 39 "L" = 19.5 L real, + 1 L in flight
 expect Hmi.TotalB ~ 41.0 1.0

@@ -41,8 +41,10 @@ TYPE
     PreactB         : REAL := 1.0;    (* in-flight volume of XV-202, L *)
     SettleTime      : TIME := T#3s;   (* after an inlet closes, before the charge is complete *)
     NoFlowTime      : TIME := T#10s;  (* inlet open, no meter pulse for this long = dosing fault *)
-    MaxChargeTime   : TIME := T#5m;   (* longest a charge phase may run = dosing fault *)
-    MaxHeatTime     : TIME := T#15m;  (* longest the heating phase may run = heating timeout *)
+    MaxChargeTime   : TIME := T#8m;   (* longest a charge phase may run = dosing fault;
+                                         covers 1500 L of A (375 s) and MaxQtyB of B (400 s) *)
+    MaxHeatTime     : TIME := T#25m;  (* longest the heating phase may run = heating timeout;
+                                         1500 L from 20 to 78 degC takes about 17 min *)
     TempBand        : REAL := 2.0;    (* "at temperature" = within +/- this of TempSP, degC *)
     TempHighLimit   : REAL := 85.0;   (* high temperature alarm, degC (clears 2 degC below) *)
     TempKc          : REAL := 8.0;    (* TIC-203 gain, % per degC (ideal form) *)
@@ -59,6 +61,7 @@ TYPE
     XmtrFaultDelay  : TIME := T#2s;   (* NE43 failure must persist this long *)
     MinBatchL       : REAL := 300.0;  (* smallest valid batch (QtyA + QtyB), L *)
     MaxBatchL       : REAL := 1500.0; (* largest valid batch, L *)
+    MaxQtyB         : REAL := 400.0;  (* largest valid charge of B, L (the B line is small) *)
     MinTempSP       : REAL := 20.0;   (* lowest valid recipe setpoint, degC (no cooling) *)
     MaxTempSP       : REAL := 80.0;   (* highest valid recipe setpoint, degC *)
   END_STRUCT;

@@ -81,15 +81,11 @@ END_FUNCTION
 
 
 PROGRAM RecipeManager
-  VAR (* recipe book, edited on the HMI recipe screen. Slot 4 holds a typing
-         mistake (95 degC), and slot 5 is empty (it is left out of the
-         initialiser on purpose, so it starts as '', 0.0 and T#0s). Both
-         must be refused. *)
-    Recipes : ARRAY[1..5] OF ST_Recipe := [
-      (Name := 'Tomato soup',     Dose := [400.0, 150.0, 20.0], Temp := 85.0, MixTime := T#20m),
-      (Name := 'Vegetable stock', Dose := [450.0, 300.0, 10.0], Temp := 80.0, MixTime := T#30m),
-      (Name := 'Cheese sauce',    Dose := [250.0, 200.0, 50.0], Temp := 65.0, MixTime := T#15m),
-      (Name := 'Trial batch',     Dose := [100.0, 100.0, 0.0],  Temp := 95.0, MixTime := T#10m)];
+  VAR (* recipe book, edited on the HMI recipe screen. Slots 1 to 4 are
+         filled in by the first-scan block at the top of the code. Slot 4
+         holds a typing mistake (95 degC), and slot 5 is left empty on
+         purpose ('', 0.0 and T#0s). Both must be refused. *)
+    Recipes : ARRAY[1..5] OF ST_Recipe;
   END_VAR
   VAR (* HMI selection and command, and the state of the batch *)
     SelectNo     : INT;             (* recipe number chosen on the HMI; 0 = none *)
@@ -102,16 +98,59 @@ PROGRAM RecipeManager
     ActiveNo     : INT;             (* which slot Active came from; 0 = nothing loaded yet *)
     LoadResult   : E_LoadResult;    (* outcome of the last load command *)
   END_VAR
+  VAR (* the limits of this vessel: set by the first-scan block, never written anywhere else *)
+    RecipeLimits : ST_RecipeLimits;
+  END_VAR
   VAR CONSTANT
-    RECIPE_LIMITS : ST_RecipeLimits := (DoseMax := 500.0, TotalMax := 1000.0,
-                                        TempMin := 20.0, TempMax := 85.0,
-                                        MixTimeMin := T#1m, MixTimeMax := T#2h);
     FIRST_SLOT : INT := 1;          (* keep in step with the ARRAY[1..5] bounds *)
     LAST_SLOT  : INT := 5;
   END_VAR
   VAR
+    Initialised : BOOL;             (* NOT retentive: FALSE until the first-scan block has run *)
     Check : E_LoadResult;           (* what a load of the selected slot would give now *)
   END_VAR
+
+  (* ---- 0. First scan only: fill in the recipe book and the limits.
+     Standard IEC 61131-3 would give both as initialisers in the declarations:
+       Recipes : ARRAY[1..5] OF ST_Recipe := [
+         (Name := 'Tomato soup', Dose := [400.0, 150.0, 20.0], Temp := 85.0, MixTime := T#20m),
+         ...];
+       RECIPE_LIMITS : ST_RecipeLimits := (DoseMax := 500.0, ...);   (a VAR CONSTANT)
+     OpenPLC's compiler does not accept these initialisers (see Appendix E),
+     so the values are set here. The block is at the very top, so the values
+     are in place before anything below reads them, from the first scan on.
+     Initialised is not RETAIN, so every restart starts again from these
+     values, as the initialisers would. (If the book were RETAIN, as it would
+     be on a real plant, Initialised would have to be RETAIN too, or every
+     warm restart would overwrite the operator's edits.) ---- *)
+  IF NOT Initialised THEN
+    Recipes[1].Name := 'Tomato soup';
+    Recipes[1].Dose[1] := 400.0;  Recipes[1].Dose[2] := 150.0;  Recipes[1].Dose[3] := 20.0;
+    Recipes[1].Temp := 85.0;      Recipes[1].MixTime := T#20m;
+
+    Recipes[2].Name := 'Vegetable stock';
+    Recipes[2].Dose[1] := 450.0;  Recipes[2].Dose[2] := 300.0;  Recipes[2].Dose[3] := 10.0;
+    Recipes[2].Temp := 80.0;      Recipes[2].MixTime := T#30m;
+
+    Recipes[3].Name := 'Cheese sauce';
+    Recipes[3].Dose[1] := 250.0;  Recipes[3].Dose[2] := 200.0;  Recipes[3].Dose[3] := 50.0;
+    Recipes[3].Temp := 65.0;      Recipes[3].MixTime := T#15m;
+
+    Recipes[4].Name := 'Trial batch';
+    Recipes[4].Dose[1] := 100.0;  Recipes[4].Dose[2] := 100.0;  Recipes[4].Dose[3] := 0.0;
+    Recipes[4].Temp := 95.0;      Recipes[4].MixTime := T#10m;   (* 95 degC: the typing mistake *)
+
+    (* slot 5 is left empty *)
+
+    RecipeLimits.DoseMax    := 500.0;     (* kg, largest dose of any one ingredient *)
+    RecipeLimits.TotalMax   := 1000.0;    (* kg, vessel working capacity *)
+    RecipeLimits.TempMin    := 20.0;      (* degC *)
+    RecipeLimits.TempMax    := 85.0;      (* degC *)
+    RecipeLimits.MixTimeMin := T#1m;
+    RecipeLimits.MixTimeMax := T#2h;
+
+    Initialised := TRUE;
+  END_IF;
 
   (* ---- 1. Check the selected slot, every scan. The index comes from the
      HMI, so it is tested FIRST: Recipes[SelectNo] is only read inside the
@@ -120,7 +159,7 @@ PROGRAM RecipeManager
     Check := E_LoadResult#BadIndex;
   ELSIF LEN(Recipes[SelectNo].Name) = 0 THEN
     Check := E_LoadResult#EmptySlot;
-  ELSIF NOT F_RecipeValuesOk(R := Recipes[SelectNo], Lim := RECIPE_LIMITS) THEN
+  ELSIF NOT F_RecipeValuesOk(R := Recipes[SelectNo], Lim := RecipeLimits) THEN
     Check := E_LoadResult#BadValue;
   ELSE
     Check := E_LoadResult#Loaded;   (* passes every check: it can be loaded *)

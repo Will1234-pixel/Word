@@ -186,9 +186,10 @@ PROGRAM FeedPumps
     P104_Contactor AT %QX0.3 : BOOL;
     FaultLamp      AT %QX0.4 : BOOL;      (* ON while any pump is faulted *)
   END_VAR
-  VAR (* the data model: one element per pump, read and written by the HMI *)
-    Motors : ARRAY[1..4] OF ST_MotorData := [3((Cfg := (FbTimeoutMs := 2000))),
-                                              (Cfg := (FbTimeoutMs := 5000))];
+  VAR (* the data model: one element per pump, read and written by the HMI.
+         Cfg.FbTimeoutMs starts at the ST_MotorCfg default of 2000 ms; the
+         first-scan block gives P-104 its 5000 ms. *)
+    Motors : ARRAY[1..4] OF ST_MotorData;
     RunningCount : INT;                   (* pumps proven running *)
   END_VAR
   VAR (* clock - given, do not change *)
@@ -196,8 +197,27 @@ PROGRAM FeedPumps
     NowMs  : DINT;                        (* ms since power-up *)
   END_VAR
   VAR
+    Initialised : BOOL;                   (* NOT retentive: FALSE until the first-scan block has run *)
     Group : FB_MotorGroup;                (* ONE instance for all four pumps *)
   END_VAR
+
+  (* ---- First scan only (given): P-104's flow switch is slow to make, so it
+     gets 5000 ms instead of the default 2000 ms. Standard IEC 61131-3 would
+     say this in the declaration, with an initialiser for the array of
+     structures:
+       Motors : ARRAY[1..4] OF ST_MotorData := [3((Cfg := (FbTimeoutMs := 2000))),
+                                                 (Cfg := (FbTimeoutMs := 5000))];
+     OpenPLC's compiler does not accept this initialiser (see Appendix E), so
+     the value is set here, at the very top, before the pump logic first
+     reads it. Pumps 1 to 3 keep the default from ST_MotorCfg. Initialised
+     is not RETAIN, so every restart starts again from these values, as the
+     initialiser would. (Cfg is retentive on a real plant; Initialised would
+     then have to be RETAIN too, or a warm restart would undo the engineer's
+     settings.) ---- *)
+  IF NOT Initialised THEN
+    Motors[4].Cfg.FbTimeoutMs := 5000;
+    Initialised := TRUE;
+  END_IF;
 
   (* ---- Millisecond clock (given): see Lab 12-2. ---- *)
   UpTime(IN := TRUE, PT := T#24d);

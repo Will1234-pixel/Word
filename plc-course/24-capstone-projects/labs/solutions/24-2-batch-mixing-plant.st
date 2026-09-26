@@ -58,8 +58,10 @@ TYPE
     PreactB         : REAL := 1.0;    (* in-flight volume of XV-202, L *)
     SettleTime      : TIME := T#3s;   (* after an inlet closes, before the charge is complete *)
     NoFlowTime      : TIME := T#10s;  (* inlet open, no meter pulse for this long = dosing fault *)
-    MaxChargeTime   : TIME := T#5m;   (* longest a charge phase may run = dosing fault *)
-    MaxHeatTime     : TIME := T#15m;  (* longest the heating phase may run = heating timeout *)
+    MaxChargeTime   : TIME := T#8m;   (* longest a charge phase may run = dosing fault;
+                                         covers 1500 L of A (375 s) and MaxQtyB of B (400 s) *)
+    MaxHeatTime     : TIME := T#25m;  (* longest the heating phase may run = heating timeout;
+                                         1500 L from 20 to 78 degC takes about 17 min *)
     TempBand        : REAL := 2.0;    (* "at temperature" = within +/- this of TempSP, degC *)
     TempHighLimit   : REAL := 85.0;   (* high temperature alarm, degC (clears 2 degC below) *)
     TempKc          : REAL := 8.0;    (* TIC-203 gain, % per degC (ideal form) *)
@@ -76,6 +78,7 @@ TYPE
     XmtrFaultDelay  : TIME := T#2s;   (* NE43 failure must persist this long *)
     MinBatchL       : REAL := 300.0;  (* smallest valid batch (QtyA + QtyB), L *)
     MaxBatchL       : REAL := 1500.0; (* largest valid batch, L *)
+    MaxQtyB         : REAL := 400.0;  (* largest valid charge of B, L (the B line is small) *)
     MinTempSP       : REAL := 20.0;   (* lowest valid recipe setpoint, degC (no cooling) *)
     MaxTempSP       : REAL := 80.0;   (* highest valid recipe setpoint, degC *)
   END_STRUCT;
@@ -409,7 +412,7 @@ FUNCTION F_RecipeValid : BOOL
   END_VAR
   F_RecipeValid := (R.QtyA > 0.0) AND (R.QtyB >= 0.0)
                    AND (R.QtyA + R.QtyB >= C.MinBatchL)
-                   AND (R.QtyA + R.QtyB <= C.MaxBatchL)
+                   AND (R.QtyA + R.QtyB <= C.MaxBatchL) AND (R.QtyB <= C.MaxQtyB)
                    AND (R.TempSP >= C.MinTempSP) AND (R.TempSP <= C.MaxTempSP)
                    AND (R.MixTime >= T#0s) AND (R.HoldTime >= T#0s);
 END_FUNCTION
@@ -419,8 +422,8 @@ FUNCTION_BLOCK FB_CycleTime
      it (instead of assuming the task interval) keeps timers, totals and
      the PID right if the task interval is ever changed. *)
   VAR_OUTPUT
-    DeltaT  : TIME;
-    DeltaS : REAL;
+    DeltaT : TIME;                 (* for TIME accumulators *)
+    DeltaS : REAL;                 (* the same in seconds, for REAL maths *)
   END_VAR
   VAR
     Clock  : TON;
@@ -446,7 +449,7 @@ FUNCTION_BLOCK FB_AnalogIn
     EuMax      : REAL := 100.0;    (* engineering value at 20 mA *)
     FilterTime : TIME;             (* first-order filter; T#0s = none *)
     FaultDelay : TIME := T#2s;     (* NE43 failure must persist this long *)
-    DeltaS        : REAL;             (* seconds since the previous call *)
+    DeltaS     : REAL;             (* seconds since the previous call *)
   END_VAR
   VAR_OUTPUT
     Value : REAL;                  (* holds the last good value while the signal is bad *)
@@ -595,7 +598,7 @@ FUNCTION_BLOCK FB_PID
     OutMax : REAL := 100.0;
     Enable : BOOL;
     ResetI : BOOL;
-    DeltaS    : REAL;                 (* seconds since the previous call *)
+    DeltaS : REAL;                 (* seconds since the previous call *)
   END_VAR
   VAR_OUTPUT
     Out : REAL;
@@ -1025,9 +1028,12 @@ PROGRAM BatchMixer
   HeatWatchdog(IN := (State = Running) AND (Phase = PhaseHeat), PT := Cfg.MaxHeatTime);
 
   (* --- mix/hold timers: retentive (they pause while held, they do not
-     restart); the hold timer counts only while at temperature --- *)
+     restart). The mix timer counts agitated time only; the hold timer
+     counts only while the contents are inside the temperature band. --- *)
   IF (State = Running) AND (Phase = PhaseMix) THEN
-    MixAcc := ADD_TIME(MixAcc, Cycle.DeltaT);
+    IF Agitator.Running THEN
+      MixAcc := ADD_TIME(MixAcc, Cycle.DeltaT);
+    END_IF;
     IF ABS(TempC - Active.TempSP) <= Cfg.TempBand THEN
       HoldAcc := ADD_TIME(HoldAcc, Cycle.DeltaT);
     END_IF;
