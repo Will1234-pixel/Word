@@ -910,6 +910,10 @@ master usually point to the segment.
 
 PROFIBUS has a very large installed base, especially in Siemens-based plants. New projects
 mostly choose PROFINET, often with PA instruments reached through a PROFINET-to-PA proxy.
+A newer route for process instruments is **Ethernet-APL** (Advanced Physical Layer, based on
+the IEEE 802.3cg 10BASE-T1L standard): two-wire Ethernet at 10 Mbit/s that also powers the
+instrument, covers field-cable distances, and has intrinsically safe variants, so that
+PROFINET (or another Ethernet protocol) can run all the way to the transmitter.
 
 ### 5.2 PROFINET
 
@@ -1373,10 +1377,12 @@ PLC-clears-the-command pattern in [Module 18](../18-hmi-and-scada/).
 Writing to a remote device on every PLC scan is a common beginner's mistake:
 
 - On a serial network the writes crowd out the reads, and every device's data goes stale.
-- Some devices store written values in non-volatile memory (EEPROM or flash) that survives a
-  limited number of write cycles. Written every scan, it can wear out within weeks or months.
-  Drive manuals usually say which parameters are stored and how to write them to RAM only;
-  cyclic setpoints belong in the cyclic data, not in stored parameters.
+- Some devices store written values in non-volatile memory (EEPROM or flash) that is rated
+  for a limited number of write cycles, typically somewhere between tens of thousands and
+  about a million. Written every scan, it can wear out in days or even hours (worked example
+  4 counts the writes). Drive manuals usually say which parameters are stored and how to
+  write them to RAM only; cyclic setpoints belong in the cyclic data, not in stored
+  parameters.
 - Some devices restart an action on every write, for example re-ramping to a setpoint.
 
 The pattern: **write on change**, ignore changes smaller than a **deadband**, never write more

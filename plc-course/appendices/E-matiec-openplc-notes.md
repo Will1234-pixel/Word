@@ -81,7 +81,7 @@ The lab files avoid all of them.
 | An array **element** passed to a FUNCTION's `VAR_IN_OUT`, `F(Arr[2])` (it compiles, then the C build fails) | Copy the element to a variable, call, copy back; or pass the whole array | Allowed |
 | Located arrays, `Inputs AT %IX0.0 : ARRAY[0..7] OF BOOL` | Separate located BOOLs, copied into an array in the I/O-mapping code | Allowed in CODESYS; TIA and Logix map I/O differently |
 | Ordering or converting enumeration values: `State > Idle`, `E_State_TO_INT(State)` | Compare with `=` / `<>`, or use `CASE`; keep a separate INT if you need a number | CODESYS allows conversion and, with care, ordering |
-| `MUL_TIME` / `DIV_TIME` function names | `T * n`, `T / n` | Named functions available in some tools |
+| `MUL_TIME` / `DIV_TIME` function names | `T * n`, `T / n`, or the older names `MULTIME` / `DIVTIME` | Named functions available in some tools |
 | (OpenPLC's fork only) Structure initialisers with STRING or array members, `(Name := 'Soup', Dose := [1.0, 2.0])`, initialisers for arrays of structures, and some REAL/LREAL members in a constant structure ("Initialization element identifier … is not declared"). Upstream MATIEC accepts all of these | Set such values in code, in a first-scan initialisation block (`IF NOT Initialised THEN … Initialised := TRUE; END_IF`) | Allowed |
 | (OpenPLC's fork only) Several instances of your own FB declared in one list, `Cause1, Cause2, Cause3 : FB_TripCause;`, crashed the Runtime's compiler in two labs, while upstream MATIEC compiled them. The crash is in the code that writes `VARIABLES.csv` and depends on the rest of the program, so it is hard to predict | Declare FB instances one per line. All lab files follow this rule | Not affected |
 | A named constant (`VAR CONSTANT`) used as a `CASE` label ("invalid case element(s)") | Literal labels, or better, an enumeration | Allowed |
@@ -169,6 +169,24 @@ normally.
 the POU runs (in a `PROGRAM`, that is every scan). A "previous value" bit kept in `VAR_TEMP`
 therefore looks like a new edge on every scan. This is standard IEC behaviour, not a MATIEC
 quirk. Keep anything that must survive between scans in `VAR`.
+
+**A TIME sum can compare as smaller than it is.** When the millisecond parts of a TIME
+addition add up to exactly one second, MATIEC's library leaves the result un-normalised
+(4 s + 1 000 000 000 ns instead of 5 s). It prints as 5000 ms, but compares as neither
+equal to nor greater than `T#5s`:
+
+| Expression | MATIEC result |
+|---|---|
+| `T#4500ms + T#500ms` | prints as T#5000ms |
+| `(T#4500ms + T#500ms) >= T#5s` | FALSE |
+| `(T#4500ms + T#500ms) = T#5s` | FALSE |
+
+The cause is an off-by-one test (`> 1000000000` instead of `>=`) in the normalising
+function; OpenPLC's runtime library has the same code. The effect is that a `>=` test on an
+accumulated time can fire one scan late. For timing, prefer a timer's `ET`, which is not
+affected. [Module 07](../07-timers/) shows how to design accumulated-time logic around it.
+`ADD_TIME`, `SUB_TIME`, `MULTIME` and `DIVTIME` all work; the edition-3 names `MUL_TIME` and
+`DIV_TIME` do not.
 
 **Integer overflow.** Arithmetic wraps around silently (`INT` 32767 + 1 = −32768) because the
 generated C uses fixed-size integers. Some PLCs set a status flag or fault instead. Size your
