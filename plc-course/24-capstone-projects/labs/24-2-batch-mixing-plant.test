@@ -346,19 +346,27 @@ until Hmi.State = Complete within 5m
 expect Sim.DeliveredB 0.0
 expect Report.ActualB ~ 0.0 0.05
 
-scenario M3 K-factor and preact come from Cfg, not from constants
+scenario M3 K-factor, preact and settle time come from Cfg; the report records the counts
 set EStopOK_NC TRUE
 scan
 set Cfg.PreactA 2.0                         # too small: A overshoots by about 2 L
 set Cfg.LitresPerPulseB 0.2                 # wrong K-factor: B is counted double
+set Cfg.SettleTime T#6s
 set Hmi.RecipeNo 3
 set Hmi.CmdStart TRUE
 scan
 until Hmi.Phase = PhaseChargeB within 2m
 expect Sim.DeliveredA ~ 262.0 1.0
-until Hmi.Phase = PhaseHeat within 2m
+until InletBValve TRUE within 1s
+until InletBValve FALSE within 1m
+wait 5s
+expect Hmi.Phase PhaseChargeB               # still settling: SettleTime is 6 s now
+until Hmi.Phase = PhaseHeat within 3s
 expect Sim.DeliveredB ~ 20.5 0.5            # closes at 39 "L" = 19.5 L real, + 1 L in flight
 expect Hmi.TotalB ~ 41.0 1.0
+until Hmi.State = Complete within 3m
+expect Report.ActualA ~ 262.0 1.25          # what was counted, not the recipe's 260 L
+expect Report.ActualB ~ 41.0 1.0            # what FQ-202 counted (with its wrong K-factor)
 
 # ======================================================================
 # M4  Agitator, temperature control and the mix/hold timers
@@ -510,6 +518,7 @@ expect Sim.VolumeL < 20.0
 expect OutletValve TRUE
 wait 1500ms
 expect OutletValve TRUE                     # the valve lags the pump
+expect Hmi.Phase PhaseDrain                 # complete only once the valve is told to shut
 until OutletValve FALSE within 2s
 until Hmi.State = Complete within 3s
 expect Sim.VolumeL <= 5.0                   # run-on emptied the vessel
