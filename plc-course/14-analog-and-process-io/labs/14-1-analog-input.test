@@ -99,13 +99,39 @@ wait 2200ms
 expect TT102.OverRange TRUE
 expect TT102.UnderRange FALSE
 expect TT102.Fault TRUE
-set TT102_Raw -700              # 3.59 mA
+set TT102_Raw -700              # 3.59 mA: straight into the other failure band
 scan
-expect TT102.OverRange FALSE    # the high band has cleared
+expect TT102.OverRange FALSE    # the flags follow the band...
+expect TT102.UnderRange TRUE
+expect TT102.Fault TRUE         # ...but the signal is still bad: no new delay
 wait 2200ms
 expect TT102.UnderRange TRUE
 expect TT102.OverRange FALSE
 expect TT102.Fault TRUE
+
+scenario a failed transmitter that is then disconnected keeps its substitute value
+set LT101_Raw 13824
+set TT102_Raw 20736             # 100 degC
+scan
+set TT102_Raw 31104             # 22 mA: the transmitter has failed upscale
+wait 2200ms
+expect TT102.OverRange TRUE
+expect TT102.Value ~ 150.0 0.01
+set TT102_Raw -6912             # disconnected for replacement: 0 mA
+scan
+expect TT102.Fault TRUE         # the fault must not clear...
+expect TT102.UnderRange TRUE
+expect TT102.OverRange FALSE
+expect TT102.Value ~ 150.0 0.01 # ...and the substitute must not disappear
+wait 1s
+expect TT102.Fault TRUE
+expect TT102.Value ~ 150.0 0.01
+set TT102_Raw 31104             # and back again
+scan
+expect TT102.Fault TRUE
+expect TT102.OverRange TRUE
+expect TT102.UnderRange FALSE
+expect TT102.Value ~ 150.0 0.01
 
 scenario LT101 wire break: value held during the delay, then UnderRange, still held
 set LT101_Raw 13824             # 2.0 m

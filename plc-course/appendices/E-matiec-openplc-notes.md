@@ -79,6 +79,8 @@ The lab files avoid all of them.
 | An empty program body, or a bare `;` statement | At least one real statement. That is why starters contain placeholder assignments | Empty bodies are allowed elsewhere |
 | An array as a FUNCTION `VAR_INPUT` (it compiles, then the C build fails) | Pass the array to a FUNCTION_BLOCK input (use a named array type), or as `VAR_IN_OUT` | Allowed |
 | `MUL_TIME` / `DIV_TIME` function names | `T * n`, `T / n` | Named functions available in some tools |
+| `WSTRING` (internal compiler error) | `STRING` | `WSTRING` / `WString` available |
+| A based literal outside the signed range, assigned to a signed type: `MyInt := 16#FFFF;` or `MySint := 16#80;` (rejected as "Incompatible data types") | Use the matching bit-string type (`WORD`, `BYTE`), a decimal value (`-1`), or a conversion (`WORD_TO_INT(16#FFFF)`) | Usually accepted, sometimes with a warning |
 
 Accepted, and verified in this course: `IF/ELSIF/CASE` (with lists and ranges), `FOR … BY`,
 `WHILE`, `REPEAT`, `EXIT`, `CONTINUE`, `RETURN`, `VAR_TEMP`, `VAR RETAIN`, `VAR CONSTANT`,
@@ -170,8 +172,10 @@ type, configuration, resource and task a name that is not used for any variable.
 naming conventions (`FB_…`, `ST_…`, `E_…`, descriptive program names, `Config0`, `Res0`,
 `MainTask`, `Inst0`) keep you clear of this.
 
-The same happens with names of standard functions and FBs (`Limit`, `Max`, `Sel`, `Ton`),
-type keywords (`Dt`, `Date`) and SFC keywords (`Step`) used as variables.
+The same happens with names of standard functions and FBs (`Limit`, `Max`, `Sel`, `Sin`,
+`Ton`), type keywords (`Dt`, `Date`) and language keywords (`Step`, `By`) used as variables.
+Remember that IEC identifiers are **not case-sensitive**: `Motor`, `MOTOR` and `motor` are
+the same variable, and `Sin` is the same name as the `SIN` function.
 
 ## E.5 Reading MATIEC error messages
 

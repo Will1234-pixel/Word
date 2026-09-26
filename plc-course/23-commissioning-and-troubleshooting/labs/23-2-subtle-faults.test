@@ -102,6 +102,7 @@ scenario stop aborts the fill and the drum is not counted
 set StopPB_NC TRUE
 set DrumPresentPX TRUE
 set WeightRaw 2304
+wait 100ms                     # let the PLC finish its start-up scan first
 set StartPB TRUE
 scan
 set StartPB FALSE
@@ -121,6 +122,7 @@ scenario a drum pulled off the scale during the fill aborts it
 set StopPB_NC TRUE
 set DrumPresentPX TRUE
 set WeightRaw 2304
+wait 100ms
 set StartPB TRUE
 scan
 set StartPB FALSE
@@ -189,6 +191,12 @@ expect TotalKg 32800
 set DrumCount 250              # and much later in the shift
 scan
 expect TotalKg 50000
+set DrumCount 1000             # beyond what a 16-bit UINT product could hold
+scan
+expect TotalKg 200000
+set DrumCount 32767            # the largest count an INT can hold
+scan
+expect TotalKg 6553400
 
 # ------------------------------------------------- restart after a power cut
 
@@ -210,6 +218,22 @@ scan
 set StartPB FALSE
 wait 500ms
 expect FillValve FALSE
+
+scenario power returns during a fill with a nearly full drum: not counted
+set FillStep Filling           # retained memory says "Filling"; the tare was not retained
+set DrumCount 57
+set StopPB_NC TRUE
+set DrumPresentPX TRUE
+set WeightRaw 20828            # 226 kg gross: more than 200 kg if the lost tare reads as 0
+scan
+expect FillValve FALSE
+expect DoneLamp FALSE
+expect FillStep Idle
+expect DrumCount 57            # an interrupted drum is never counted automatically
+expect TotalKg 11400
+wait 1s
+expect DrumCount 57
+expect DoneLamp FALSE
 
 scenario power returns while a full drum waits: no double count, valve shut
 set FillStep Done

@@ -134,8 +134,10 @@ a voltage for a 1–5 V input (or, instead of the resistor, a card with a curren
 
 With a passive (zener) barrier instead of an isolator, the loop current itself flows through
 the barrier. Seen from the PLC the result is the same: 1–5 V across the burden, or 4–20 mA
-into a current input. A 250 Ω resistor in the loop also gives HART communication the
-minimum loop resistance it needs (typically about 230–250 Ω).
+into a current input. A 250 Ω resistor in the loop also meets the minimum loop resistance
+that HART communication needs (usually quoted as about 230 Ω,
+[Module 02](../02-electrical-and-field-devices/)). If a HART device on the safe-area side must
+talk to the transmitter through an isolator, the isolator must be a HART-transparent type.
 
 **What a line fault looks like in the PLC.** Using the raw convention of this module's labs
 (0..27648 = 4..20 mA, explained in Section 1.6):
@@ -199,8 +201,9 @@ channels. Some cards also integrate each reading over a mains period (20 ms for 
 about 16.7 ms for 60 Hz) to reject mains interference; this is usually a configuration
 setting called interference or noise suppression. The total delay from process to program is
 the sum of the transmitter damping, the card filter and update time, the PLC task interval
-and any filter in your code. For a trip, that sum must fit inside the process safety time
-([Module 20](../20-functional-safety/)).
+and any filter in your code. For a trip, that sum is only part of the response time: add the
+logic and the time the final element (valve, contactor) needs to act, and the total must fit
+well inside the process safety time ([Module 20](../20-functional-safety/)).
 
 **Filtering on the card.** Most cards offer a hardware or firmware filter (Siemens calls it
 smoothing, with levels such as weak, medium and strong). It is convenient, but it is invisible
@@ -419,8 +422,11 @@ writes the code.
 Whatever you choose, **always** raise an instrument-fault alarm and show the bad quality on
 the HMI ([Module 18](../18-hmi-and-scada/)), so that operators know the number is not live.
 
-In a safety instrumented system a transmitter fault is normally treated as a demand (a trip)
-on a single-channel function, or it changes the voting: in a 2oo3 arrangement one bad
+In a safety instrumented system the reaction to a detected transmitter fault is part of the
+safety requirements. On a single-channel function the usual choice is to trip (treat the
+fault as a demand); the alternative that IEC 61511 allows, keeping the plant running for a
+limited time under compensating measures, must be designed and justified in advance. With
+redundant transmitters the fault changes the voting instead: in a 2oo3 arrangement one bad
 transmitter might leave the function voting 1oo2, as the design specifies. A standard PLC
 that quietly holds the last value of a signal used for protection hides the fact that the
 protection has gone. This module's labs are training exercises, not safety designs.
@@ -467,16 +473,24 @@ scans) the output is 1.0 + 0.632 × 2.0 = 2.26 m; after 6 s it is 2.90 m; after 
 instead of at once, because the output needs 2.3 τ to cover 90 % of a step.
 
 ```text
-  3.0 m  +- - - - - - - - - - - - - - - - - - - - - - -   input after the step
-         |                     ..........oooooooooooo
-  2.73 m +               ...ooo'                           86 % at 2 tau
-  2.26 m +         ..oo''                                  63 % at 1 tau
-         |      .o'
-         |    .o'                                          filter output
-  1.0 m  +--o'
-         +--------+--------+--------+--------+-------> t
-         0       tau     2 tau    3 tau    4 tau
+  3.0 m |------------------------ooooooooooooooooo    input after the step
+        |                oooooooo                     2.73 m = 86 % at 2 tau
+        |            oooo
+        |         ooo
+        |       oo                                    2.26 m = 63 % at 1 tau
+  2.0 m |     oo
+        |    o
+        |   o                                         o = filter output
+        |  o
+        | o
+  1.0 m |o
+        +--------+-------+-------+-------+-------+--> t
+         0      tau    2 tau   3 tau   4 tau   5 tau
 ```
+
+(Rows are 0.2 m apart and each column is τ/8.) On a steady ramp instead of a step, the output
+settles to following the input one time constant late, so the lag this filter adds is τ: a
+level rising at 0.1 m/min, filtered with τ = 2 s, reads about 3 mm low.
 
 **The time constant depends on the scan time.** alpha only means "τ = 2 s" if the block
 really runs every `Ts`. Run it in a cyclic (periodic) task, and give it `Ts` as an input or
@@ -520,8 +534,9 @@ Three details in this block matter on a real plant:
   zero. The block treats T#0s explicitly as "no filtering" (`Ts / (tau + Ts)` would also give
   1, but not if `Ts` were zero too).
 - **Units of TIME.** `TIME_TO_REAL` returns seconds in MATIEC/OpenPLC but milliseconds in
-  CODESYS and TIA Portal. A *ratio* of two times is correct on both. When you need seconds,
-  write `TIME_TO_REAL(t) / TIME_TO_REAL(T#1s)`.
+  CODESYS, and TIA Portal also counts a TIME in milliseconds (`TIME_TO_DINT(T#1s)` is 1000
+  there). A *ratio* of two times is correct everywhere. When you need seconds, write
+  `TIME_TO_REAL(t) / TIME_TO_REAL(T#1s)`.
 
 **Never filter in INT.** With integer arithmetic the correction `alpha × (X − Y)` truncates
 to 0 as soon as the error is small. With alpha = 0.005, any error below 200 counts gives a
@@ -576,7 +591,8 @@ average). With ten samples 100 ms apart, the window is about one second.
 
 Compared with the first-order lag: after a step the moving average ramps in a straight line
 and arrives *exactly* after N samples, and for random noise it reduces the scatter by a
-factor of √N (ten samples: about 3.2 times). It costs memory for the buffer and a loop each
+factor of √N (ten samples: about 3.2 times). On a steady ramp it lags by about half its
+window ((N − 1)/2 sample intervals, 0.45 s for the example above). It costs memory for the buffer and a loop each
 scan. Adding the whole buffer every scan, as above, is simple and cannot drift; for long
 windows, keep a running sum instead (subtract the oldest sample, add the newest) and
 recalculate it now and then.
@@ -668,8 +684,8 @@ FUNCTION_BLOCK FB_RateOfChange
     ScansPerSecond : INT;
   END_VAR
 
-  (* Count scans rather than use a self-restarting TON: the TON pattern loses
-     a scan or two per period, which becomes an error in the rate. *)
+  (* Count scans rather than use a self-restarting TON: the TON pattern adds
+     a scan or two to every period, which becomes an error in the rate. *)
   ScansPerSecond := REAL_TO_INT(TIME_TO_REAL(T#1s) / TIME_TO_REAL(CycleTime));
   ScanCount := ScanCount + 1;
   IF ScanCount >= ScansPerSecond THEN
@@ -871,11 +887,17 @@ transmitter fails.
 
 ### 7.4 Ready-made blocks
 
-MATIEC and OpenPLC include a `HYSTERESIS` block (so does the CODESYS Util library):
+MATIEC and OpenPLC include a `HYSTERESIS` block with REAL inputs `XIN1`, `XIN2` and `EPS`:
 `Q` goes TRUE when `XIN1 > XIN2 + EPS` and FALSE when `XIN1 < XIN2 − EPS`. For the sump,
 `PumpCtl(XIN1 := Level, XIN2 := 1.5, EPS := 0.5);` gives a `Q` that switches on above 2.0 m
-and off below 1.0 m. For a fill pump, use `NOT PumpCtl.Q`. Writing the `IF ... ELSIF` yourself
-is just as good and makes the start and stop levels easier to read.
+and off below 1.0 m. For a fill pump, use `NOT PumpCtl.Q`.
+
+Blocks with the same name are not the same block. The CODESYS Util library's `HYSTERESIS`
+has INT inputs `IN`, `HIGH` and `LOW`, and its output `OUT` works the other way round: TRUE
+when `IN` falls below `LOW`, FALSE when it rises above `HIGH`. That suits a heater or a
+fill pump. Read the help of the block you actually have. Writing the `IF ... ELSIF` yourself
+is just as good, is the same on every platform, and makes the start and stop levels easier
+to read.
 
 ## 8. Analog outputs
 
@@ -925,9 +947,10 @@ A 4 mA signal and a 0 mA signal mean very different things to a field device:
   speed or run at a preset speed. Choose deliberately, and make the PLC notice
   ([Module 19](../19-motion-and-drives/)).
 
-Whether 0 % output means "closed" or means "fail position" is a site convention (the
-positioner can usually be set up either way). The loop drawing must show it, and the
-program's scaling must match.
+For a fail-open valve, "4 mA = closed" and "4 mA = at the fail position (open)" are two
+different set-ups, and the positioner can usually be configured for either (direct or
+reverse action). Which one a site uses is a convention. The loop drawing must show it, and
+the program's scaling must match.
 
 ### 8.3 What the outputs do when the PLC stops
 
@@ -1139,14 +1162,16 @@ filters set there too; the input tag then carries a REAL in engineering units pl
 status bits such as fault, under-range and over-range (tag names vary by module family). Some
 Logix analog modules can also raise HH/H/L/LL process alarms with a deadband, and rate
 alarms, on the module itself. Compact I/O 1769 modules offer the INT formats in Section 1.6.
-For scaling in logic there is `SCP` (scale with parameters) in ladder; the function block and
-ST process instructions include `SCL` (scale), `LPF` (low-pass filter), `TOT` (totaliser) and
-`ALMA` (analog alarm, with HH/H/L/LL limits, deadband and rate-of-change detection).
+For scaling in logic there is `SCP` (scale with parameters), usable in ladder. The function
+block and ST instruction set adds process and filter instructions such as `SCL` (scale),
+`LPF` (low-pass filter) and `TOT` (totaliser), and `ALMA` is an analog alarm instruction
+with HH/H/L/LL limits, deadband and rate-of-change detection.
 Micro800 controllers (CCW) use plug-in or expansion modules; check each module's raw range.
 
 **CODESYS.** The raw format depends entirely on the I/O module or fieldbus device; read its
-manual. The Util library has `LIN_TRAFO` (linear scaling), `HYSTERESIS` and `LIMITALARM`, and
-the free OSCAT BASIC library adds many filter and scaling blocks. `TIME_TO_REAL` returns
+manual. The Util library has `LIN_TRAFO` (linear scaling), `HYSTERESIS` (INT inputs, output
+TRUE below `LOW`: the opposite sense to the MATIEC block of the same name, Section 7.4) and
+`LIMITALARM`, and the free OSCAT BASIC library adds many filter and scaling blocks. `TIME_TO_REAL` returns
 milliseconds, so the ratio trick in Section 4.2 keeps filter code portable. With edition 3
 object orientation you could build the analog input as a class with methods; see
 [Module 21](../21-architecture-and-standards/).
@@ -1154,7 +1179,8 @@ object orientation you could build the analog input as a class with methods; see
 **OpenPLC.** Analog inputs and outputs are 16-bit words, 0–65535, whatever the board's ADC
 resolution. Declare them as UINT or WORD; if you declare INT, readings above 32767 appear
 negative. Example: a board that maps 0–10 V to 0–65535, with a 250 Ω burden, reads about 6554
-at 4 mA (1 V) and about 32768 at 20 mA (5 V), so only half the range is used. There are no
+at 4 mA (1 V) and about 32768 at 20 mA (5 V), so the 4–20 mA span uses only 40 % of the
+counts, and a 10-bit ADC gives only about 400 real steps across it. There are no
 card diagnostics, so software range checks are your only line-fault detection. The MATIEC
 library adds `HYSTERESIS`, `RAMP`, `INTEGRAL`, `DERIVATIVE` and `PID` blocks; all but
 `HYSTERESIS` take a `CYCLE` input for the sample time. In the MATIEC build used by `plctest`, `TIME_TO_REAL`
@@ -1196,17 +1222,21 @@ function block. The two instances are set up differently, so nothing may be hard
 | `.Current_mA` | output | REAL | loop current: not filtered, not clamped |
 | `.Value` | output | REAL | engineering value |
 | `.Good` | output | BOOL | TRUE while the current is inside the NE43 limits |
-| `.UnderRange`, `.OverRange` | outputs | BOOL | confirmed NE43 failure, low or high |
-| `.Fault` | output | BOOL | `UnderRange OR OverRange` |
+| `.Fault` | output | BOOL | confirmed NE43 failure (either band) |
+| `.UnderRange`, `.OverRange` | outputs | BOOL | which band the confirmed failure is in: low or high |
 
 **Requirements:**
 
 1. `Current_mA = 4 + Raw / 1728`, every scan, unfiltered and unclamped.
 2. `Good` is TRUE while 3.6 mA < `Current_mA` < 21.0 mA, and FALSE otherwise, with no delay.
-3. `UnderRange` goes TRUE when `Current_mA` ≤ 3.6 mA continuously for `FaultDelay`;
-   `OverRange` when it is ≥ 21.0 mA continuously for `FaultDelay`. If the current comes back
-   inside the limits, even briefly, the delay starts again. Each flag clears on the first scan
-   the current is back inside its limit. `Fault = UnderRange OR OverRange`.
+3. `Fault` goes TRUE when the current has been outside the NE43 limits (≤ 3.6 mA or
+   ≥ 21.0 mA) continuously for `FaultDelay`. If the current comes back inside the limits, even
+   briefly, the delay starts again. `Fault` clears on the first scan the current is back
+   inside the limits. While `Fault` is TRUE, `UnderRange` is TRUE if the current is ≤ 3.6 mA
+   and `OverRange` if it is ≥ 21.0 mA, so `Fault = UnderRange OR OverRange`. A current that
+   jumps straight from one failure band to the other (a transmitter that failed upscale is
+   disconnected for replacement) stays a fault: the fault must not clear, and the substitute
+   value must not disappear, while the signal is still bad.
 4. `Value` is the linear scaling of 4..20 mA to `EuMin`..`EuMax`, clamped to that range. A
    reading between 3.6 and 4 mA shows `EuMin`, one between 20 and 21 mA shows `EuMax`; neither
    is a fault.
@@ -1232,8 +1262,11 @@ python3 tools/plctest.py my-work/14-1-analog-input.st 14-analog-and-process-io/l
 <details>
 <summary>Hint (open only if stuck)</summary>
 
-Work in the order the requirements are listed. Two `TON`s, one per failure band, give the
-delays (`IN := Current_mA <= 3.6` and `IN := Current_mA >= 21.0`). For the filter keep a REAL
+Work in the order the requirements are listed. Work out `Good` first; then one `TON` with
+`IN := NOT Good` gives the confirmation delay, and `Fault` is its `Q`. The direction flags
+are `Fault AND (Current_mA <= 3.6)` and `Fault AND (Current_mA >= 21.0)`. (One timer per
+band looks natural, but then a jump from one band to the other restarts the delay and the
+fault clears for a while.) For the filter keep a REAL
 state variable and a BOOL "filter ready": when `Good` and not ready, load the state with the
 scaled value and set ready; when `Good` and ready, apply
 `State := State + Alpha * (Scaled - State)`; when `Good` is FALSE, don't touch the state (that
@@ -1434,7 +1467,7 @@ Demand := TRUE; ELSIF Level <= 1.0 THEN Demand := FALSE; END_IF;` and finally
    broken wire reads 0 mA, which is a valid 0 %, so the PLC cannot tell it from a real zero.
    On 4–20 mA it reads 0 mA, far below 3.6 mA: an obvious under-range fault.
 3. It shows **0**. `Raw / 27648` is an integer division, and any value below 27648 gives 0;
-   only full scale gives 250. Even `Raw * 250 / 27648` is risky, because the intermediate
+   only full scale (and over-range) gives 250. Even `Raw * 250 / 27648` is risky, because the intermediate
    product does not fit an INT on platforms that calculate in 16 bits, and the result has only
    whole-unit resolution. Write `Flow := INT_TO_REAL(Raw) * 250.0 / 27648.0;` with `Flow` a
    REAL.

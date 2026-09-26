@@ -220,9 +220,10 @@ expect LineStats.Count 0
 set Head2Weight 490.0               # ...a container is weighed during the clear
 set Head2Ready TRUE
 scan
+expect LineStats.Count 0            # zero on every scan while the button is held
 set Head2Ready FALSE
 scan 3
-expect LineStats.Count 0            # not added to the cleared record
+expect LineStats.Count 0            # the weight is not added to the cleared record
 expect LineStats.OutSpec 0
 expect LineStats.MinValue ~ 0.0 0.001
 expect LineStats.Sum ~ 0.0 0.001

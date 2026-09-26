@@ -250,12 +250,12 @@ and how long it lives.
 | `VAR_IN_OUT` | FUNCTION, FB, PROGRAM | Both. It *is* the caller's variable | Not stored in the POU |
 | `VAR` | all | POU only (private) | FB/PROGRAM: yes. Function: no |
 | `VAR_TEMP` | PROGRAM, FB | POU only | **No**: fresh on every call |
-| `VAR_GLOBAL` | CONFIGURATION, RESOURCE | Any POU that declares it `VAR_EXTERNAL` | Yes |
+| `VAR_GLOBAL` | CONFIGURATION, RESOURCE (the standard also allows PROGRAM; MATIEC does not) | Any POU that declares it `VAR_EXTERNAL` | Yes |
 | `VAR_EXTERNAL` | PROGRAM, FB | As the global it refers to | (it is the global) |
 | `CONSTANT` | qualifier: `VAR CONSTANT`, `VAR_GLOBAL CONSTANT` | Read only | — |
 | `RETAIN` / `NON_RETAIN` | qualifier: `VAR RETAIN`, `VAR_GLOBAL RETAIN` | as the base class | Survives a warm restart |
 | `AT %IX0.0` | programs, configuration/resource globals | Located on a physical address | — |
-| `VAR_ACCESS` | CONFIGURATION | Named access paths for communication | — |
+| `VAR_ACCESS` | CONFIGURATION, PROGRAM | Named access paths for communication | — |
 
 One FB can show almost all of them. This compiles and runs as written (the configuration
 declares the global `gPlantInService`):
@@ -382,7 +382,8 @@ Rules and traps:
   write back to. MATIEC refuses `U1(N := 5)` and `U1(N := A + B)` with "Assignment to an
   expression or a literal value is not allowed". The standard also expects the connection on
   every call. MATIEC accepts a call that leaves it unconnected, and the FB then works on a
-  private copy that the caller never sees. Other compilers reject such a call. Always connect it.
+  private copy that the caller never sees. Many other compilers reject such a call. Always
+  connect it.
 - **Think of it as passing by reference.** The standard describes it that way. Some compilers
   copy the variable in and copy it back at the end of the call. MATIEC does this for FBs (you
   can see it in the generated C code), and Siemens does it for some parameter types. In ordinary
@@ -403,8 +404,9 @@ Siemens bug.
 
 ### 3.4 Globals: `VAR_GLOBAL` and `VAR_EXTERNAL`
 
-A global is declared once, at configuration or resource level. Every POU that uses it must say
-so with `VAR_EXTERNAL`, repeating the name and type:
+A global is declared once, normally at configuration or resource level (the standard also lets
+a program declare globals for the POUs it calls). Every POU that uses it must say so with
+`VAR_EXTERNAL`, repeating the name and type:
 
 ```iecst
 CONFIGURATION Config0               (* fragment *)
@@ -544,7 +546,7 @@ Priority numbers are **not** consistent between platforms. Check before you assu
 | Platform | Highest priority | Notes |
 |---|---|---|
 | IEC 61131-3 | 0 | Larger numbers are lower priority |
-| CODESYS / TwinCAT | 0 | CODESYS uses 0–31 |
+| CODESYS / TwinCAT | The smallest number (0 in CODESYS) | CODESYS uses 0–31. In TwinCAT, too, a smaller number is a higher priority. |
 | Rockwell Logix | 1 | Periodic and event tasks 1–15. The continuous task always runs at the lowest priority. |
 | Siemens S7 | the **largest** number | OB1, the main cycle, has the lowest priority, 1 |
 
@@ -621,7 +623,7 @@ There are two classic ways to divide a program:
 
 Most good projects are **organised by area, and by function inside each area**. They use a
 shared library of device FBs that every area calls. This follows the ISA-88 physical model
-(site, area, process cell, unit, equipment module, control module), which
+(enterprise, site, area, process cell, unit, equipment module, control module), which
 [Module 21](../21-architecture-and-standards/) covers properly.
 
 ### 5.2 Layers
@@ -762,6 +764,7 @@ stateDiagram-v2
     Stopped --> Starting: Start, and no Stop, InterlockOK, no Fault
     Starting --> Running: RunFb arrives within FbTimeout
     Starting --> Faulted: no RunFb within FbTimeout
+    Starting --> Stopped: Stop or InterlockOK lost
     Running --> Stopped: Stop or InterlockOK lost
     Running --> Faulted: RunFb lost for FbTimeout
     Stopped --> Faulted: RunFb present without a command for FbTimeout
@@ -783,7 +786,10 @@ The decisions behind it:
 - **Latch the fault** and switch off the command. Reset clears the latch but does not start
   the motor. If the cause is still there, the fault comes straight back.
 - **Parameters per instance.** A contactor auxiliary contact proves in milliseconds. An airflow
-  switch in a duct needs a few seconds. Same FB, different `FbTimeout`.
+  switch in a duct needs a few seconds. Same FB, different `FbTimeout`. The same allowance also
+  covers the stop: after a stop the feedback must drop out within `FbTimeout`. A fan or pump that
+  keeps its flow switch made for a long run-down needs a timeout long enough for that too, or a
+  separate stop allowance.
 
 ### 6.3 FB_Valve: the canonical on/off valve
 
@@ -941,6 +947,7 @@ PROGRAM SumpPumping
     HMI_Reset       : BOOL;            (* ...cleared by the PLC once used *)
     SIM_LevelLow    : BOOL;            (* simulated level switches, set from the HMI *)
     SIM_LevelHigh   : BOOL;
+    SIM_LocalStop   : BOOL;            (* simulated local stop: TRUE = pressed *)
   END_VAR
   VAR (* HMI interface: status read by the HMI *)
     STS_P301_Running : BOOL;
@@ -960,16 +967,17 @@ PROGRAM SumpPumping
 
   (* ---- Layer 1: input mapping. Polarity, simulation and re-wiring are
      dealt with here and nowhere else. ---- *)
-  P301_LocalStop := NOT DI_P301_Stop_NC;
   SimContactor(IN := P301.RunCmd, PT := T#200ms);
   IF HMI_Simulate THEN
-    LevelLow   := SIM_LevelLow;
-    LevelHigh  := SIM_LevelHigh;
-    P301_RunFb := SimContactor.Q;
+    LevelLow       := SIM_LevelLow;
+    LevelHigh      := SIM_LevelHigh;
+    P301_RunFb     := SimContactor.Q;
+    P301_LocalStop := SIM_LocalStop;
   ELSE
-    LevelLow   := DI_LSL301;
-    LevelHigh  := DI_LSH301;
-    P301_RunFb := DI_P301_Aux;
+    LevelLow       := DI_LSL301;
+    LevelHigh      := DI_LSH301;
+    P301_RunFb     := DI_P301_Aux;
+    P301_LocalStop := NOT DI_P301_Stop_NC;   (* NC: pressed or wire broken = stop *)
   END_IF;
 
   (* ---- Layer 3: equipment logic. Pump down from the high switch to the
@@ -1160,8 +1168,8 @@ instruction (section 4.5).
   are function blocks, and each call needs memory. *DBs* are data blocks: global DBs for shared
   data, and *instance DBs* holding one FB instance's memory each. *PLC data types* are
   structures (UDTs).
-- **Instances.** Calling an FB from an OB or an FC needs a **single-instance DB** for that call
-  (TIA offers to create one). Calling an FB from inside another FB can declare the instance in
+- **Instances.** Calling an FB from an OB or an FC normally uses a **single-instance DB** for
+  that call (TIA offers to create one). Calling an FB from inside another FB can declare the instance in
   the caller's *Static* section, as a **multi-instance**. Its data is then stored inside the
   caller's instance DB, which keeps the number of DBs manageable. In SCL:
 
@@ -1350,8 +1358,9 @@ few seconds to make after a start.
 4. If `RunCmd` and `RunFb` disagree continuously for longer than `FbTimeout`, in **either**
    direction, `Fault` latches and `RunCmd` switches off. A disagreement that clears before
    the timeout restarts the allowance.
-5. While `Fault` is TRUE a Start is refused. `Reset` clears `Fault` (if its cause has gone)
-   and does **not** start the motor.
+5. While `Fault` is TRUE a Start is refused. `Reset` clears `Fault` if its cause has gone,
+   and does **not** start the motor. While the cause is still there (for example feedback with
+   no command), `Fault` stays TRUE, even while `Reset` is held.
 6. The FB contains no I/O addresses and no globals.
 7. Program: the pumps' `InterlockOK` is "fan proven running (`Fan1.Running`) AND tank level
    healthy". The fan has no process interlock.
@@ -1443,8 +1452,10 @@ not in basic control logic.*
    ignored.
 5. On any fault the solenoid is de-energised, so the valve goes to its fail position, and
    stays de-energised until reset.
-6. `Reset` clears both faults. If a cause is still present, its fault comes back. After a
-   reset the valve follows `OpenCmd` again, with a full `TravelTime`.
+6. `Reset` clears both faults. A `LimitFault` whose cause is still present (both switches
+   still made) stays TRUE, even while `Reset` is held. After a reset the valve follows `OpenCmd`
+   again with a full `TravelTime`, so a valve that is still stuck trips again only when that
+   time has run out.
 7. Program: XV101 fails closed with a 5 s travel time. XV102 fails open with an 8 s travel
    time. `ResetPB` resets both. `FaultLamp` = either valve faulted.
 
@@ -1521,8 +1532,9 @@ moved by at least 0.5 g (report-by-exception).
    instance and is not cleared by `ClearPB`.
 6. `Stats` is a `VAR_IN_OUT`. Both instances update the same `LineStats`, and samples from
    both heads in the same scan are both counted.
-7. While `ClearPB` is pressed every field of `LineStats` is zero. At power-up every field is
-   zero too.
+7. While `ClearPB` is pressed every field of `LineStats` is zero, at the end of every scan. A
+   weight that arrives while it is pressed still operates its reject gate and counts in its
+   instance's `Samples`, but it is not added to `LineStats`. At power-up every field is zero too.
 8. Limits changed at run time apply from the next sample.
 9. Every scan: `ReportedMean := F_Deadband(LineStats.Mean, ReportedMean, MeanDeadband)`.
 10. The reject gates follow their instances' `Reject` outputs.
@@ -1542,11 +1554,15 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
   never reported.
 - Inside the FB, put an `R_TRIG` on `Sample` and do all the work inside `IF Edge.Q THEN`.
 - Test `Stats.Count = 0` *before* incrementing it, to know whether this is the first sample.
+  Don't test `MinValue = 0.0` instead: an empty container weighs 0 g, and that is a real sample.
 - Clearing a whole structure: declare a `VAR CONSTANT` of type `ST_Stats` with every field
-  zero and assign it, `LineStats := CLEARED_STATS;`, or assign the fields one by one.
-- Why `Sum` is `LREAL`: a `REAL` holds about 7 significant digits. After tens of thousands of
-  500 g samples the total runs into the tens of millions, and adding 500.0 to it starts to
-  lose grams ([Module 09](../09-math-and-data-handling/)).
+  zero and assign it, `LineStats := CLEARED_STATS;`, or assign the fields one by one. Do the
+  clear *after* the two calls, so that a weight arriving in the same scan cannot leave the
+  record non-zero while the button is held.
+- Why `Sum` is `LREAL`: a `REAL` holds about 7 significant digits. After about 17,000 samples
+  of 500 g the total passes 8.4 million, and from there a `REAL` can only change in whole
+  grams, so every weight added is rounded to a whole gram. An `LREAL` keeps 15–16 digits
+  ([Module 09](../09-math-and-data-handling/)).
 </details>
 
 ## Check your understanding

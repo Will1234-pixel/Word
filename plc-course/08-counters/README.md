@@ -1060,9 +1060,9 @@ a smoother display, use a moving window (section 13).
   FB ([Module 11](../11-program-organization/)). Dragging the box into a block creates the
   instance, and the call in SCL then looks like
   `"PalletCtr_DB".CTU(CU := "CartonPE", R := "NewPalletPB", PV := 24);`. The counters count to
-  the limits of their data type and stop there. In `CTUD`, `R` has priority over `LD`, `LD` is level-sensitive,
-  and simultaneous up and down edges leave `CV` unchanged. The instance data can be made
-  retentive. For `ADD`-style counting, LAD and FBD have `INC` and `DEC` boxes. The older
+  the limits of their data type and stop there. In `CTUD`, `R` has priority over `LD`, `LD` is
+  level-sensitive, and simultaneous up and down edges leave `CV` unchanged. The instance data
+  can be made retentive. For `ADD`-style counting, LAD and FBD have `INC` and `DEC` boxes. The older
   S5-style counters (`S_CU`, `S_CD`, `S_CUD`, with `C` addresses, a range of 0 to 999 and a BCD
   output) are available on S7-300/400 and S7-1500, but not on S7-1200. Avoid them in new
   projects.

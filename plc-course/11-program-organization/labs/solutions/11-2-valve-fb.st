@@ -30,9 +30,10 @@ FUNCTION_BLOCK FB_Valve
          momentary overlap).
        - On any fault the solenoid is de-energised, so the valve goes to its
          fail position, and stays there until Reset.
-       - Reset clears both faults. After a reset the valve follows OpenCmd
-         again and gets a fresh TravelTime. If a fault's cause is still
-         present the fault comes back.
+       - Reset clears both faults. A limit fault whose cause is still present
+         is set again in the same scan, so it never appears to clear. After a
+         reset the valve follows OpenCmd again and gets a fresh TravelTime; a
+         valve that is still stuck trips again when that time runs out.
 
      Version history
        1.0  first release (Lab 11-2)

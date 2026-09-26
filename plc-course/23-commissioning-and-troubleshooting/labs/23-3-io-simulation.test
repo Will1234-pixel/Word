@@ -77,6 +77,12 @@ scan
 expect SimCount 3
 expect SimActive TRUE
 expect SimLamp TRUE
+expect SimLSL101.Value TRUE    # bumpless on every point: each Value is loaded
+expect SimP101FB.Value TRUE    # from its live field value...
+expect SimLT101.Value ~ 25.0 0.05
+expect LSL101_OK TRUE          # ...so the logic sees no change
+expect P101Running TRUE
+expect LT101_Pct ~ 25.0 0.05
 set SimLSL101.Value FALSE
 set SimP101FB.Value FALSE
 set SimLT101.Value 90.0

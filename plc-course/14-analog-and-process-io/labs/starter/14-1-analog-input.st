@@ -29,9 +29,9 @@ FUNCTION_BLOCK FB_AnalogInput
     Current_mA : REAL;   (* loop current worked out from Raw: not filtered, not clamped *)
     Value      : REAL;   (* engineering value for the rest of the program *)
     Good       : BOOL;   (* TRUE while the loop current is inside the NE43 limits *)
-    UnderRange : BOOL;   (* current <= 3.6 mA for FaultDelay: wire break, failure low *)
-    OverRange  : BOOL;   (* current >= 21.0 mA for FaultDelay: short circuit, failure high *)
-    Fault      : BOOL;   (* UnderRange OR OverRange *)
+    UnderRange : BOOL;   (* Fault, and the current is <= 3.6 mA: wire break, failure low *)
+    OverRange  : BOOL;   (* Fault, and the current is >= 21.0 mA: short circuit, failure high *)
+    Fault      : BOOL;   (* outside the NE43 limits for FaultDelay (= UnderRange OR OverRange) *)
   END_VAR
   VAR CONSTANT
     COUNTS_PER_MA : REAL := 1728.0;   (* 27648 counts / 16 mA *)
@@ -40,8 +40,7 @@ FUNCTION_BLOCK FB_AnalogInput
   END_VAR
   VAR
     (* Suggested internal variables - add, rename or remove as you like. *)
-    LowTimer    : TON;    (* confirmation delay for the low failure band *)
-    HighTimer   : TON;    (* confirmation delay for the high failure band *)
+    FaultTimer  : TON;    (* confirmation delay: signal outside the NE43 limits *)
     Filtered    : REAL;   (* filter state; also the last good value *)
     FilterReady : BOOL;   (* FALSE until the filter holds a real measurement *)
   END_VAR
@@ -49,7 +48,7 @@ FUNCTION_BLOCK FB_AnalogInput
   (* TODO: replace these placeholder lines with your logic (see the
      requirements in the Module 14 README, Lab 14-1). Suggested order:
        1. Raw -> Current_mA (convert to REAL first!)
-       2. NE43 limits with the FaultDelay -> UnderRange, OverRange, Fault, Good
+       2. NE43 limits -> Good; then the FaultDelay -> Fault, UnderRange, OverRange
        3. Scale 4..20 mA to EuMin..EuMax and clamp
        4. First-order filter, fed only with good readings
        5. Value: substitute, hold or live *)

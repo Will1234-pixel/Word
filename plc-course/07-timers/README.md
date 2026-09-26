@@ -1,6 +1,6 @@
 # 07 — Timers
 
-> **Level:** 2 — Core programming · **Time:** ~10 hours · **Prerequisites:** [04 — Ladder Logic](../04-ladder-logic/), [06 — Edges and One-Shots](../06-edges-and-one-shots/)
+> **Level:** 2 — Core programming · **Time:** ~10 hours · **Prerequisites:** [04 — Ladder Logic Fundamentals](../04-ladder-logic/), [06 — Edge Detection, One-Shots and Latching Patterns](../06-edges-and-one-shots/)
 
 Almost every real control program measures time. A sump pump waits until the high level has
 been present for a few seconds before it starts, so that a wave does not start it. A cooling
@@ -29,7 +29,7 @@ After this module you will be able to:
 - Estimate the real accuracy of a timer from the scan time, and explain why a timer only
   updates when it is called.
 - Apply the three timer rules: one instance per job, call every timer once per scan
-  unconditionally, and reset a timer by giving it IN = FALSE for a scan.
+  unconditionally, and reset a TON by giving it IN = FALSE for a scan.
 - Translate between IEC timers, Rockwell TON/TOF/RTO (`.EN .TT .DN .ACC .PRE`) and Siemens
   TP/TON/TOF/TONR.
 - Build a retentive timer and a run-hours meter that neither drifts nor overflows.
@@ -42,8 +42,10 @@ After this module you will be able to:
 Before PLCs, time delays in control panels came from **timing relays**. An *on-delay*
 relay (delay on energisation) changes over its contacts a set time after its coil is
 energised and releases them as soon as the coil is de-energised. An *off-delay* relay (delay
-on de-energisation) operates at once and releases a set time after the coil drops out. An
-*interval* or *single-pulse* relay closes its contact for a fixed time when triggered.
+on de-energisation) operates at once and releases a set time after the coil drops out
+(electronic versions usually have a separate control input for this). A *single-shot* (pulse)
+relay closes its contact for a fixed time when triggered, whatever the trigger does
+afterwards.
 
 IEC 61131-3 defines the same three behaviours as standard function blocks:
 
@@ -51,7 +53,7 @@ IEC 61131-3 defines the same three behaviours as standard function blocks:
 |---|---|---|---|
 | On-delay | `TON` | `TON` | `TON` |
 | Off-delay | `TOF` | `TOF` | `TOF` |
-| Single pulse / interval | `TP` | (build it, see [section 4.3](#43-tp-pulse-timer)) | `TP` |
+| Single-shot pulse | `TP` | (build it, see [section 4.3](#43-tp-pulse-timer)) | `TP` |
 | Accumulating (retentive) | not in the base standard | `RTO` | `TONR` |
 
 The big difference from a relay is that a PLC timer is an **instance of a function block**.
@@ -134,7 +136,8 @@ units, largest first:
 | `T#1d2h3m4s5ms` | every unit at once |
 | `T#-5s` | a negative duration: legal as a value (the result of a subtraction), meaningless as a preset |
 
-The units are `d`, `h`, `m`, `s` and `ms`. Watch the difference between `m` (minutes) and
+The units are `d`, `h`, `m`, `s` and `ms` (edition 3 of the standard adds `us` and `ns`,
+mainly for `LTIME`). Watch the difference between `m` (minutes) and
 `ms` (milliseconds): `T#5m` is 60,000 times longer than `T#5ms`, and a missing `s` is an easy
 slip to make and a hard one to spot.
 
@@ -155,16 +158,22 @@ IEC 61131-3 lets you add and subtract durations (`T#1s + T#500ms`), multiply or 
 duration by a number, and compare durations with `=`, `<>`, `<`, `>`, `<=` and `>=`. A common
 use is an HMI countdown: remaining time = `PT - ET`.
 
-> **plctest/OpenPLC note.** In the MATIEC toolchain used by `plctest`, comparisons of TIME
-> values work, but the infix operators `+ - * /` on TIME values compile and then fail when
-> the generated C code is built. Use the named functions instead: `ADD_TIME(a, b)`,
-> `SUB_TIME(a, b)`, `MULTIME(t, n)` and `DIVTIME(t, n)`. CODESYS and TIA Portal accept the
-> infix operators.
+The standard also names these operations as functions: `ADD_TIME(a, b)` and
+`SUB_TIME(a, b)`, plus `MULTIME(t, n)` and `DIVTIME(t, n)` in edition 2 (edition 3 renamed the
+last two `MUL_TIME` and `DIV_TIME`). You will meet both styles in other people's code.
 
-Converting a TIME to a number is not portable either. In CODESYS and TIA Portal,
-`TIME_TO_DINT(T#1500ms)` gives 1500 (milliseconds). In MATIEC it gives 1 (whole seconds). If
-you need to decide something about a duration, **compare TIME values** (`ET >= T#1s`) rather
-than converting them to integers.
+> **plctest/OpenPLC note.** Infix `+ - * /` on TIME values and `ADD_TIME`, `SUB_TIME`,
+> `MULTIME` and `DIVTIME` all work in `plctest` and OpenPLC. The edition 3 names `MUL_TIME`
+> and `DIV_TIME` are not recognised. (Upstream MATIEC has a code-generation bug in TIME
+> arithmetic that `plctest` works around for you; OpenPLC's own compiler does not have it.)
+> One quirk remains in the MATIEC runtime library: a TIME produced by an addition can
+> compare as *less* than an equal value, so `T#4500ms + T#500ms >= T#5s` is FALSE. Section
+> 6.1 shows how to design around it.
+
+Converting a TIME to a number is not portable. In CODESYS and TIA Portal,
+`TIME_TO_DINT(T#1500ms)` gives 1500 (milliseconds). In MATIEC and OpenPLC it gives 1 (whole
+seconds). If you need to decide something about a duration, **compare TIME values**
+(`ET >= T#1s`) rather than converting them to integers.
 
 ## 3. How to read the timing diagrams
 
@@ -1481,4 +1490,4 @@ when a stroke starts. Then:
   real requirements behind Lab 07-5.
 
 ---
-Previous: [06 — Edges and One-Shots](../06-edges-and-one-shots/) · Next: [08 — Counters](../08-counters/)
+Previous: [06 — Edge Detection, One-Shots and Latching Patterns](../06-edges-and-one-shots/) · Next: [08 — Counters](../08-counters/)

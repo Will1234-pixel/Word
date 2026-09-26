@@ -50,8 +50,8 @@ By the end of this project you will be able to:
 
 ## 1. The story
 
-Brightwell Chemicals blends water-based cleaning products for supermarket own brands. Its
-mixing vessel T-201 has been run by hand: an operator opens the water valve, watches a sight
+A small contract manufacturer blends water-based cleaning products for supermarket own
+brands. Its mixing vessel T-201 has been run by hand: an operator opens the water valve, watches a sight
 glass, adds surfactant concentrate from a drum pump, opens the steam valve "a couple of turns",
 and writes the batch sheet at the end of the shift. Last year the vessel overflowed twice, and
 a customer audit found batch records that could not be trusted.
@@ -108,7 +108,7 @@ PLC only *monitors* it.
                               P-204 drain pump (6 L/s) ---> to the filling line
 ```
 
-| Tag | Device | Tag letters (ISA-5.1 style) |
+| Tag | Device | What the letters mean |
 |---|---|---|
 | T-201 | Mixing vessel, 2000 L, steam jacket | T = tank |
 | XV-201, XV-202, XV-204 | Actuated on/off valves, spring return (they close on loss of air or power) | XV = on/off valve |
@@ -149,8 +149,9 @@ The analog card is the Siemens-style range from [Module 14](../14-analog-and-pro
 
 The pulse inputs are ordinary digital inputs. At 8 pulses per second each pulse is high for
 about 62 ms and low for 62 ms, six scans each at 10 ms, which a scanned input counts safely.
-A meter that pulses faster than about a quarter of the scan rate needs a high-speed counter
-input ([Module 08](../08-counters/), section 14).
+A scanned input can never count more than one pulse every two scans, and it needs a good
+margin below that, so a faster meter needs a high-speed counter input
+([Module 08](../08-counters/), section 14).
 
 ## 5. The plant simulation (`FB_PlantSim`)
 
@@ -542,8 +543,8 @@ track it). After Restart the controller carries on from roughly where it was.
 
 **Performance requirements** (tested with recipe 1: 450 L to 60 °C):
 
-1. The heat phase reaches `TempSP − TempBand` (58 °C) within **4 minutes**. Full steam takes
-   about 3 minutes.
+1. The heat phase reaches `TempSP − TempBand` (58 °C) within **4 minutes**. Full steam alone
+   takes about 160 s.
 2. The true temperature never overshoots the setpoint by more than **3 °C**.
 3. During the mix phase the temperature stays inside ±`TempBand`, so the hold time
    accumulates.
@@ -593,17 +594,18 @@ The pump must never run against a shut valve. That is a *deadhead*, which heats 
 can damage its seal. The sequence is:
 
 ```text
- drain phase starts
-        |<- ValveLeadTime ->|                                     |<- DrainRunOn ->|<- ValveLeadTime ->|
-                             _____________________________________________________
- PumpRun         ___________|                                                     |____________________
-                  ____________________________________________________________________________________
- OutletValve     |                                                                                    |__
-                                                                  _______________________________________
- level <= 1 %    ________________________________________________|
-                                                                                                         |
-                                                                                           phase complete
+             drain phase starts                    level reads empty
+             |<----lead--->|                       |<-DrainRunOn->|<----lag---->|
+              __________________________________________________________________
+OutletValve  _|                                                                 |_____
+                            ______________________________________
+PumpRun      _______________|                                     |___________________
+                                                    __________________________________
+Level <= 1 % _______________________________________|
+                                                                          phase complete
 ```
+
+Both the lead and the lag are `ValveLeadTime`.
 
 1. Open XV-204.
 2. After `ValveLeadTime` (2 s, the valve's stroke time) start P-204.
@@ -883,7 +885,7 @@ specification for Hold and Restart in a sentence each.
 
 ```bash
 cd plc-course
-# the untouched starter compiles and fails (about 260 of the 461 checks)
+# the untouched starter compiles and fails (about 270 of the 461 checks)
 python3 tools/plctest.py 24-capstone-projects/labs/starter/24-2-batch-mixing-plant.st
 
 # your copy
@@ -892,7 +894,7 @@ cp 24-capstone-projects/labs/starter/24-2-batch-mixing-plant.st my-work/
 python3 tools/plctest.py my-work/24-2-batch-mixing-plant.st 24-capstone-projects/labs/24-2-batch-mixing-plant.test
 ```
 
-The whole test simulates about four hours of plant time and runs in a few seconds.
+The whole test simulates about two hours of plant time and runs in a few seconds.
 
 **What the test checks.** It plays the operator (HMI commands, recipe selection and edits),
 the engineer (a few `Cfg` changes) and the plant (fault injection through `Sim`). It checks
@@ -901,10 +903,17 @@ inside your program. Timing checks allow for sensible differences between design
 example, the settle check only asks that the next phase does not start within 1.5 s of the
 valve closing. The control-performance checks are the three requirements of section 7.5.
 
-**Reading a failure.** `FAIL line 379 until Hmi.Phase = PhaseMix within 4m (actual: PHASEHEAT,
-at t=395940 ms)` means the heat phase was still running 4 minutes after it began. Open the test
-file at that line, read the scenario from the top, then add `print` lines to a copy of the
-scenario to watch your variables:
+**Reading a failure.** Here is part of the output for a design that starts its heat phase
+bumplessly from 0 % (section 7.5):
+
+```text
+  FAIL    line 378  until Sim.HeatValvePct > 50.0 within 30s   (actual: 40.0101, at t=185930 ms)
+  FAIL    line 379  until Hmi.Phase = PhaseMix within 4m   (actual: PHASEHEAT, at t=425930 ms)
+```
+
+The steam valve had reached only 40 % after 30 s, and the heat phase was still running
+4 minutes after it began. Open the test file at those lines and read the scenario from the
+top. Then add `print` lines to a copy of the scenario to watch your variables:
 
 ```text
 scenario debug heat-up
@@ -930,18 +939,18 @@ FAT sign-off and a code review would judge a real project.
 
 | Area | What earns the marks | Points |
 |---|---|---|
-| **Acceptance test** | Pro rata to the scenarios that pass. All 41 = 40 points | 40 |
+| **Acceptance test** | Pro rata to the scenarios that pass: all 41 scenarios = 40 points | 40 |
 | **Structure** | Clear layers (commands, measurements, alarms, state machine, equipment, outputs); FBs for repeated equipment; each output written in one place; interlocks on the outputs, not in the sequence | 15 |
 | **Readability** | Meaningful names; comments that explain *why*; no magic numbers (Cfg, constants); consistent style ([Module 22](../22-software-engineering/)) | 10 |
 | **Robustness and safety** | Fail-safe handling of NC inputs and bad signals; resets never start equipment; e-stop agreement; no division by zero; counters that cannot overflow in a realistic batch | 10 |
 | **Operability** | Every state, phase, total and alarm visible on the HMI; no nuisance or consequential alarms; reject codes that tell the operator what to fix | 5 |
 | **Your own tests** | At least three extra scenarios of your own that pass, each with a comment saying what it proves | 10 |
 | **Design note** | One or two pages: your architecture, any interpretation of the specification, your tuning and how you found it, known limitations | 10 |
-| **Total** | | **90** |
+| **Total** | | **100** |
 | **Extension** (bonus) | One extension from the list below, specified, implemented and tested | +10 |
 
-A total of 75 or more (out of 90) is a strong project, one you could show and explain in a job
-interview. Below 60 means some parts need more work before the project is complete.
+A total of 85 or more is a strong project, one you could show and explain in a job interview.
+Below 65 means some parts need more work before the project is complete.
 
 ## 12. Common pitfalls
 

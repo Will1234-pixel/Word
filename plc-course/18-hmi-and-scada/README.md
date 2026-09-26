@@ -196,6 +196,11 @@ HMI numeric field shows the pump's mode and lets the operator type a new one str
 into the same tag. The PLC then changes the mode itself (say, it drops to Manual on a
 fault). The HMI may already hold the old value in a pending write, and puts it back.
 
+Command tags are the one deliberate exception, and only in a strictly limited form: the
+HMI only ever sets a command and the PLC only ever clears it, so the two writers never
+compete to hold a value. Section 2.3 shows how to make that safe, and the sequence-number
+pattern in section 2.4 removes even this shared write.
+
 The same rule protects the PLC's state. Keep the real state (the mode, the active setpoint,
 the latched fault) in internal variables, and *copy* it to the HMI status tags every scan.
 Then a faulty HMI, a script or a mistyped engineering write into a status tag is simply
@@ -571,16 +576,22 @@ its commands. Each faceplate *instance* is connected to one instance of the devi
 structure in the PLC.
 
 ```text
-  PLC                                                 HMI / SCADA
- +---------------------+   writes Sts, SP, ...   +---------------------+
- | P101 : FB_Motor     | ----------------------> | P101_Hmi            |<-- faceplate "Motor"
- | (device logic,      |                         |  : ST_MotorHmi      |    opened for P101
- |  Module 11)         | <---------------------- |  .Cmd .Sts .SpeedSP |
- +---------------------+   reads Cmd, SpeedReq   |  .RejectCode ...    |
- +---------------------+                         +---------------------+
- | P102 : FB_Motor     | <---------------------> | P102_Hmi            |<-- the same faceplate
- +---------------------+                         +---------------------+    opened for P102
+ ----------------------------- PLC -----------------------------   -- HMI / SCADA --
+ +-------------------+              +--------------------+         +----------------+
+ | P101 : FB_Motor   |  writes .Sts | P101_Hmi           |  tags   | faceplate      |
+ | (device logic,    |  .SpeedSP... |   : ST_MotorHmi    |<------->| "Motor",       |
+ |  Module 11)       |------------->| .Cmd   .SpeedReq   |         | opened for P101|
+ |                   |<-------------| .Sts   .SpeedSP    |         +----------------+
+ |                   |  reads .Cmd, | .RejectCode ...    |
+ +-------------------+  .SpeedReq   +--------------------+
+ +-------------------+              +--------------------+         +----------------+
+ | P102 : FB_Motor   |<------------>| P102_Hmi           |<------->| the same       |
+ +-------------------+              +--------------------+         | faceplate, P102|
+                                                                   +----------------+
 ```
+
+The device FB and its HMI structure both live in the PLC. The faceplate on the HMI is
+bound to one structure instance (by symbol, or by the address of its register block).
 
 One design serves every motor in the plant, so:
 
@@ -817,7 +828,8 @@ Research into abnormal situation management (for example by the Abnormal Situati
 Management Consortium, an industry and university research group) and practitioner guidance
 such as *The High Performance HMI Handbook* led to a different approach.
 **ANSI/ISA-101.01**, first published in 2015, sets out a lifecycle for designing, building
-and maintaining HMIs for process automation. ISA-101 is mainly a *work-process* standard:
+and maintaining HMIs for process automation. The international standard **IEC 63303**
+(2024) is based on it. ISA-101 is mainly a *work-process* standard:
 it requires you to define an HMI philosophy and a style guide and to apply them
 consistently. It does not say "make it grey". The grey, low-colour look is the widely
 adopted practice that follows from its principles.
@@ -1666,7 +1678,8 @@ enumeration) for the mode.
 
 ## Further reading
 
-- ANSI/ISA-101.01, *Human Machine Interfaces for Process Automation Systems*.
+- ANSI/ISA-101.01, *Human Machine Interfaces for Process Automation Systems*, and IEC 63303,
+  the international standard based on it.
 - B. Hollifield, D. Oliver, I. Nimmo, E. Habibi, *The High Performance HMI Handbook*, PAS.
 - ANSI/ISA-18.2 and IEC 62682 (alarm management), and EEMUA Publication 191, all covered in
   [Module 16](../16-alarms-and-diagnostics/).

@@ -67,6 +67,7 @@ expect FirstOut 1
 set HS300_NC TRUE              # ESD button released
 wait 1s
 expect CauseLatched[1] TRUE    # latched: nothing comes back by itself
+expect TripAlm TRUE            # the alarm follows the latch, not the contact
 expect XV301_Sol FALSE
 expect P301_Permit FALSE
 expect XV302_Sol FALSE
@@ -185,6 +186,7 @@ set PSHH301_NC TRUE
 wait 1s
 expect CauseLatched[4] TRUE
 expect XV303_Sol FALSE
+expect TripAlm TRUE
 set ResetPB TRUE
 scan
 set ResetPB FALSE
@@ -316,6 +318,39 @@ scan
 set ResetPB FALSE
 wait 50ms
 expect CauseLatched[5] FALSE
+expect P301_Permit TRUE
+
+scenario reset needs the contact healthy, not just the delay not yet run out
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+scan
+set LSLL301_NC FALSE           # C3 low-low: trips after 2 s
+wait 2200ms
+expect CauseLatched[3] TRUE
+set LSLL301_NC TRUE            # the level recovers...
+wait 500ms
+set LSLL301_NC FALSE           # ...and falls again: the contact is open, the 2 s has not run out
+wait 500ms
+set ResetPB TRUE               # a reset now must be refused: the contact is not healthy
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[3] TRUE
+expect P301_Permit FALSE
+expect XV302_Sol FALSE
+wait 2s
+expect CauseLatched[3] TRUE
+set LSLL301_NC TRUE
+wait 200ms
+set ResetPB TRUE
+scan
+set ResetPB FALSE
+wait 50ms
+expect CauseLatched[3] FALSE
 expect P301_Permit TRUE
 
 scenario reset acts on the press, not on a held button
@@ -616,6 +651,31 @@ expect Bypassed[3] TRUE
 wait 12s
 expect Bypassed[3] FALSE
 
+scenario each bypass times out on its own timer
+set HS300_NC TRUE
+set LSHH301_NC TRUE
+set LSLL301_NC TRUE
+set PSHH301_NC TRUE
+set PSHH302_NC TRUE
+set TSHH303_NC TRUE
+set BypassKey TRUE
+scan
+set BypReq[4] TRUE             # C4 bypassed at t0
+wait 30s
+set BypReq[6] TRUE             # C6 bypassed 30 s later
+wait 24s
+expect Bypassed[4] TRUE        # C4 at 54 s
+expect Bypassed[6] TRUE
+wait 12s
+expect Bypassed[4] FALSE       # C4 at 66 s: expired
+expect Bypassed[6] TRUE        # C6 at 36 s: still running
+expect BypassAlm TRUE
+wait 18s
+expect Bypassed[6] TRUE        # C6 at 54 s
+wait 12s
+expect Bypassed[6] FALSE       # C6 at 66 s: expired
+expect BypassAlm FALSE
+
 scenario removing the request or turning the key off ends bypasses at once
 set HS300_NC TRUE
 set LSHH301_NC TRUE
@@ -650,6 +710,17 @@ wait 50ms
 expect Bypassed[4] FALSE
 expect Bypassed[6] FALSE
 expect BypassAlm FALSE
+set BypassKey TRUE             # key back in, requests still set: no bypass without a new request
+wait 1s
+expect Bypassed[4] FALSE
+expect Bypassed[6] FALSE
+expect BypassAlm FALSE
+set BypReq[4] FALSE            # a new request (with the key in) starts a bypass again
+wait 100ms
+set BypReq[4] TRUE
+wait 100ms
+expect Bypassed[4] TRUE
+expect Bypassed[6] FALSE
 
 scenario a bypass lets maintenance reset a latched cause, but does not clear it by itself
 set HS300_NC TRUE
@@ -680,7 +751,7 @@ expect BypassAlm TRUE
 wait 10s
 expect CauseLatched[6] FALSE   # still masked
 set BypReq[6] FALSE            # maintenance removes the bypass without fixing the switch
-wait 5500ms
+wait 50ms
 expect Bypassed[6] FALSE
-expect CauseLatched[6] TRUE    # the protection acts again
-expect P301_Permit FALSE
+expect CauseLatched[6] TRUE    # the protection acts again at once: the contact has been open
+expect P301_Permit FALSE       # far longer than its 5 s delay

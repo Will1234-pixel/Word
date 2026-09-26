@@ -27,9 +27,9 @@ FUNCTION_BLOCK FB_AnalogInput
     Current_mA : REAL;   (* loop current worked out from Raw: not filtered, not clamped *)
     Value      : REAL;   (* engineering value for the rest of the program *)
     Good       : BOOL;   (* TRUE while the loop current is inside the NE43 limits *)
-    UnderRange : BOOL;   (* current <= 3.6 mA for FaultDelay: wire break, failure low *)
-    OverRange  : BOOL;   (* current >= 21.0 mA for FaultDelay: short circuit, failure high *)
-    Fault      : BOOL;   (* UnderRange OR OverRange *)
+    UnderRange : BOOL;   (* Fault, and the current is <= 3.6 mA: wire break, failure low *)
+    OverRange  : BOOL;   (* Fault, and the current is >= 21.0 mA: short circuit, failure high *)
+    Fault      : BOOL;   (* outside the NE43 limits for FaultDelay (= UnderRange OR OverRange) *)
   END_VAR
   VAR CONSTANT
     COUNTS_PER_MA : REAL := 1728.0;   (* 27648 counts / 16 mA *)
@@ -37,8 +37,7 @@ FUNCTION_BLOCK FB_AnalogInput
     FAIL_HIGH_MA  : REAL := 21.0;     (* NE43: at or above = failure signal *)
   END_VAR
   VAR
-    LowTimer    : TON;    (* confirmation delay for the low failure band *)
-    HighTimer   : TON;    (* confirmation delay for the high failure band *)
+    FaultTimer  : TON;    (* confirmation delay: signal outside the NE43 limits *)
     Scaled      : REAL;   (* engineering value, clamped, before the filter *)
     Filtered    : REAL;   (* filter state; also the last good value *)
     FilterReady : BOOL;   (* FALSE until Filtered holds a real measurement *)
@@ -49,18 +48,20 @@ FUNCTION_BLOCK FB_AnalogInput
         arithmetic: Raw * 16 in INT would overflow above 2047 counts. *)
   Current_mA := 4.0 + INT_TO_REAL(Raw) / COUNTS_PER_MA;
 
-  (* 2. NAMUR NE43 check. Each failure band has its own timer, so the
-        signal must stay in the band for the whole FaultDelay. The flags
-        clear on the first scan the current is back inside the limits. *)
-  LowTimer(IN := Current_mA <= FAIL_LOW_MA, PT := FaultDelay);
-  HighTimer(IN := Current_mA >= FAIL_HIGH_MA, PT := FaultDelay);
-  UnderRange := LowTimer.Q;
-  OverRange := HighTimer.Q;
-  Fault := UnderRange OR OverRange;
-
-  (* Good = the reading is a live measurement right now. It drops at once,
-     without waiting for the delay; Fault is the confirmed version. *)
+  (* 2. NAMUR NE43 check. Good = the reading is a live measurement right
+        now. It drops at once, without waiting for the delay. *)
   Good := (Current_mA > FAIL_LOW_MA) AND (Current_mA < FAIL_HIGH_MA);
+
+  (* Fault = the confirmed version: outside the limits continuously for
+     FaultDelay. One timer covers both failure bands, so a current that
+     jumps straight from one band to the other (a transmitter that failed
+     upscale and is then disconnected) stays a fault. It clears on the
+     first scan the current is back inside the limits. The direction
+     flags only say which band the confirmed failure is in. *)
+  FaultTimer(IN := NOT Good, PT := FaultDelay);
+  Fault := FaultTimer.Q;
+  UnderRange := Fault AND (Current_mA <= FAIL_LOW_MA);
+  OverRange := Fault AND (Current_mA >= FAIL_HIGH_MA);
 
   (* 3. Linear scaling 4..20 mA -> EuMin..EuMax, then clamp. Between
         3.6 and 4 mA (and 20 and 21 mA) the reading is still trusted
