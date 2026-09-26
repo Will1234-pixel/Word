@@ -15,14 +15,15 @@ manual. Use it to find the right page of the manual.
   says so. [Appendix E](E-matiec-openplc-notes.md) lists MATIEC's gaps.
 - **Siemens** is TIA Portal (STEP 7) for S7-1200 and S7-1500 CPUs, in the languages LAD, FBD,
   SCL and GRAPH. Older S7-300/400 differences are noted where they matter, because you will
-  meet migrated code.
+  meet migrated code. The newer S7-1200 G2 family does not always match the classic S7-1200
+  rows here, so check its own documentation.
 - **Rockwell** is Studio 5000 Logix Designer for ControlLogix and CompactLogix ("Logix"), in
   Ladder Diagram, Function Block Diagram, Structured Text and SFC. The Micro800 family,
   programmed with Connected Components Workbench (CCW), is a different, more IEC-like
   environment. It appears in [section A.1.4](#a14-other-platforms-at-a-glance).
 - **"—"** means there is no direct equivalent. **"Check the manual"** means that something
   exists but the details depend on the CPU, firmware or software version.
-- **Rockwell renamed some instructions.** From Logix Designer version 36, several ladder
+- **Rockwell renamed some instructions.** From Logix Designer version 36, several instruction
   mnemonics took IEC-style names (`MOV` became `MOVE`, `EQU` became `EQ`, and so on:
   [section A.7](#a7-maths-comparison-move-conversion-and-scaling)). Most existing code,
   manuals, forum posts and the other modules of this course use the older names. Where the
@@ -48,7 +49,7 @@ starting point, and confirm it in the instruction help of the tool and version y
 | Structured Text (ST) | SCL (Structured Control Language) | Structured Text | Same core language. Declarations, calls and names differ ([Module 10](../10-structured-text/)) |
 | Sequential Function Chart (SFC) | GRAPH (S7-1500 and S7-300/400, not S7-1200) | SFC | Step and action control differ between tools ([Module 13](../13-sequential-control/)) |
 | Instruction List (IL), deprecated in edition 3 | STL (S7-1500 and S7-300/400, not S7-1200) | — | Meet it in old code, don't write new code in it |
-| — | CEM (Cause Effect Matrix), in recent versions, in FBs only | — | Of interest if you work with C&E charts. A standard PLC running a C&E matrix is still not a safety system |
+| — | CEM (Cause Effect Matrix): recent TIA Portal versions and CPU firmware, S7-1200 and S7-1500, in FBs only | — | Of interest if you work with C&E charts. A standard PLC running a C&E matrix is still not a safety system |
 
 ### A.1.2 Project structure and program organisation
 
@@ -77,7 +78,7 @@ starting point, and confirm it in the instruction help of the tool and version y
 | Connect to the running PLC | Login / Logout | Go online / Go offline | Go Online / Go Offline | "Online" = connected and monitoring |
 | PC → PLC | Login with download; **online change** for small edits | Download to device | Download | A full download usually stops the PLC. Plan it |
 | PLC → PC | Source upload, only if the source was stored in the PLC | Upload from device | Upload | Always keep the offline project under version control ([Module 22](../22-software-engineering/)) |
-| Edit while running | Online change | Download changed blocks in RUN (S7-1500 can also add tags without reinitialising) | Online edits: start pending edits, accept, test, assemble | Check the consequences before accepting |
+| Edit while running | Online change | Download changed blocks in RUN; S7-1200 and S7-1500 can add tags to a block without reinitialising it, within the block's memory reserve | Online edits: start pending edits, accept, test, assemble | Check the consequences before accepting |
 | Watch live values | Watch lists, online view in the editor | Monitoring (glasses icon), watch tables | Monitor Tags, Watch window, live ladder colouring | |
 | Write a value once | Write values | *Modify* in a watch table | Type a new value in Monitor Tags | |
 | Force a value | Force values | Force table. S7-1200/1500 force only I/O | I/O forces (install, then enable) | Forces override logic. Record and remove them |
@@ -97,7 +98,7 @@ A download replaces values as well as code: see the last row of the false friend
 | Reusable blocks | User-defined function blocks (UDFBs) | `FUNCTION_BLOCK` with methods, properties, interfaces | `FUNCTION_BLOCK` | FBs | FBs and functions |
 | Physical I/O in code | Embedded I/O variables such as `_IO_EM_DI_00` | `AT %I*` / `AT %Q*` variables linked to terminals in the I/O tree | I/O mapping to variables | Devices `X` and `Y` (FX5: octal numbering) | Device variables assigned in the I/O Map |
 | Transfer to controller | Download | Activate configuration, then Login | Login | Write to PLC / Read from PLC | Synchronize |
-| First-scan flag | `_SYSVA_FIRST_SCAN` | `_TaskInfo[...].FirstCycle` (index from `GETCURTASKINDEX`) | Check the manual | Special relay `SM402` (on for one scan after RUN) | `P_First_Run` (per program) |
+| First-scan flag | System variable `_SYSVA_FIRST_SCAN` (firmware 2 and later; some sources write it with two leading underscores, so copy it from CCW's system-variable list) | `_TaskInfo[GETCURTASKINDEXEX()].FirstCycle` | Check the manual | Special relay `SM402` (on for one scan after RUN) | `P_First_RunMode` (first task period after the change to RUN); `P_First_Run` (first period after a program starts) |
 | Timers | IEC `TON`, `TOF`, `TP` with `IN`, `PT`, `Q`, `ET` | `TON`, `TOF`, `TP` (Tc2_Standard library) | `TON`, `TOF`, `TP` (Standard library) | Timer devices `T` (retentive `ST`) plus IEC-style timer FBs. Check the time base | `TON`, `TOF`, `TP` and vendor timer instructions. Check the manual |
 
 The other sections concentrate on IEC, Siemens and Rockwell. For TwinCAT and Machine Expert,
@@ -114,13 +115,13 @@ its own `%I0.0`-style addressing.
 |---|---|---|---|
 | `BOOL` | `Bool` | `BOOL` | Logix `BOOL` arrays come in multiples of 32 |
 | `BYTE`, `WORD`, `DWORD`, `LWORD` | `Byte`, `Word`, `DWord`, `LWord` (S7-1500) | — | Logix has no bit-string types. Use `SINT`/`INT`/`DINT` with bit access (`MyDint.3`) |
-| `SINT`, `USINT` | `SInt`, `USInt` | `SINT`; unsigned types on newer firmware (check) | |
-| `INT`, `UINT` | `Int`, `UInt` | `INT` | Siemens analog values arrive as `Int`, nominal 0–27 648 |
+| `SINT`, `USINT` | `SInt`, `USInt` | `SINT`; `USINT`, `UINT`, `UDINT`, `ULINT` only on 5380/5480/5580-family controllers | |
+| `INT`, `UINT` | `Int`, `UInt` | `INT` (`UINT`: see above) | Siemens analog values arrive as `Int`, nominal 0–27 648 |
 | `DINT`, `UDINT` | `DInt`, `UDInt` | **`DINT`**, the natural size | See A.2.3 |
 | `LINT`, `ULINT` | `LInt`, `ULInt` (S7-1500) | `LINT` (time stamps; wider instruction support on newer firmware: check) | |
 | `REAL` | `Real` | `REAL` | IEEE 754 single precision everywhere: about 7 significant digits |
-| `LREAL` | `LReal` | Newer controllers and firmware only: check | |
-| `TIME` | `Time` (32-bit milliseconds), `LTime` (S7-1500), `S5Time` (legacy) | Timers use `DINT` milliseconds. Newer versions add time types (check) | See A.2.2 |
+| `LREAL` | `LReal` | 5380/5480/5580-family controllers only | |
+| `TIME` | `Time` (32-bit milliseconds), `LTime` (S7-1500), `S5Time` (legacy) | Timers use `DINT` milliseconds. Newer versions add `TIME`, but in **microseconds** | See A.2.2 |
 | `DATE`, `TIME_OF_DAY`, `DATE_AND_TIME` | `Date`, `Time_Of_Day`, `Date_And_Time` (not S7-1200), `DTL` | Wall clock read with `GSV` from the `WallClockTime` object. Newer versions add date-and-time types (check) | See A.2.2 |
 | `STRING`, `WSTRING` | `String` (up to 254 characters), `WString`, `Char`, `WChar` | `STRING`: `.LEN` plus `.DATA`, 82 characters; you can define other string lengths | CODESYS `STRING` defaults to 80 characters; MATIEC allows 126 |
 | `ARRAY[1..10] OF INT` | `Array[1..10] of Int`, any bounds | `INT[10]`: always zero-based, up to three dimensions | |
@@ -153,10 +154,13 @@ and `DATE_AND_TIME` (`DT`) hold calendar values. MATIEC has no `LTIME`, and its
 **Rockwell.** Logix timers keep their preset and accumulated value as `DINT` milliseconds, so
 5 s is `5000`. The controller's wall clock is read with `GSV` from the `WallClockTime` object,
 for example as seven `DINT`s (year, month, day, hour, minute, second, microsecond). Recent
-versions of Logix Designer add IEC-style time and date types (such as `DT`, `LDT`, `TIME32`,
-`TIME` and `LTIME`), usable in a limited set of instructions. Check their sizes, units and
-supported instructions in your version before relying on them, and don't assume that a
-Logix `TIME` is the same size as a CODESYS or Siemens `TIME`.
+versions of Logix Designer add IEC-style time and date types: `TIME32` (32 bits,
+microseconds), `TIME` (64 bits, microseconds), `LTIME` (64 bits, nanoseconds), `DT`
+(64 bits, microseconds) and `LDT` (64 bits, nanoseconds). Only a limited set of
+instructions accepts them (moves, clears, adds, subtracts, compares, `GSV`/`SSV`), FBD does
+not support them, and the timer instructions still use `DINT` milliseconds. So a Logix
+`TIME` is neither the size nor the unit of a CODESYS or Siemens `TIME`. Check the help of
+your version before using them.
 
 ### A.2.3 Rockwell's DINT-centric practice
 
@@ -176,10 +180,10 @@ built-in type) and Siemens an instance DB or multi-instance.
 | Purpose | IEC instance | Siemens | Rockwell ladder | Rockwell ST / FBD |
 |---|---|---|---|---|
 | Timer | `TON`, `TOF`, `TP` instance | `TON_TIME` etc. (`IEC_TIMER` in some versions and CPUs) | `TIMER`: `.PRE`, `.ACC`, `.EN`, `.TT`, `.DN` | `FBD_TIMER` (for `TONR`, `TOFR`, `RTOR`) |
-| Counter | `CTU`, `CTD`, `CTUD` instance | `IEC_COUNTER` (Int), `IEC_DCOUNTER` (DInt) and others | `COUNTER`: `.PRE`, `.ACC`, `.CU`, `.CD`, `.DN`, `.OV`, `.UN` | `FBD_COUNTER` (for `CTUD`) |
+| Counter | `CTU`, `CTD`, `CTUD` instance | `IEC_COUNTER` (Int) and typed variants for the other count types | `COUNTER`: `.PRE`, `.ACC`, `.CU`, `.CD`, `.DN`, `.OV`, `.UN` | `FBD_COUNTER` (for `CTUD`) |
 | Edge detection | `R_TRIG`, `F_TRIG` instance | `R_TRIG`/`F_TRIG` instance, or an edge memory bit | A storage `BOOL` for `ONS`, `OSR`, `OSF` | `FBD_ONESHOT` (for `OSRI`, `OSFI`) |
 | Shift registers, FIFOs, sequencers | — | — | `CONTROL`: `.LEN`, `.POS`, `.EN`, `.DN`, `.EM`, `.UL` and others | — |
-| PID | Vendor or library FB instance | `PID_Compact` instance DB | `PID` | `PIDE` |
+| PID | Vendor or library FB instance | `PID_Compact` instance DB | `PID` | `PIDE` (the `PID` instruction is also available in ST) |
 | Messaging | — | Instance of the communication instruction | `MESSAGE` (for `MSG`) | `MESSAGE` |
 
 ## A.3 Addressing styles
@@ -345,14 +349,16 @@ the table above and these two:
 | `LIM` | `LIMIT` | Range **test** (not a clamp) |
 | `MOV` | `MOVE` | Move |
 | `SQR` | `SQRT` | Square root |
+| `XPY` | `EXPT` | X to the power of Y |
 | `TRN` | `TRUNC` | Truncate |
 | `TOD` | `TO_BCD` | Convert to BCD |
+| `FRD` | `BCD_TO` | Convert from BCD to integer |
+| `ACS`, `ASN`, `ATN` | `ACOS`, `ASIN`, `ATAN` | Arc cosine, arc sine, arc tangent |
 
-This is not the complete list: other instructions, among them some conversion and
-trigonometric ones, were renamed too. The Logix Designer help has a page, *Updated
-instruction mnemonics*, with all of them. Rockwell's documentation says that code using the new
-mnemonics cannot simply be imported into older versions, so agree on a version before
-sharing exported code.
+That is the list in the Logix Designer help page *Updated instruction mnemonics* at the time
+of writing; check that page for your version. Rockwell's documentation also says that code
+using the new mnemonics cannot simply be converted or imported into older versions, so agree
+on a version before sharing exported code.
 
 ### A.7.2 Arithmetic
 
@@ -362,7 +368,7 @@ sharing exported code.
 | Remainder | `MOD` | `MOD` | `MOD` | Check the sign rule for negative values |
 | Whole expression | ST | `CALCULATE` (LAD/FBD) | `CPT` (ladder) | |
 | Square root | `SQRT` | `SQRT` (`SQR` **squares**) | `SQR`/`SQRT` (square root) | A classic false friend |
-| Power | `EXPT`, `**` | `EXPT`; `**` in SCL | `XPY`; `**` in ST (check the name in your version) | |
+| Power | `EXPT`, `**` | `EXPT`; `**` in SCL | `XPY`/`EXPT`; `**` in ST | |
 | Negate, absolute value | Unary `-`, `ABS` | `NEG`, `ABS` | `NEG`, `ABS` | |
 | Increment, decrement | `x := x + 1` | `INC`, `DEC` | `ADD` | |
 | Minimum, maximum, clamp | `MIN`, `MAX`, `LIMIT` | `MIN`, `MAX`, `LIMIT` | Clamp with `HLL` (FBD/ST) or two comparisons | Rockwell `LIM`/`LIMIT` is a test |
@@ -392,8 +398,8 @@ sharing exported code.
 
 | Operation | IEC / CODESYS / OpenPLC | Siemens | Rockwell | Notes |
 |---|---|---|---|---|
-| Numeric conversion | Typed: `INT_TO_REAL`, `REAL_TO_INT` (rounds), `TRUNC`. CODESYS also `TO_INT(x)` | `CONV` (LAD/FBD), `ROUND`, `TRUNC`, `CEIL`, `FLOOR`; SCL typed conversions and many implicit ones | Implicit in `MOV` and assignments: REAL to integer **rounds**; `TRN`/`TRUNC` truncates | See the false friends in A.14 |
-| BCD | Library functions (MATIEC: `UINT_TO_BCD_WORD`, `WORD_BCD_TO_UINT`) | `CONV` with the BCD16/BCD32 types | `TOD`/`TO_BCD` and `FRD` (renamed from v36) | Thumbwheels, 7-segment displays |
+| Numeric conversion | Typed: `INT_TO_REAL`, `REAL_TO_INT` (rounds), `TRUNC` | `CONV` (LAD/FBD), `ROUND`, `TRUNC`, `CEIL`, `FLOOR`; SCL typed conversions and many implicit ones | Implicit in `MOV` and assignments: REAL to integer **rounds**; `TRN`/`TRUNC` truncates | See the false friends in A.14 |
+| BCD | Library functions (MATIEC: `UINT_TO_BCD_WORD`, `WORD_BCD_TO_UINT`) | `CONV` with the BCD16/BCD32 types | `TOD`/`TO_BCD` and `FRD`/`BCD_TO` | Thumbwheels, 7-segment displays |
 | Degrees, radians | Multiply by π/180 | Multiply | `DEG`, `RAD` | |
 | Scale raw counts to engineering units | Your own function ([Module 14](../14-analog-and-process-io/)); CODESYS Util `LIN_TRAFO` | `NORM_X` then `SCALE_X`; S7-300/400 `SCALE` (FC105) and `UNSCALE` (FC106) | `SCP` (ladder), `SCL` (FBD/ST), or scaling in the module properties | |
 
@@ -432,21 +438,21 @@ calling an FB.
 | Function | IEC / CODESYS / OpenPLC | Siemens | Rockwell | Notes |
 |---|---|---|---|---|
 | Bitwise AND, OR, XOR, NOT | On bit strings (`WORD` etc.); CODESYS also on integers | `AND`, `OR`, `XOR`, `INV`; SCL operators | `AND`, `OR`, `XOR`, `NOT` on integers | MATIEC: bit strings only, no arithmetic on `WORD` |
-| Shift a word | `SHL`, `SHR` | `SHL`, `SHR` | No general word-shift instruction in the classic set (check your version); `MUL`/`DIV` by powers of two for unsigned-style values | Division of negative numbers does not behave like a shift |
-| Rotate a word | `ROL`, `ROR` | `ROL`, `ROR` | Check the manual | |
-| Bit shift register (one bit per part, for tracking) | Build it with `SHL` or a `BOOL` array | Build it with `SHL` on a word or an array loop | `BSL`, `BSR` on a `DINT` array with a `CONTROL` tag (`.LEN` in bits; `.UL` holds the bit shifted out) | [Module 12](../12-data-structures/) |
+| Shift a word | `SHL`, `SHR` | `SHL`, `SHR` | No word-shift instruction (check your version); `MUL`/`DIV` by powers of two for unsigned-style values | Division of negative numbers does not behave like a shift |
+| Rotate a word | `ROL`, `ROR` | `ROL`, `ROR` | No rotate instruction (check your version): build it from shifts and masks | |
+| Bit shift register (one bit per part, for tracking) | Build it with `SHL` or a `BOOL` array | Build it with `SHL` on a word or an array loop; the LGF library has `LGF_ShiftRegister` | `BSL`, `BSR` on a `DINT` array with a `CONTROL` tag (`.LEN` in bits; `.UL` holds the bit shifted out) | [Module 12](../12-data-structures/) |
 | FIFO queue | Build it: array plus indexes | No FIFO in the basic instruction set; the Siemens LGF library has one (`LGF_FIFO`) | `FFL` (load), `FFU` (unload) with a `CONTROL` tag (`.DN` full, `.EM` empty) | |
-| LIFO stack | Build it | Build it | `LFL`, `LFU` | |
+| LIFO stack | Build it | Build it, or `LGF_LIFO` from the LGF library | `LFL`, `LFU` | |
 | Sequencer tables | Build it (`CASE`, arrays) | Build it | `SQO`, `SQI`, `SQL` | |
 | Bit-field distribute | Shifts and masks | Slice access and shifts | `BTD` | |
 | Array search and arithmetic | `FOR` loops | `FOR` loops | `FSC` (search and compare), `FAL` (arithmetic and logic) | |
 | Single bit of a word | `MyWord.3` (CODESYS; not MATIEC) | `#MyWord.%X3`; also `%B` and `%W` slices | `MyDint.3` | |
 
-The Logix shift, FIFO and sequencer instructions are ladder instructions. From ST, write the
-loop yourself or call a ladder routine. Siemens has always expected you to build these from
-arrays and loops in SCL, and the Library of General Functions (LGF), which Siemens provides
-for S7-1200/1500 through its online support site, supplies ready-made blocks for common jobs,
-including a FIFO.
+The Logix bit-shift (`BSL`, `BSR`), FIFO, LIFO and sequencer instructions are ladder-only.
+From ST, write the loop yourself or call a ladder routine. In TIA Portal you normally build
+these from arrays and loops in SCL, or use the Library of General Functions (LGF), which
+Siemens provides for S7-1200/1500 through its online support site. It includes a FIFO, a
+LIFO and a shift register.
 
 ## A.10 PID control
 
@@ -477,14 +483,14 @@ including a FIFO.
 
 | Need | IEC / CODESYS / OpenPLC | Siemens S7-1200/1500 | Rockwell Logix | Notes |
 |---|---|---|---|---|
-| First scan | Not in the standard. Roll your own (a `BOOL` initialised TRUE and cleared at the end of the scan). TwinCAT: `_TaskInfo[...].FirstCycle` | `FirstScan` bit of the system memory byte (`%M1.0` when the byte is at MB1); startup OB100 | `S:FS`; optional power-up handler | Micro800: `_SYSVA_FIRST_SCAN` |
+| First scan | Not in the standard. Roll your own (a `BOOL` initialised TRUE and cleared at the end of the scan). TwinCAT: `_TaskInfo[GETCURTASKINDEXEX()].FirstCycle` | `FirstScan` bit of the system memory byte (`%M1.0` when the byte is at MB1), TRUE in the first cycle after the startup OBs; startup OB100 | `S:FS`; optional power-up handler | Micro800: `_SYSVA_FIRST_SCAN` (check the spelling: A.1.4) |
 | Always TRUE / FALSE bits | Literals | `AlwaysTRUE`, `AlwaysFALSE` system memory bits | — | |
 | Clock pulses | Build with timers | Clock memory byte: bits from 10 Hz down to 0.5 Hz | Build with timers | Clock bits are not synchronised to your logic |
 | Date and time | CODESYS system libraries (check your runtime) | `RD_SYS_T` (UTC), `RD_LOC_T` (local) into `DTL` | `GSV` from `WallClockTime` | |
 | Read or write controller data | Runtime-specific | Dedicated instructions: `RUNTIME`, `GET_DIAG`, `DeviceStates`, `ModuleStates`, `LED` and others | `GSV` and `SSV` with an object class and attribute | Logix: one pair of instructions for many objects |
 | Scan-time measurement | CODESYS task monitor | Online & diagnostics shows the cycle time; `RUNTIME` measures code sections | `GSV` from the `Task` object: `LastScanTime`, `MaxScanTime` | [Module 23](../23-commissioning-and-troubleshooting/) |
 | Scan-time limit | Task watchdog | Maximum cycle time in the CPU properties; OB80 time-error OB; `RE_TRIGR` restarts the monitoring | Watchdog time per task; expiry is a major fault | |
-| Programming error at run time | Exceptions; implicit checks in CODESYS | OB121, or local handling with `GET_ERROR` / `GET_ERR_ID` | Major fault: the program's fault routine, then the controller fault handler | For example an array index out of range |
+| Programming error at run time | Exceptions; implicit checks in CODESYS | S7-1500: OB121. S7-1200: no error OB; the CPU logs the error in the diagnostic buffer and stays in RUN (check your firmware). Both: local handling with `GET_ERROR` / `GET_ERR_ID` | Major fault: the program's fault routine, then the controller fault handler | For example an array index out of range |
 | I/O and module faults | Device diagnosis in the device tree | OB82 (diagnostic interrupt), OB83 (pull/plug), OB86 (rack or station failure); `DeviceStates`, `ModuleStates` | Module status; `GSV` from the `Module` object; a lost connection can be set to cause a major fault | Treat missing I/O as a fault, not as FALSE |
 | Arithmetic status | — | `ENO` of the box | `S:V` (overflow, also a minor fault), `S:Z`, `S:N`, `S:C` | |
 | Fault history | Log | Diagnostic buffer | Major and minor fault logs; `S:MINOR` | |
@@ -501,10 +507,10 @@ error and carry on. Find out for your controller before commissioning, not durin
 | Read or write another controller on demand | Library blocks (check your platform) | `GET`, `PUT` (S7 communication; must be permitted in the partner CPU's protection settings) | `MSG` (CIP Data Table Read/Write; CIP Generic for other objects) | Triggered by your logic: handle done, error and timeout |
 | Cyclic data between controllers | Network variables or fieldbus configuration (check) | **PROFINET I-device**: a CPU acts as an IO device of another controller, with configured transfer areas | **Produced and consumed tags**, at a requested packet interval (RPI) | Configured, not programmed; monitor the connection status |
 | Open TCP or UDP | Socket libraries (check) | `TSEND_C` / `TRCV_C` (connection built in); `TCON`, `TSEND`, `TRCV`, `TDISCON` | Socket interface, driven by `MSG` instructions (check your controller or module) | For devices with their own protocol |
-| Modbus TCP client | CODESYS Modbus TCP device; OpenPLC slave devices | `MB_CLIENT` | Not built in: gateway, module or Rockwell sample AOIs. Micro800: `MSG_MODBUS` family | |
+| Modbus TCP client | CODESYS Modbus TCP device; OpenPLC slave devices | `MB_CLIENT` | Not built in: gateway, module, or Rockwell's Modbus TCP sample AOIs (which use the socket interface). Micro800: `MSG_MODBUS` family | |
 | Modbus TCP server | CODESYS Modbus TCP server device; the OpenPLC Runtime is a server | `MB_SERVER` | As above | |
 | Modbus RTU | CODESYS serial Modbus devices | `Modbus_Comm_Load` with `Modbus_Master` or `Modbus_Slave` on a serial module (names vary by module and version) | Gateway or module; Micro800 serial ports | |
-| OPC UA | CODESYS: symbol configuration and OPC UA server | S7-1500 OPC UA server, enabled and scoped in the project | Recent controllers and versions (check) | Protect it: [Module 17](../17-industrial-communications/), IEC 62443 |
+| OPC UA | CODESYS: symbol configuration and OPC UA server | OPC UA server on S7-1500, and on S7-1200 with recent firmware; enabled and scoped in the project (check licensing) | Recent controllers and versions (check) | Protect it: [Module 17](../17-industrial-communications/), IEC 62443 |
 
 Notes:
 
@@ -522,8 +528,9 @@ Notes:
 
 ## A.13 Translating a lab between tools: Lab 07-1
 
-> **Spoiler.** This section contains the logic of the [Lab 07-1](../07-timers/) reference
-> solution. Do the lab first.
+> **Spoiler.** This section contains the logic of the
+> [Lab 07-1](../07-timers/README.md#lab-07-1-star-delta-starter) reference solution. Do the
+> lab first.
 
 Lab 07-1 is a star-delta starter. Start runs the main and star contactors; after the star time
 the star contactor opens; 100 ms later the delta contactor closes. Stop or the overload relay
@@ -576,6 +583,10 @@ Create an FB, `FB_StarDelta`, with this interface (edited in the table above the
 | Output | `DeltaK` | `Bool` | | Delta contactor |
 | Static | `StarTimer` | `TON_TIME` | | Multi-instance: star period |
 | Static | `GapTimer` | `TON_TIME` | | Multi-instance: changeover gap |
+
+Depending on the CPU and TIA Portal version, the editor may offer `IEC_TIMER` for a
+multi-instance timer instead of `TON_TIME` (the S7-1200 manual shows `IEC_TIMER`). Use the
+type it offers when you drop a `TON` into the FB and choose *Multi instance*.
 
 The FB body:
 
@@ -653,7 +664,7 @@ XIC(MainK)XIC(GapTimer.DN)XIO(StarK)OTE(DeltaK);
 ```
 
 The first rung copies an HMI-adjustable star time into the preset on every scan. Leave it out
-for a fixed 5 s. (From v36 the editor shows `MOV` as `MOVE`.) The second rung is the seal-in
+for a fixed 5 s. (From v36 the instruction is called `MOVE`.) The second rung is the seal-in
 from [Module 00](../00-start-here/) with the overload contact added: the branch
 `[ … , … ]` is the OR, and contacts in series are the AND.
 
@@ -700,6 +711,7 @@ Words and habits that look the same across tools but are not.
 | False friend | In one tool | In another | What goes wrong |
 |---|---|---|---|
 | Timer preset | IEC: `PT := T#5s`, a `TIME` | Rockwell: `.PRE := 5000`, a `DINT` in ms. Siemens S5: `S5T#5S`, BCD | Copy the number 5 and the delay becomes 5 ms |
+| `TIME` data type | CODESYS and Siemens: 32 bits, milliseconds | Logix (newer versions): 64 bits, **microseconds**; `TIME32` is 32 bits, also microseconds | A raw count copied between them is out by a factor of 1000 |
 | `TONR` | Siemens: **retentive** on-delay (accumulating, with an `R` input) | Rockwell ST/FBD: ordinary on-delay "with reset". The retentive one is `RTOR` (ladder `RTO`) | An accumulating run-hours timer silently resets, or the other way round |
 | `SR`, `RS` | IEC and CODESYS: `SR` is set-dominant | Siemens: `SR` is **reset**-dominant (`S`, `R1`) | A trip latch that loses to its reset, or a motor latch that ignores Stop. The input marked 1 wins |
 | `LIMIT` | IEC, Siemens, CODESYS: a **clamp** that returns a number | Rockwell `LIM` (v36: `LIMIT`): a **test** that is true inside the band, or outside it when Low > High | Ported code compiles and does something completely different |
@@ -708,7 +720,7 @@ Words and habits that look the same across tools but are not.
 | `TOD` | IEC: the *time of day* data type | Rockwell (legacy): *convert to BCD* instruction (v36: `TO_BCD`) | As above |
 | Program | IEC: a `PROGRAM` POU containing code | Rockwell: a container of routines and tags. Siemens: the whole user program | "Add it to the program" means different things |
 | `ENO` | Siemens LAD/FBD: FALSE after an error such as overflow; when `EN` is FALSE the box does not run and **its outputs are not written** (the destination keeps its old value) | IEC: `EN`/`ENO` are optional. Rockwell ladder: the rung condition, with `S:V` for overflow | A value "freezes" when its box is disabled. In SCL, how `ENO` is set depends on a block property: check it |
-| REAL to integer | Rockwell: `MOV` or assignment **rounds**; `TRN`/`TRUNC` truncates. `DIV` with only integer operands truncates, but with a `REAL` operand and an integer destination it rounds | IEC `REAL_TO_INT` rounds; `TRUNC` truncates. C-style habits expect truncation | Off-by-one indexes and counts. Exact halves (2.5) round differently between platforms (MATIEC: to even), so don't rely on them |
+| REAL to integer | Rockwell: `MOV` or assignment **rounds**; `TRN`/`TRUNC` truncates. `DIV` with only integer operands truncates, but with a `REAL` operand and an integer destination it rounds | IEC `REAL_TO_INT` rounds; `TRUNC` truncates. C-style habits expect truncation | Off-by-one indexes and counts. Logix and MATIEC round exact halves to the even neighbour (2.5 → 2, 3.5 → 4); other platforms may round halves away from zero, so don't rely on them |
 | `CTD` done | IEC `CTD.Q`: `CV <= 0` | Rockwell `CTD .DN`: `.ACC >= .PRE` | A "batch finished" signal that is never, or always, true |
 | Counter limits | IEC/MATIEC and Siemens: stop at a limit | Rockwell: wraps at the `DINT` limits and sets `.OV`/`.UN` | A totaliser that suddenly goes negative |
 | Array bounds | IEC, Siemens, CODESYS: any bounds, often `[1..10]` | Rockwell: always zero-based, `[0]` to `[9]` | Off-by-one, or a major fault on an index out of range |

@@ -83,7 +83,7 @@ Pick at least one option from each row:
 | Purpose | Recommended | Alternatives |
 |---|---|---|
 | Automatic checking of every lab (Structured Text) | **`plctest`**, the test runner in this repo | — |
-| Drawing Ladder / FBD / SFC graphically | **OpenPLC Editor** (free, open source) | CODESYS; vendor tools |
+| Drawing Ladder / FBD graphically and simulating it on your PC | **OpenPLC Editor** (free, open source; the "Download OpenPLC IDE" button on autonomylogic.com) | CODESYS; vendor tools |
 | A "real" IDE with simulation, used in industry | **CODESYS Development System** (free, Windows) | Siemens TIA Portal + PLCSIM (trial), Rockwell Connected Components Workbench (free, Micro800) |
 
 ### Option 1 — `plctest`: the course test runner (do this first)
@@ -110,17 +110,31 @@ It runs on Linux, macOS, or Windows through WSL (Windows Subsystem for Linux).
    Every line should say `PASS`. Solutions must pass their tests. Starter files must *fail*
    them, which proves the tests really check something.
 
-### Option 2 — OpenPLC Editor and Runtime (graphical LD/FBD/SFC, free)
+### Option 2 — OpenPLC Editor (graphical Ladder and FBD, free, with a simulator)
 
 [OpenPLC](https://autonomylogic.com) is a free, open-source PLC that follows IEC 61131-3.
-The **Editor** (Windows, Linux, macOS) lets you draw Ladder, FBD and SFC and write ST.
-The **Runtime** turns a PC, Raspberry Pi or some Arduino-class boards into a PLC with a web
-interface for loading programs and watching variables.
+On the website, click **Download OpenPLC IDE**. You don't need *Autonomy Edge*, which is a
+separate cloud service from the same company.
 
-Why it pairs well with this course: OpenPLC uses the same compiler family as `plctest`, and the
-lab `.st` files use the same `CONFIGURATION Config0 / RESOURCE Res0` layout that the OpenPLC
-Runtime expects when you upload a program. Draw a lab in Ladder in the Editor, then check it
-with the same acceptance test (see *Testing Ladder you drew in OpenPLC Editor* below).
+- The **Editor** (Windows, macOS, Linux) lets you draw **Ladder (LD)** and **Function Block
+  Diagram (FBD)** and write **Structured Text (ST)** and **Instruction List (IL)**.
+- It has a **built-in simulator**. Write a program, start the simulator, and it runs on your
+  PC with no hardware. Ladder wires light up where "power" flows, and a debugger panel shows
+  live variable values that you can change to simulate pressing buttons.
+- The separate **Runtime** turns a PC, Raspberry Pi or some Arduino-class boards into a real
+  PLC when you want to drive actual I/O later. In the current version (v4) it is managed from
+  the Editor. The older v3 Runtime had its own web page for uploading `.st` files, which is
+  why you will see both described online.
+
+Why it pairs well with this course: OpenPLC uses the same compiler family (MATIEC) as
+`plctest`, so code that passes `plctest` uses only what OpenPLC understands. Every lab solution
+is also compile-checked with the OpenPLC Runtime's own compiler. The simplest way to use it:
+**draw each lab in the Editor, run it in the simulator, and tick off the lab's numbered
+requirements one by one**, toggling the inputs in the debugger.
+
+Sequential Function Chart (SFC) is not listed among the current Editor's languages. For the
+SFC part of Module 13, use CODESYS (Option 3), or write the textual SFC form that `plctest`
+accepts.
 
 ### Option 3 — CODESYS (industry-grade, free)
 
@@ -221,10 +235,14 @@ print Level                   # show a value while you debug
 
 ### Testing Ladder you drew in OpenPLC Editor
 
-The graphical languages (LD, FBD, SFC) are stored as XML. OpenPLC Editor translates them into
-Structured Text when it builds a program for the Runtime. To test a Ladder solution with
-`plctest`, build or generate the program for the Runtime in the Editor, save the generated
-`.st` file, and run it against the lab test:
+The quickest check is the Editor's own simulator: go through the lab's numbered requirements
+and set the inputs in the debugger to prove each one, including the "must not" cases (stop
+wins, no restart after a trip, and so on). Reading the lab's `.test` file shows you exactly
+which situations the automatic test checks, because it is plain text.
+
+Graphical programs are translated into Structured Text before compiling. If your version of
+the Editor lets you export or save that generated `.st` file (older versions did this when
+building a program for the Runtime), you can also run it against the acceptance test:
 
 ```bash
 python3 tools/plctest.py path/to/generated.st 04-ladder-logic/labs/04-1-start-stop-station.test
@@ -335,7 +353,9 @@ lamp shows when the motor is running.
 2. Copy the starter to `my-work/`, write the logic, and run the test again:
    `python3 tools/plctest.py my-work/00-1-hello-plc.st 00-start-here/labs/00-1-hello-plc.test`
 3. When it passes, open `labs/solutions/00-1-hello-plc.st` and compare.
-4. *(Optional)* Draw the same logic in Ladder in OpenPLC Editor using the rung above.
+4. *(Optional, and recommended if you installed OpenPLC Editor)* Draw the same logic in
+   Ladder using the rung above, start the simulator, and check each requirement by changing
+   `StartPB` and `StopPB_NC` in the debugger.
 
 <details>
 <summary>Hint (open only if stuck)</summary>
