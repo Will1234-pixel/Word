@@ -8,6 +8,12 @@ looks in Siemens TIA Portal, Rockwell Studio 5000, CODESYS and OpenPLC.
 **New here? Start with [Module 00 — Start Here](00-start-here/).** It explains how the course
 works and helps you install free practice software. No PLC hardware is needed.
 
+## Want to see PLC logic working right now?
+
+Open the **[PLC Playground](playground/)**: a ready-made OpenPLC project with five programs
+(start/stop, timers, a flasher, a counter and a tank level). Open it in the free OpenPLC
+Editor, press Play, and click the contacts to watch the logic work. No typing needed.
+
 ## Quick start (about 30 minutes)
 
 1. Read [Module 00](00-start-here/).
@@ -80,8 +86,9 @@ You can do the labs two ways:
 - A start-here module, 23 teaching modules, 3 capstone projects and 5 appendices.
 - 68 labs and 3 capstone acceptance tests. Every reference solution passes its tests, and every
   starter fails them (except the refactoring lab in Module 22, whose legacy starter is meant
-  to pass), which proves the tests really check the logic. Every lab file also compiles with
-  the OpenPLC Runtime's own compiler.
+  to pass), which proves the tests really check the logic. Every lab file also compiles
+  with OpenPLC's compilers: the v3 Runtime's MATIEC fork (all files) and STruC++ in OpenPLC
+  Editor v4 (all except the textual-SFC lab, since v4 has no SFC).
 - Each module was written, then independently reviewed. Reviewers checked facts against vendor
   documentation and standards, and tried hundreds of deliberately wrong solutions against the
   tests. The tests were tightened until they caught them.

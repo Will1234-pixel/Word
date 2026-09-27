@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "name": "PLC-Playground",
+    "type": "plc-project"
+  },
+  "data": {
+    "pous": [],
+    "dataTypes": [],
+    "libraries": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "MainTask",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "Inst1_StartStop",
+            "program": "P1_StartStop",
+            "task": "MainTask"
+          },
+          {
+            "name": "Inst2_Timers",
+            "program": "P2_Timers",
+            "task": "MainTask"
+          },
+          {
+            "name": "Inst3_Flasher",
+            "program": "P3_Flasher",
+            "task": "MainTask"
+          },
+          {
+            "name": "Inst4_Counter",
+            "program": "P4_Counter",
+            "task": "MainTask"
+          },
+          {
+            "name": "Inst5_TankLevel",
+            "program": "P5_TankLevel",
+            "task": "MainTask"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "debugVariables": {
+      "pous": {
+        "P1_StartStop": [
+          "StartPB",
+          "StopPB_NC",
+          "Motor",
+          "RunLamp"
+        ],
+        "P2_Timers": [
+          "DelayPB",
+          "DelayLamp",
+          "DelayET",
+          "FanSwitch",
+          "Fan",
+          "RunOnET"
+        ],
+        "P3_Flasher": [
+          "Enable",
+          "OnDone",
+          "OffDone",
+          "Beacon"
+        ],
+        "P4_Counter": [
+          "BottleSensor",
+          "ResetPB",
+          "Count",
+          "BoxFull"
+        ],
+        "P5_TankLevel": [
+          "Level",
+          "InletPump",
+          "OutletOpen",
+          "HighAlarm"
+        ]
+      }
+    }
+  }
+}

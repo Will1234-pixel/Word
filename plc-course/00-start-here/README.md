@@ -137,9 +137,12 @@ separate cloud service from the same company.
   the Editor. The older v3 Runtime had its own web page for uploading `.st` files, which is
   why you will see both described online.
 
-Why it pairs well with this course: OpenPLC uses the same compiler family (MATIEC) as
-`plctest`, so code that passes `plctest` uses only what OpenPLC understands. Every lab solution
-is also compile-checked with the OpenPLC Runtime's own compiler. The simplest way to use it:
+Why it pairs well with this course: every lab file is checked with three compilers. They are
+`plctest`'s MATIEC, the MATIEC fork used by the older OpenPLC Runtime v3, and **STruC++**,
+which the current OpenPLC Editor v4 uses. So the course code builds in the OpenPLC you
+download today. The one exception is the textual-SFC lab in Module 13, because v4 has no SFC.
+For an instant start, open the ready-made **[PLC Playground](../playground/)** project. The
+simplest way to use the Editor for the labs:
 **draw each lab in the Editor, run it in the simulator, and tick off the lab's numbered
 requirements one by one**, toggling the inputs in the debugger.
 
