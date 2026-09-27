@@ -109,8 +109,8 @@ FUNCTION_BLOCK FB_MotorGroup
        (and so hide) the alarm. -- *)
     IF Motors[i].Cmd.Reset THEN
       Motors[i].Alm := NO_ALARMS;
-      IF Motors[i].Sts.State = E_MotorState#Faulted THEN
-        Motors[i].Sts.State := E_MotorState#Stopped;
+      IF Motors[i].Sts.State = Faulted THEN
+        Motors[i].Sts.State := Stopped;
         Motors[i].DisagreeMs := 0;
       END_IF;
     END_IF;
@@ -118,19 +118,19 @@ FUNCTION_BLOCK FB_MotorGroup
     (* -- Commands. Stop (and the area stop) win over Start. A start is only
        accepted from Stopped, so a faulted pump cannot be started. -- *)
     CASE Motors[i].Sts.State OF
-      E_MotorState#Stopped:
+      Stopped:
         IF Motors[i].Cmd.Start AND NOT Motors[i].Cmd.Stop AND NOT StopAll THEN
-          Motors[i].Sts.State := E_MotorState#Starting;
+          Motors[i].Sts.State := Starting;
         END_IF;
-      E_MotorState#Starting, E_MotorState#Running:
+      Starting, Running:
         IF Motors[i].Cmd.Stop OR StopAll THEN
-          Motors[i].Sts.State := E_MotorState#Stopped;
+          Motors[i].Sts.State := Stopped;
         END_IF;
     END_CASE;
 
     (* -- Feedback proves the start. -- *)
-    IF Motors[i].Sts.State = E_MotorState#Starting AND Motors[i].RunFb THEN
-      Motors[i].Sts.State := E_MotorState#Running;
+    IF Motors[i].Sts.State = Starting AND Motors[i].RunFb THEN
+      Motors[i].Sts.State := Running;
       Motors[i].Sts.Starts := Motors[i].Sts.Starts + 1;
     END_IF;
 
@@ -138,8 +138,8 @@ FUNCTION_BLOCK FB_MotorGroup
        structure. It restarts whenever command and feedback agree, and it
        stops counting at the timeout (like a TON's ET stops at PT), so it
        cannot overflow however long a disagreement lasts. -- *)
-    Motors[i].Sts.RunCmd := Motors[i].Sts.State = E_MotorState#Starting
-                            OR Motors[i].Sts.State = E_MotorState#Running;
+    Motors[i].Sts.RunCmd := Motors[i].Sts.State = Starting
+                            OR Motors[i].Sts.State = Running;
     Disagree := Motors[i].Sts.RunCmd XOR Motors[i].RunFb;
     IF NOT Disagree THEN
       Motors[i].DisagreeMs := 0;
@@ -149,20 +149,20 @@ FUNCTION_BLOCK FB_MotorGroup
 
     IF Motors[i].DisagreeMs >= Motors[i].Cfg.FbTimeoutMs THEN
       CASE Motors[i].Sts.State OF
-        E_MotorState#Starting: Motors[i].Alm.FailToStart := TRUE;
-        E_MotorState#Running:  Motors[i].Alm.FbLost := TRUE;
-        E_MotorState#Stopped:  Motors[i].Alm.Uncommanded := TRUE;
+        Starting: Motors[i].Alm.FailToStart := TRUE;
+        Running:  Motors[i].Alm.FbLost := TRUE;
+        Stopped:  Motors[i].Alm.Uncommanded := TRUE;
       END_CASE;
-      Motors[i].Sts.State := E_MotorState#Faulted;
+      Motors[i].Sts.State := Faulted;
     END_IF;
 
     (* -- Final command and the group summary. -- *)
-    Motors[i].Sts.RunCmd := Motors[i].Sts.State = E_MotorState#Starting
-                            OR Motors[i].Sts.State = E_MotorState#Running;
-    IF Motors[i].Sts.State = E_MotorState#Running THEN
+    Motors[i].Sts.RunCmd := Motors[i].Sts.State = Starting
+                            OR Motors[i].Sts.State = Running;
+    IF Motors[i].Sts.State = Running THEN
       RunningCount := RunningCount + 1;
     END_IF;
-    IF Motors[i].Sts.State = E_MotorState#Faulted THEN
+    IF Motors[i].Sts.State = Faulted THEN
       AnyFault := TRUE;
     END_IF;
 

@@ -51,9 +51,9 @@ PROGRAM BatchTank
     BatchCount : INT;               (* completed batches *)
   END_VAR
   VAR (* internal *)
-    State     : E_Batch := E_Batch#Idle;
-    PrevState : E_Batch := E_Batch#Idle;
-    HeldFrom  : E_Batch := E_Batch#Idle;  (* the step to resume *)
+    State     : E_Batch := Idle;
+    PrevState : E_Batch := Idle;
+    HeldFrom  : E_Batch := Idle;  (* the step to resume *)
     FirstScan : BOOL := TRUE;
     StepEntry : BOOL;               (* TRUE on the first scan in a state *)
     StepTimer : TON;                (* time in the current state *)
@@ -92,76 +92,76 @@ PROGRAM BatchTank
   (* 3. Entry actions: done once, on the first scan in a state. They come
         BEFORE the transitions, because StepEntry belongs to the state the
         scan started in. *)
-  IF StepEntry AND (State = E_Batch#Complete) THEN
+  IF StepEntry AND (State = Complete) THEN
     BatchCount := BatchCount + 1;
   END_IF;
 
-  Running := (State = E_Batch#Filling) OR (State = E_Batch#Mixing)
-          OR (State = E_Batch#Heating) OR (State = E_Batch#Draining);
+  Running := (State = Filling) OR (State = Mixing)
+          OR (State = Heating) OR (State = Draining);
 
   (* 4. Transitions. Abort beats Hold, and both beat the step's own
         transitions, so they are tested first. *)
-  IF AbortCmd AND (Running OR (State = E_Batch#Held)) THEN
-    State := E_Batch#Idle;
+  IF AbortCmd AND (Running OR (State = Held)) THEN
+    State := Idle;
 
   ELSIF HoldCmd AND Running THEN
-    IF State = E_Batch#Mixing THEN
+    IF State = Mixing THEN
       (* bank the mixing done so far: it still counts after Resume *)
       MixDone := ADD_TIME(MixDone, StepTimer.ET);
     END_IF;
     HeldFrom := State;
-    State := E_Batch#Held;
+    State := Held;
 
   ELSE
     CASE State OF
-      E_Batch#Idle, E_Batch#Complete:
+      Idle, Complete:
         IF StartCmd THEN
           MixDone := T#0s;
-          State := E_Batch#Filling;
+          State := Filling;
         END_IF;
 
-      E_Batch#Filling:
+      Filling:
         IF LevelHighLS THEN
-          State := E_Batch#Mixing;
+          State := Mixing;
         ELSIF StepTimer.ET >= FillTimeout THEN
           FaultCode := 1;
-          State := E_Batch#Faulted;
+          State := Faulted;
         END_IF;
 
-      E_Batch#Mixing:
+      Mixing:
         IF ADD_TIME(MixDone, StepTimer.ET) >= MixTime THEN
-          State := E_Batch#Heating;
+          State := Heating;
         END_IF;
 
-      E_Batch#Heating:
+      Heating:
         IF TankTemp >= TempSP THEN
-          State := E_Batch#Draining;
+          State := Draining;
         ELSIF StepTimer.ET >= HeatTimeout THEN
           FaultCode := 2;
-          State := E_Batch#Faulted;
+          State := Faulted;
         END_IF;
 
-      E_Batch#Draining:
+      Draining:
         IF NOT LevelLowLS THEN
-          State := E_Batch#Complete;
+          State := Complete;
         ELSIF StepTimer.ET >= DrainTimeout THEN
           FaultCode := 3;
-          State := E_Batch#Faulted;
+          State := Faulted;
         END_IF;
 
-      E_Batch#Held:
+      Held:
         IF ResumeCmd THEN
           State := HeldFrom;        (* its step timer and watchdog restart *)
         END_IF;
 
-      E_Batch#Faulted:
+      Faulted:
         IF ResetCmd THEN
           FaultCode := 0;
-          State := E_Batch#Idle;    (* the operator decides what happens next *)
+          State := Idle;    (* the operator decides what happens next *)
         END_IF;
     ELSE
       FaultCode := 99;              (* impossible state value: stop safely *)
-      State := E_Batch#Faulted;
+      State := Faulted;
     END_CASE;
   END_IF;
 
@@ -169,18 +169,18 @@ PROGRAM BatchTank
         output changes in the same scan as its state). The interlocks are
         written here, separately from the sequence, so they hold whatever
         state the sequence is in. *)
-  Running := (State = E_Batch#Filling) OR (State = E_Batch#Mixing)
-          OR (State = E_Batch#Heating) OR (State = E_Batch#Draining);
+  Running := (State = Filling) OR (State = Mixing)
+          OR (State = Heating) OR (State = Draining);
 
-  InletValve  := (State = E_Batch#Filling) AND NOT LevelHighLS;  (* never overfill *)
-  Agitator    := (State = E_Batch#Mixing) OR (State = E_Batch#Heating);
-  Heater      := (State = E_Batch#Heating) AND LevelLowLS;       (* elements covered *)
-  OutletValve := State = E_Batch#Draining;
+  InletValve  := (State = Filling) AND NOT LevelHighLS;  (* never overfill *)
+  Agitator    := (State = Mixing) OR (State = Heating);
+  Heater      := (State = Heating) AND LevelLowLS;       (* elements covered *)
+  OutletValve := State = Draining;
 
   RunLamp      := Running;
-  HeldLamp     := State = E_Batch#Held;
-  FaultLamp    := State = E_Batch#Faulted;
-  CompleteLamp := State = E_Batch#Complete;
+  HeldLamp     := State = Held;
+  FaultLamp    := State = Faulted;
+  CompleteLamp := State = Complete;
 END_PROGRAM
 
 CONFIGURATION Config0

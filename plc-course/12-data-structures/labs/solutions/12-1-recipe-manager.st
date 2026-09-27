@@ -156,26 +156,26 @@ PROGRAM RecipeManager
      HMI, so it is tested FIRST: Recipes[SelectNo] is only read inside the
      ELSIF branches, which run only when the index is in range. ---- *)
   IF SelectNo < FIRST_SLOT OR SelectNo > LAST_SLOT THEN
-    Check := E_LoadResult#BadIndex;
+    Check := BadIndex;
   ELSIF LEN(Recipes[SelectNo].Name) = 0 THEN
-    Check := E_LoadResult#EmptySlot;
+    Check := EmptySlot;
   ELSIF NOT F_RecipeValuesOk(R := Recipes[SelectNo], Lim := RecipeLimits) THEN
-    Check := E_LoadResult#BadValue;
+    Check := BadValue;
   ELSE
-    Check := E_LoadResult#Loaded;   (* passes every check: it can be loaded *)
+    Check := Loaded;   (* passes every check: it can be loaded *)
   END_IF;
 
-  SelectedOk := Check = E_LoadResult#Loaded;
+  SelectedOk := Check = Loaded;
 
   (* ---- 2. The load command: acted on once, then cleared (the HMI sets
      command bits, the PLC clears them). Never change the recipe of a batch
      that is running. ---- *)
   IF LoadCmd THEN
     IF BatchRunning THEN
-      LoadResult := E_LoadResult#BatchBusy;
+      LoadResult := BatchBusy;
     ELSE
       LoadResult := Check;
-      IF Check = E_LoadResult#Loaded THEN
+      IF Check = Loaded THEN
         Active := Recipes[SelectNo];      (* whole-structure copy: all or nothing *)
         ActiveNo := SelectNo;
       END_IF;

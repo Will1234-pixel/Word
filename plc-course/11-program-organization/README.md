@@ -476,9 +476,11 @@ initialisers. It rejects initialisers for arrays of structures, structure initia
 array members, and some others, among them the all-zero constant
 `(Count := 0, ..., Mean := 0.0)` that Lab 11-3 needs
 ([Appendix E](../appendices/E-matiec-openplc-notes.md); [Module 12](../12-data-structures/),
-section 3.2). There are two portable ways round it. If every member should start at its type's
-default, leave the initialiser out: `CLEARED_STATS : ST_Stats;` in a `VAR CONSTANT` is already
-all zeros. Otherwise declare the variable without an initialiser and set its values in a
+section 3.2). OpenPLC Editor v4's compiler (STruC++) pulls the other way: a `VAR CONSTANT`
+*must* have an initialiser. There are two ways round both. If every member should start at
+its type's default, declare it in a plain `VAR` with no initialiser: `CLEARED_STATS : ST_Stats;`
+is already all zeros, and as long as nothing writes to it, it behaves like a constant.
+Otherwise declare the variable without an initialiser and set its values in a
 **first-scan block** at the very top of the program body, so they are in place before any
 logic reads them:
 
@@ -571,7 +573,7 @@ Priority numbers are **not** consistent between platforms. Check before you assu
 | Siemens S7 | the **largest** number | OB1, the main cycle, has the lowest priority, 1 |
 
 The standard allows either pre-emptive or non-pre-emptive scheduling. MATIEC's generated code
-(used by OpenPLC and by `plctest`) runs every task of a resource from one loop. On each base
+(used by `plctest` and by the OpenPLC Runtime v3) runs every task of a resource from one loop. On each base
 tick it runs the tasks that are due, one after another. Tasks therefore never interrupt each
 other there, whatever their priorities.
 
@@ -1587,10 +1589,11 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
 - Inside the FB, put an `R_TRIG` on `Sample` and do all the work inside `IF Edge.Q THEN`.
 - Test `Stats.Count = 0` *before* incrementing it, to know whether this is the first sample.
   Don't test `MinValue = 0.0` instead: an empty container weighs 0 g, and that is a real sample.
-- Clearing a whole structure: declare a `VAR CONSTANT` of type `ST_Stats` with every field
-  zero and assign it, `LineStats := CLEARED_STATS;`, or assign the fields one by one. Every
-  member of `ST_Stats` starts at zero, so `CLEARED_STATS : ST_Stats;` needs no initialiser.
-  Leave it out: OpenPLC's compiler rejects the written-out one (section 3.6). Do the clear
+- Clearing a whole structure: declare a variable of type `ST_Stats` that is never written, so
+  every field stays zero, and assign it: `LineStats := CLEARED_STATS;`. Or assign the fields
+  one by one. Every member of `ST_Stats` starts at zero, so `CLEARED_STATS : ST_Stats;` in a
+  plain `VAR` needs no initialiser. Section 3.6 explains why not `VAR CONSTANT`: OpenPLC v3
+  and v4 disagree about the initialiser. Do the clear
   *after* the two calls, so that a weight arriving in the same scan cannot leave the record
   non-zero while the button is held.
 - Why `Sum` is `LREAL`: a `REAL` holds about 7 significant digits. After about 17,000 samples

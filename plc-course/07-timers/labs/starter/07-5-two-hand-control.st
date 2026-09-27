@@ -13,7 +13,7 @@ PROGRAM TwoHandControl
     PressDown AT %QX0.0 : BOOL;  (* press stroke valve *)
   END_VAR
   VAR (* internal - add your own timers and helper variables here *)
-    Window : TON;                (* suggested: time since the first button was pressed *)
+    PressWindow : TON;                (* suggested: time since the first button was pressed *)
   END_VAR
 
   (* TODO: replace this placeholder line with your logic. *)

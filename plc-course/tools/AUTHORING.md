@@ -196,6 +196,12 @@ END_CONFIGURATION
 
 ### 5.3 Running the checks
 
+Lab files must also compile with **STruC++**, the compiler of OpenPLC Editor v4 (Appendix E,
+section E.7). So write enum values without the type prefix (`Idle`, not `E_State#Idle`), give
+every `VAR CONSTANT` an initial value (or use a plain `VAR`), and avoid names of OSCAT Basic
+functions and blocks. To check, install STruC++ (it comes with the OpenPLC Editor source,
+`npm run setup:strucpp`) and run `strucpp file.st -o /tmp/out.cpp` on each file.
+
 From `plc-course/`:
 
 ```bash

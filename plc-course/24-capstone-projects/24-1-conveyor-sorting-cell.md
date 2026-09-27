@@ -1114,8 +1114,8 @@ syntax, not testable here). Encoder inputs often come from EtherCAT or other fie
 counter terminals that deliver the count as a process-data word; its width (often 16 or 32
 bits) depends on the terminal and how it is configured.
 
-**OpenPLC.** The same compiler family as `plctest`, so the files run unchanged. Two practical
-points. First, the Modbus server of the OpenPLC Runtime (version 3) exposes *located*
+**OpenPLC.** The capstone files compile with both OpenPLC compilers: MATIEC in the v3 Runtime
+and STruC++ in the v4 Editor. Two practical points. First, the Modbus server of the OpenPLC Runtime (version 3) exposes *located*
 variables, not structures: `%IX` as discrete inputs, `%QX` as coils, `%IW` as input registers, and `%QW`,
 `%MW`, `%MD` and `%ML` as holding registers (there are no `%MX` memory bits). To connect a real
 HMI you would add an I/O-mapping section that unpacks the command bits from a `%MW` word the

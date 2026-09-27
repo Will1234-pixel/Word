@@ -281,7 +281,35 @@ the same variable, and `Sin` is the same name as the `SIN` function.
 Vendor details change between versions. Treat the table as a starting point and check your
 tool's help for the exact instruction names.
 
-## E.7 Troubleshooting the setup
+## E.7 OpenPLC Editor v4 and the STruC++ compiler
+
+The current **OpenPLC Editor (v4)** no longer uses MATIEC. It compiles Structured Text, and the
+Ladder and FBD it translates into Structured Text, with **STruC++**, a newer IEC 61131-3 to
+C++ compiler. MATIEC remains what `plctest` uses and what the older OpenPLC Runtime v3 used.
+
+Every lab file was also compiled with STruC++ 0.6.9, the version bundled with OpenPLC Editor
+4.3.1. All of them compile except the textual-SFC lab (13-3), because STruC++ and the v4
+Editor have no SFC. These are the differences that were found, and how the labs avoid them:
+
+| Construct | MATIEC (`plctest`, OpenPLC v3) | STruC++ (OpenPLC v4) | What the labs do |
+|---|---|---|---|
+| Qualified enum value `E_State#Idle` (the IEC form) | Accepted | Rejected ("unexpected character #") | Plain `Idle` |
+| Qualified enum value `E_State.Idle` (CODESYS style) | Rejected | Accepted | Plain `Idle` |
+| `VAR CONSTANT` with no initial value | Accepted | Rejected ("must have an initializer") | A plain `VAR` that nothing writes to |
+| A variable named like a function or block in STruC++'s bundled libraries (for example `Window`: OSCAT Basic has a `WINDOW` function) | Accepted | Rejected: the name clashes with the library function | Distinct names (`PressWindow`) |
+| Textual SFC (`INITIAL_STEP`, `STEP`, `TRANSITION`) | Supported | Not supported | Only Lab 13-3 uses it |
+
+Plain enum values (`Idle`) are the form every compiler here accepts, as long as two enum types
+don't share a value name.
+
+**Using a lab in OpenPLC Editor v4.** Create a project, add a program in Structured Text,
+then copy the lab's variable declarations and its logic into the program. Data types
+(`TYPE … END_TYPE`) and function blocks become separate items in the project tree. The
+CONFIGURATION section at the end of each lab file isn't needed: the Editor sets up tasks in its
+own configuration. For a ready-to-open example of the v4 project format, see the
+[PLC Playground](../playground/).
+
+## E.8 Troubleshooting the setup
 
 - **`MATIEC (iec2c) not found`**: run `tools/setup-matiec.sh` from the `plc-course` folder,
   or set `MATIEC_HOME` to an existing MATIEC build (a folder that contains `iec2c` and `lib/`).

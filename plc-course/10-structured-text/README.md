@@ -1305,8 +1305,9 @@ uses:
 
 ### OpenPLC and MATIEC
 
-OpenPLC compiles ST with MATIEC, the same compiler `plctest` uses, so code that compiles here
-should also build for the OpenPLC Runtime. MATIEC follows edition 2 strictly and adds a few
+`plctest` compiles ST with MATIEC, which the OpenPLC Runtime v3 also used. The current OpenPLC
+Editor v4 compiles with a newer compiler, STruC++. The course's lab files are checked with
+both (Appendix E lists the few differences). MATIEC follows edition 2 strictly and adds a few
 limits of its own. This module met these:
 
 - no `//` comments, no nested comments, no OOP, no generic `TO_INT`, no `STRING(n)`;

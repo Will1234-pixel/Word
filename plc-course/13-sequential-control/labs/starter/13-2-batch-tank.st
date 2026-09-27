@@ -43,9 +43,9 @@ PROGRAM BatchTank
     BatchCount : INT;               (* completed batches *)
   END_VAR
   VAR (* internal - suggestions; add or change as you like *)
-    State     : E_Batch := E_Batch#Idle;
-    PrevState : E_Batch := E_Batch#Idle;
-    HeldFrom  : E_Batch := E_Batch#Idle;  (* the step to resume *)
+    State     : E_Batch := Idle;
+    PrevState : E_Batch := Idle;
+    HeldFrom  : E_Batch := Idle;  (* the step to resume *)
     FirstScan : BOOL := TRUE;
     StepEntry : BOOL;               (* TRUE on the first scan in a state *)
     StepTimer : TON;                (* time in the current state *)

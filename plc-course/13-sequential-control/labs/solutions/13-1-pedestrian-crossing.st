@@ -35,8 +35,8 @@ PROGRAM PedCrossing
     PedClearTime : TIME := T#4s;   (* flashing green figure *)
   END_VAR
   VAR (* internal *)
-    State      : E_Crossing := E_Crossing#Startup;
-    PrevState  : E_Crossing := E_Crossing#Startup;
+    State      : E_Crossing := Startup;
+    PrevState  : E_Crossing := Startup;
     FirstScan  : BOOL := TRUE;
     StepEntry  : BOOL;           (* TRUE on the first scan in a state *)
     StepTimer  : TON;            (* time spent in the current state *)
@@ -57,56 +57,56 @@ PROGRAM PedCrossing
   (* 2. Transitions. Only the branch of the current state runs, so the
         crossing can move at most one state per scan. *)
   CASE State OF
-    E_Crossing#Startup:
+    Startup:
       IF StepTimer.ET >= StartupTime THEN
-        State := E_Crossing#RedAmber;
+        State := RedAmber;
       END_IF;
 
-    E_Crossing#RedAmber:
+    RedAmber:
       IF StepTimer.ET >= RedAmberTime THEN
-        State := E_Crossing#Green;
+        State := Green;
       END_IF;
 
-    E_Crossing#Green:
+    Green:
       (* rest here until someone asks, but always give the minimum green *)
       IF Request AND (StepTimer.ET >= MinGreen) THEN
-        State := E_Crossing#Amber;
+        State := Amber;
       END_IF;
 
-    E_Crossing#Amber:
+    Amber:
       IF StepTimer.ET >= AmberTime THEN
-        State := E_Crossing#AllRed;
+        State := AllRed;
       END_IF;
 
-    E_Crossing#AllRed:
+    AllRed:
       IF StepTimer.ET >= AllRedTime THEN
-        State := E_Crossing#Walk;
+        State := Walk;
       END_IF;
 
-    E_Crossing#Walk:
+    Walk:
       IF StepTimer.ET >= WalkTime THEN
-        State := E_Crossing#PedClear;
+        State := PedClear;
       END_IF;
 
-    E_Crossing#PedClear:
+    PedClear:
       IF StepTimer.ET >= PedClearTime THEN
-        State := E_Crossing#RedAmber;
+        State := RedAmber;
       END_IF;
   ELSE
     (* An impossible value: restart through the all-red start-up phase. *)
-    State := E_Crossing#Startup;
+    State := Startup;
   END_CASE;
 
   (* 3a. Request latch. A press is remembered in every state except Walk,
          where the pedestrians already have their green. The latch is
          cleared in the same scan as the walk phase starts, so the WAIT lamp
          goes out exactly when the green figure lights. *)
-  Request := (Request OR PedPB) AND (State <> E_Crossing#Walk);
+  Request := (Request OR PedPB) AND (State <> Walk);
 
   (* 3b. Flasher for the clearance phase: toggles every 500 ms and starts
          with the green figure OFF, so pedestrians see the change at once. *)
-  FlashTimer(IN := (State = E_Crossing#PedClear) AND NOT FlashTimer.Q, PT := T#500ms);
-  IF State <> E_Crossing#PedClear THEN
+  FlashTimer(IN := (State = PedClear) AND NOT FlashTimer.Q, PT := T#500ms);
+  IF State <> PedClear THEN
     FlashOn := FALSE;
   ELSIF FlashTimer.Q THEN
     FlashOn := NOT FlashOn;
@@ -114,13 +114,13 @@ PROGRAM PedCrossing
 
   (* 4. Outputs, derived from the state. Reading down a column of the lab's
         state/output table gives each of these lines. *)
-  CarRed   := (State = E_Crossing#Startup) OR (State = E_Crossing#RedAmber)
-           OR (State = E_Crossing#AllRed) OR (State = E_Crossing#Walk)
-           OR (State = E_Crossing#PedClear);
-  CarAmber := (State = E_Crossing#RedAmber) OR (State = E_Crossing#Amber);
-  CarGreen := State = E_Crossing#Green;
-  PedGreen := (State = E_Crossing#Walk) OR ((State = E_Crossing#PedClear) AND FlashOn);
-  PedRed   := (State <> E_Crossing#Walk) AND (State <> E_Crossing#PedClear);
+  CarRed   := (State = Startup) OR (State = RedAmber)
+           OR (State = AllRed) OR (State = Walk)
+           OR (State = PedClear);
+  CarAmber := (State = RedAmber) OR (State = Amber);
+  CarGreen := State = Green;
+  PedGreen := (State = Walk) OR ((State = PedClear) AND FlashOn);
+  PedRed   := (State <> Walk) AND (State <> PedClear);
   WaitLamp := Request;
 END_PROGRAM
 

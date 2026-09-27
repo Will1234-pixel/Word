@@ -940,8 +940,8 @@ the operator stops the pump to clear the strainer. At t = 66 s the pump is resta
 
 While the timer is not called, it keeps its last state: IN TRUE and timing since t = 0. It
 never saw IN go FALSE, so it never reset. When it is called again at t = 66 s (the flow has
-not had time to build up yet, so IN is still TRUE), the MATIEC timer used by OpenPLC and
-`plctest` compares the clock with the time it started, finds 66 s have passed, and sets `Q`
+not had time to build up yet, so IN is still TRUE), the MATIEC timer used by `plctest` and
+the OpenPLC Runtime v3 compares the clock with the time it started, finds 66 s have passed, and sets `Q`
 at once: the pump trips on "low flow" the moment it restarts. Other platforms may behave
 differently in detail, for example continuing from the frozen 6 s, which is itself a reason
 never to rely on it. The fault only appears when the pump was stopped *during* a low-flow
