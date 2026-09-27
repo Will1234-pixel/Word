@@ -50,11 +50,11 @@ After this module you should be able to:
 
 ### 1.1 What makes something an alarm
 
-ISA-18.2 defines an alarm, in essence, as an audible and/or visible means of telling the
-operator about an equipment malfunction, a process deviation or an abnormal condition **that
-requires a response**. The last four words are the whole of alarm management in miniature. An
-alarm is a request for action. If there is no action for the operator to take, it should not
-be an alarm.
+ISA-18.2 defines an alarm as an audible and/or visible means of indicating to the operator an
+equipment malfunction, process deviation or abnormal condition **requiring a timely
+response** (the 2009 edition said "requiring a response"). Those last words are the whole of
+alarm management in miniature. An alarm is a request for action. If there is no action for
+the operator to take, it should not be an alarm.
 
 Three consequences follow, and every good alarm system is built on them:
 
@@ -80,9 +80,10 @@ different places and need different handling:
 | **Message / prompt** | Only as part of a procedure | "Batch 1234: add catalyst, then press Continue" | operator dialogue on the HMI |
 | **Diagnostic** | Usually for maintenance, not operations | card channel 3 wire break; PLC battery low | maintenance displays, diagnostic buffer; becomes an alarm only if operations must act |
 
-Recent editions of ISA-18.2 recognise alerts as a separate category. Whatever words your site
-uses, the test is the same: *does the operator need to do something, soon?* Events are not
-less important than alarms. They are the evidence you need afterwards to work out what
+The 2016 edition of ISA-18.2 defines an **alert** as a means of indicating a condition that
+requires the operator's awareness but does not meet the criteria for an alarm. Whatever words
+your site uses, the test is the same: *does the operator need to do something, soon?* Events
+are not less important than alarms. They are the evidence you need afterwards to work out what
 happened, which is why sequence-of-events recording (Section 4.7) exists.
 
 ### 1.3 Alarms, trips, interlocks and permissives
@@ -113,8 +114,10 @@ found that in the last eleven minutes before the explosion the two control-room 
 to recognise, acknowledge and act on 275 alarms, about one every two to three seconds, and
 that most alarms were displayed as high priority even when they were only informative.
 Safety-critical alarms did not stand out, and the operators missed the information that
-mattered.
-Work that followed the investigation led to the EEMUA 191 guide to alarm systems.
+mattered. The investigation also found a control valve that had failed shut while the control
+system showed it open: the kind of discrepancy that Section 5.9 teaches you to detect. The
+incident is widely cited as one of the reasons EEMUA published its alarm-systems guide,
+EEMUA 191, in 1999.
 
 The pattern is common. Alarm systems rarely fail because a condition was not detected. They
 fail because the one important alarm was buried among many unimportant ones:
@@ -136,9 +139,9 @@ describes the management framework that decides what the PLC should do.
 | Document | What it is |
 |---|---|
 | **ANSI/ISA-18.2**, *Management of Alarm Systems for the Process Industries* | the US standard for alarm management: the lifecycle, the requirements, the performance figures. Supported by a series of ISA technical reports (TR18.2.x) with practical guidance |
-| **IEC 62682**, *Management of alarm systems for the process industries* | the international standard, based on ISA-18.2; the one to quote outside North America |
-| **EEMUA 191**, *Alarm systems: a guide to design, management and procurement* | the UK Engineering Equipment and Materials Users' Association guide; practical and widely used, with benchmarks similar to ISA-18.2 |
-| **ANSI/ISA-18.1**, *Annunciator Sequences and Specifications* | the older standard for hard-wired annunciator panels (Section 3.7) |
+| **IEC 62682**, *Management of alarm systems for the process industries* | the international standard, developed from the 2009 edition of ISA-18.2; the one to quote outside North America |
+| **EEMUA 191**, *Alarm systems: a guide to design, management and procurement* | the UK Engineering Equipment and Materials Users' Association guide (first published 1999); practical and widely used, with benchmarks similar to ISA-18.2 |
+| **ANSI/ISA-18.1**, *Annunciator Sequences and Specifications* | the older standard for hard-wired annunciator panels (Section 3.7). ISA-18.2 covers how annunciator panels fit into the alarm system, but leaves their design to ISA-18.1 |
 
 ISA-18.2 and IEC 62682 are written for the process industries, but the ideas apply equally to
 machines, water treatment and building services. On a packaging line the "operator" might be
@@ -147,21 +150,21 @@ a line technician looking at an HMI message list. The rules are the same.
 ### 2.2 The lifecycle
 
 ISA-18.2 treats the alarm system as something that is designed, used, measured and improved
-continuously, not configured once and forgotten:
+continuously, not configured once and forgotten. A simplified view of its lifecycle:
 
 ```mermaid
 flowchart TD
-    A[Philosophy<br/>the rules for everything below] --> B[Identification<br/>which alarms might be needed]
+    A([Philosophy<br/>the rules for everything below]) --> B[Identification<br/>which alarms might be needed]
     B --> C[Rationalisation<br/>justify, prioritise, set limits]
     C --> D[Detailed design<br/>logic, delays, suppression, HMI]
     D --> E[Implementation<br/>build, test, train]
     E --> F[Operation<br/>alarms in daily use]
     F <--> G[Maintenance<br/>test, repair, out of service]
-    F --> H[Monitoring and assessment<br/>KPIs, bad actors]
+    F --> H([Monitoring and assessment<br/>KPIs, bad actors])
     G --> H
     H --> I[Management of change<br/>controlled additions and edits]
-    I --> C
-    J[Audit<br/>is the process being followed?] -.-> A
+    I -->|a change goes through the stages again| B
+    J([Audit<br/>is the process being followed?]) -.-> A
 ```
 
 | Stage | Main questions | Typical outputs |
@@ -177,9 +180,16 @@ flowchart TD
 | **Management of change** | Is every change to an alarm reviewed and recorded? | MOC records |
 | **Audit** | Is the whole process being followed? | audit report, action plan |
 
-The lifecycle has more than one entry point. A new plant starts at the philosophy; an
-existing plant with a noisy alarm system usually starts at monitoring (measure how bad it
-is), fixes the worst offenders, and writes the philosophy along the way.
+An approved change is not a quick edit: it goes back through identification, rationalisation,
+design and implementation like a new alarm. The standard also describes three loops that
+keep the system healthy: monitoring and maintenance (problem alarms get repaired), monitoring
+and management of change (an alarm whose design is wrong gets redesigned), and audit and
+philosophy (the process itself gets improved).
+
+ISA-18.2 names three entry points to the lifecycle (the rounded boxes): the philosophy,
+monitoring and assessment, and audit. A new plant starts at the philosophy; an existing plant
+with a noisy alarm system usually starts at monitoring (measure how bad it is) or with an
+audit, fixes the worst offenders, and writes the philosophy along the way.
 
 ### 2.3 The alarm philosophy
 
@@ -257,9 +267,10 @@ act**. The philosophy defines both scales and a matrix. An example (every site s
 The last column is a warning. If there are only two minutes, even a perfect operator may not
 make it, and the protection should be automatic.
 
-Use **three or four priority levels**, not ten. ISA-18.2's performance guidance suggests that
-of the alarms actually annunciated, roughly 80 % should be low, 15 % medium and 5 % high
-priority. If half your alarms are high priority, the priorities have not been rationalised.
+Use **three or four priority levels**, not ten. ISA-18.2's example distribution for the alarms
+actually annunciated is roughly 80 % low, 15 % medium and 5 % high priority (with a fourth,
+"highest" level, under 1 %). If half your alarms are high priority, the priorities have not
+been rationalised.
 
 ### 2.6 Setting the limit: working back from the time to respond
 
@@ -304,7 +315,7 @@ inflow, a rate-of-change alarm, an automatic action), not a number to fudge.
 | **Chattering** | an alarm that repeatedly goes in and out of alarm | three or more times in one minute | deadband, on-delay and off-delay ([Module 14](../14-analog-and-process-io/)); fix the noisy instrument |
 | **Fleeting** | an alarm that appears and clears within seconds, with no operator action | seconds | on-delay; ask whether it is really an event |
 | **Stale** (standing) | an alarm that stays active for a long time | active for more than 24 hours | state-based suppression; re-rationalise; out-of-service procedure for equipment that is shut down |
-| **Flood** | more alarms than an operator can handle | more than 10 in 10 minutes per operator | state-based suppression, first-out, rationalisation; flood suppression in the alarm system |
+| **Flood** | more alarms than an operator can handle | more than 10 in 10 minutes per operator (ISA-18.2's example; the flood ends when the rate falls below about 5 in 10 minutes) | state-based suppression, first-out, rationalisation; flood suppression in the alarm system |
 | **Duplicate** | several alarms for one condition | review | keep the one that names the cause |
 
 **Deadband and delay starting values.** Alarm-management guidance commonly quotes starting
@@ -407,16 +418,17 @@ the master alarm database.
 
 ### 2.10 Monitoring: alarm-system KPIs
 
-You cannot improve what you do not measure. ISA-18.2 gives target figures for an alarm system
-in steady operation, per operator position, based on at least a month of data:
+You cannot improve what you do not measure. ISA-18.2 gives target figures for an alarm system,
+per operator console, based on at least 30 days of data:
 
 | Metric | ISA-18.2 guidance (approximate) |
 |---|---|
-| Annunciated alarms per day | about 150 is very likely acceptable; about 300 is the maximum manageable |
-| Annunciated alarms per hour | about 6 acceptable; about 12 maximum manageable |
-| Annunciated alarms per 10 minutes | about 1 acceptable; about 2 maximum manageable |
-| 10-minute periods containing more than 10 alarms (floods) | less than about 1 % |
+| Annunciated alarms per hour (average) | about 6 very likely acceptable; about 12 maximum manageable |
+| Annunciated alarms per 10 minutes (average) | about 1 very likely acceptable; about 2 maximum manageable |
+| Annunciated alarms per day | about 150 and about 300: the same rates over 24 hours (the 2009 edition listed these per-day figures; the 2016 edition gives only the hourly and 10-minute ones) |
+| 10-minute periods containing more than 10 alarms | less than about 1 % |
 | Maximum number of alarms in any 10 minutes | 10 or fewer |
+| Time the alarm system spends in a flood | less than about 1 % |
 | Share of all alarms from the 10 most frequent alarms | about 1 % to 5 % at most |
 | Chattering and fleeting alarms | zero, with action plans for any found |
 | Stale alarms (active more than 24 h) | fewer than 5 on any day |
@@ -491,9 +503,13 @@ stateDiagram-v2
     LatchedRtn --> Normal : reset
 ```
 
-ISA-18.2 describes the same states (and adds shelved, suppressed-by-design and
-out-of-service) in its alarm state-transition diagram. The names differ between vendors and
-standards, but the two underlying questions never change. Keep them as **two separate
+ISA-18.2's alarm state-transition diagram has the first four states (normal, unacknowledged,
+acknowledged, returned to normal unacknowledged) plus shelved, suppressed-by-design and
+out-of-service. It treats latching as an option of the alarm: a latching alarm stays in alarm
+after the process has returned to normal until an operator **resets** it. It also notes that
+the step from "returned to normal, unacknowledged" to normal can require an acknowledgement or
+happen automatically (Section 3.2). The names differ between vendors and standards, but the
+two underlying questions never change. Keep them as **two separate
 memories** in your code, `Active` and `Unacked`, and derive any state number or colour from
 them. Code that tries to hold one "state" variable and update it in many places is where
 alarm bugs live.
@@ -524,6 +540,11 @@ Use it where the event matters more than the current state:
 
 Don't latch ordinary process alarms: a latched "level high" that stays on after the level is
 back to normal is a stale alarm in the making.
+
+Decide, too, what happens when the condition comes back while the alarm is still latched and
+already acknowledged. Lab 16-1 treats it as the same occurrence: the alarm is still on show,
+the operator has seen it, and nothing new is counted. Some systems re-annunciate it as a new
+alarm instead. Both are defensible; the philosophy should say which one the site uses.
 
 ### 3.4 Silence, acknowledge and reset
 
@@ -924,11 +945,11 @@ good the time stamps are:
 | the PLC program, in the scan where it sees the change | the scan or task time plus the input filter: typically a few ms to tens of ms | alarm time stamps sent to SCADA, first-out |
 | a time-stamping input module or SOE recorder | about a millisecond | trip and power-system analysis (Section 4.7) |
 
-Stamping in the SCADA is the weakest: all changes between two polls get the same time, or
-the time of the poll that happened to see them, and a condition that comes and goes between
-two polls may never be seen at all unless the PLC latches it. If alarm times matter, stamp them in the PLC and send the
-stamp with the alarm (vendor alarm instructions such as Siemens `Program_Alarm` and Rockwell
-`ALMD` do this; see the vendor notes).
+Stamping in the SCADA is the weakest: all changes between two polls get the same time, or the
+time of the poll that happened to see them, and a condition that comes and goes between two
+polls may never be seen at all unless the PLC latches it. If alarm times matter, stamp them in
+the PLC and send the stamp with the alarm (vendor alarm instructions such as Siemens
+`Program_Alarm` and Rockwell `ALMD` do this; see the vendor notes).
 
 **Is the clock right?** A time stamp is only as good as the clock behind it:
 
@@ -1182,17 +1203,21 @@ more reason to write them as reusable blocks.
   partner PLC, an HMI or SCADA server, a remote station, a drive.
 
 The usual application watchdog is a **heartbeat**: the partner changes a value regularly, and
-you raise a fault if it stops changing for longer than a timeout. A timer-based version
-appeared in [Module 07](../07-timers/), and an HMI hold-to-run heartbeat in
-[Module 18](../18-hmi-and-scada/). The design rules:
+you raise a fault if it stops changing for longer than a timeout.
+[Module 07](../07-timers/) built a simple one from a TOF and a toggling bit, and
+[Module 18](../18-hmi-and-scada/) uses a heartbeat for an HMI hold-to-run button. The design
+rules for a heartbeat you can rely on:
 
 - **Use a counter, not a toggling bit.** A bit that toggles every second, read every two
   seconds, can look frozen because every read catches the same value. A counter that adds one
-  every second changes at every read, and also tells you how many updates were missed.
+  every second changes at every read, and also tells you how many updates were missed. (The
+  Module 07 bit works because the monitor reads it far more often than it toggles; over a
+  network you rarely control that.)
 - **Any change counts.** Compare with `<>`, never `>`: a counter wraps from 32767 to −32768,
   and a partner that restarts starts counting from 0 again. Both are signs of life.
-- **Choose the timeout from the update period.** Two to three update periods plus the worst
-  communication delay is a common choice: long enough to ride through one or two lost
+- **Choose the timeout from the update period.** About three update periods plus the worst
+  communication delay is a common choice (the same rule as in
+  [Module 17](../17-industrial-communications/)): long enough to ride through one or two lost
   messages, short enough to act in time.
 - **Don't trust the first value.** After power-up the first value read proves nothing; the
   partner may have stopped hours ago. The partner is "OK" only after its heartbeat has been
@@ -1215,10 +1240,11 @@ for example the supply to the motor contactor coils.
 
 ```text
   PLC                        Watchdog relay WDR               Hardwired circuit
-  toggles WD_OUT every       (retriggerable timer, 1 s):      +24 V --[ WDR ]--( K1 )-- 0 V
-  250 ms while the     --->  stays energised while its  --->  WDR contact in series with the
-  program is healthy         input keeps changing; drops      contactor coils: relay drops out
-                             out 1 s after the last change    = contactors drop out = stop
+                                                                        WDR          K1
+  toggles WatchdogOut        (retriggerable timer, 1 s):      +24 V ----] [--------( )---- 0 V
+  every 250 ms while   --->  stays energised while its  --->  WDR NO contact in series with
+  the program is healthy     input keeps changing; drops      the contactor coils: relay drops
+                             out 1 s after the last change    out = contactors drop out = stop
 ```
 
 ```iecst
@@ -1364,8 +1390,9 @@ level. A persistent mismatch means a leak, a passing valve or a faulty instrumen
 
 A **discrepancy** is a disagreement between what the program commanded and what the feedback
 says happened. [Module 07](../07-timers/) built feedback timeouts and
-[Module 11](../11-program-organization/) put them inside `FB_Motor` and `FB_Valve`. The full
-list of cases worth checking:
+[Module 11](../11-program-organization/) put them inside `FB_Motor` and `FB_Valve`. Milford
+Haven (Section 1.4) shows why this matters: a valve that is shut while the screen says open
+misleads everyone who looks at it. The full list of cases worth checking:
 
 | Device | Discrepancy | Typical causes | Typical time allowance |
 |---|---|---|---|
@@ -1485,10 +1512,10 @@ rationalisation team goes through the list for pump P-101:
 | P-101 run hours above 2000 h (alarm, low) | **maintenance message** | a planning item, not an alarm |
 
 Ten configured alarms become six alarms (one of them new), two events, an alert and a
-maintenance message, and one duplicate disappears. Each remaining alarm has a cause, a consequence, an action and a time, and
-the priorities spread out instead of all being high. The PLC changes are small: the
-suppression condition on FT-101, the failure-to-start detection, and moving the event bits to
-an event log instead of the alarm list.
+maintenance message, and one duplicate disappears. Each remaining alarm has a cause, a
+consequence, an action and a time, and the priorities spread out instead of all being high. The
+PLC changes are small: the suppression condition on FT-101, the failure-to-start detection, and
+moving the event bits to an event log instead of the alarm list.
 
 ### Worked example 2: which diagnostic catches which transmitter fault?
 
@@ -1509,6 +1536,10 @@ rate-of-change check (Module 14). Which fault does each check catch?
 | gateway or remote I/O serving a stale value | no | no | **yes** | **yes** | no |
 | input forced in the PLC | no | no | **yes** | **yes** | no |
 
+A "no" in the rate-of-change column assumes the fault does not start with a large step: a
+transmitter put into loop test, or a value forced, far from the real reading jumps to its new
+value, and a rate-of-change check may catch that one step.
+
 No single check catches everything, and the plausibility checks (frozen, deviation, rate) catch
 the faults that hardware diagnostics cannot see. That is the argument for redundant
 transmitters of *different* technologies on important measurements: a common cause (for
@@ -1519,10 +1550,10 @@ example a plugged tapping, or a wrong density setting) is less likely to affect 
 A month-long review starts with one week of alarm history for one operator console. The
 log holds 12,600 annunciated alarms:
 
-- per day: 12,600 ÷ 7 = **1,800**, against ISA-18.2's guidance of about 150 (acceptable) and
-  300 (maximum manageable);
-- per hour: 1,800 ÷ 24 = **75**; per 10 minutes: 75 ÷ 6 = **12.5**, which is the level of a
-  flood as an *average*.
+- per day: 12,600 ÷ 7 = **1,800**, against about 150 (very likely acceptable) and 300
+  (maximum manageable), the ISA-18.2 hourly rates over 24 hours;
+- per hour: 1,800 ÷ 24 = **75**, against about 6 and 12; per 10 minutes: 75 ÷ 6 = **12.5**,
+  which is the level of a flood as an *average*.
 
 Sorting by alarm shows that ten alarms produced 7,900 of the 12,600, which is 63 % (the
 guidance is 1 % to 5 %). The top of the list:
@@ -1530,7 +1561,7 @@ guidance is 1 % to 5 %). The top of the list:
 | Alarm | Count in 7 days | Diagnosis | Fix |
 |---|---|---|---|
 | TT-305 high | 2,300 | chattering on a noisy signal, no deadband | 1 °C deadband and a 30 s on-delay, after checking the time available |
-| "motor running" status bits for 12 motors, configured as alarms | 1,500 | events, not alarms | move them to the event log |
+| C-501 air compressor "loaded" status bit, configured as an alarm | 1,500 | an event, not an alarm: the compressor loads and unloads every few minutes | move it to the event log |
 | P-201 discharge flow low | 1,100 | active whenever the pump is stopped | state-based suppression |
 | LSH-410 high level | 900 | a faulty switch that operates on foam | work order to replace it; shelve with a time limit meanwhile |
 | six others | 2,100 | various | handled one by one |
@@ -1569,15 +1600,16 @@ alarm-improvement work usually starts with the bad-actor list.
 
 ## Vendor notes
 
-**Siemens (TIA Portal, S7-1200/1500, WinCC).** Alarms can be defined in the HMI
-(discrete alarms on bits, analog alarms on values) or in the controller. On S7-1500,
+**Siemens (TIA Portal, S7-1200/1500, WinCC).** Alarms can be defined in the HMI (discrete
+alarms on bits, analog alarms on values) or in the controller. On S7-1500 (the classic S7-1200
+has a much smaller set of alarm instructions; check the instruction help for your CPU),
 `Program_Alarm` generates a *program alarm* from a signal edge, with the CPU's time stamp and
-associated values, and the alarm then appears in the HMI with that time; S7-300/400
-projects used message blocks such as `ALARM_S` and `ALARM_8P`. **Alarm classes** set how
-alarms are acknowledged and shown. System diagnostics produces alarms for hardware faults
-automatically, and the **ProDiag** option for S7-1500 lets you define supervisions on tags
-and blocks that generate alarms with diagnostic detail for the HMI. The diagnostic buffer,
-error OBs and diagnostic instructions are in Section 5.3.
+associated values, and the alarm then appears in the HMI with that time; S7-300/400 projects
+used message blocks such as `ALARM_S` and `ALARM_8P`. **Alarm classes** set how alarms are
+acknowledged and shown. System diagnostics produces alarms for hardware faults automatically,
+and the **ProDiag** option for S7-1500 lets you define supervisions on tags and blocks that
+generate alarms with diagnostic detail for the HMI. The diagnostic buffer, error OBs and
+diagnostic instructions are in Section 5.3.
 
 **Rockwell (Studio 5000 Logix Designer, FactoryTalk).** The `ALMD` (digital) and `ALMA`
 (analog) instructions are complete alarm blocks in the controller, much like Lab 16-1's
@@ -1686,7 +1718,8 @@ Use a `TON` for the confirmation and two `R_TRIG`s for the buttons. Keep `Active
 FALSE, a non-latching alarm clears `Active`, and a latching one clears it only on a reset edge
 while `NOT Unacked`; (3) activation: `IF Confirmed AND NOT Active THEN` set both and count;
 (4) derive `State` with an `IF ... ELSIF` chain from `Active`, `Unacked` and the confirmed
-condition. Why must (1) come before (3)?
+condition. Why must (1) come before (3)? (The test can only partly check this order, because
+it cannot know in which scan your on-delay finishes, so check it by reading your code.)
 </details>
 
 ### Lab 16-2: First-out annunciator
@@ -1740,9 +1773,10 @@ wire, reads FALSE:
    not acknowledge channels that trip later.
 5. **Lamps**: off when the channel is not latched; **flashing** (about 0.5 s on, 0.5 s off)
    when it is latched and either unacknowledged or first-out; **steady** when it is latched,
-   acknowledged and not first-out. So the first-out keeps flashing after the acknowledge,
-   until it is reset. While `LampTestPB` is held, all eight lamps are steady on; the lamp test
-   changes nothing else.
+   acknowledged and not first-out. So before the acknowledge every new trip flashes, and
+   afterwards only the first-out keeps flashing, until it is reset (the HMI can show the
+   `FirstOut` flags at once). While `LampTestPB` is held, all eight lamps are steady on; the
+   lamp test changes nothing else.
 6. **Reset**: the rising edge of `ResetPB` clears every channel that is acknowledged **and**
    whose input is healthy (its latch and its first-out mark). Channels still tripped or still
    unacknowledged stay as they are. A held button does not clear channels that recover
@@ -1833,7 +1867,8 @@ the heartbeat logic at the end of the program.
 **Requirement, the program:**
 
 8. `HeartbeatOut` starts at 0 and adds 1 every second. After 32767 it goes back to 0, so it
-   never overflows.
+   never overflows. Count in `HeartbeatOut` itself, not in a helper variable that you copy
+   into it: the test presets `HeartbeatOut` to 32766 to check the wrap.
 
 **Run the test:**
 
@@ -1914,8 +1949,9 @@ Counter;`, a `TON` with `IN := NOT Changed` for the fault, and a `SeenChange` fl
    the flood periods before calling it acceptable.
 4. **Returned to normal, unacknowledged** (`RtnUnack`): not active, but unacknowledged. The
    operator still sees it in the alarm list (typically flashing); in Lab 16-1 the horn keeps
-   sounding too, though some systems silence it on return to normal. It stays so that a short excursion, which may be an early warning,
-   is not missed while the operator was busy. Acknowledging it returns it to Normal.
+   sounding too, though some systems silence it on return to normal. It stays so that a short
+   excursion, which may be an early warning, is not missed while the operator was busy.
+   Acknowledging it returns it to Normal.
 5. Nothing happens: a latched alarm can only be reset when it is acknowledged and its
    condition has gone, and a refused press is not remembered. With the button jammed, the
    press edge happened long ago, so when the vibration falls and the alarm is acknowledged it
@@ -1934,10 +1970,12 @@ Counter;`, a `TON` with `IN := NOT Changed` for the fault, and a `SeenChange` fl
    jammed button cannot restart it (Section 4.3).
 8. A toggling bit read at an unlucky rate can look frozen, or alive, by aliasing; a counter
    changes at every update and shows how many were missed. With `>`, a counter that wraps
-   from 32767 to −32768, or restarts from 0 after the partner restarts, looks like no change,
-   giving false faults. For a 2 s update, a timeout of two to three update periods plus the
-   network delay, for example 5–6 s, rides through one lost update without delaying the fault
-   too long.
+   from 32767 to −32768, or restarts from 0 after the partner restarts, looks like no change.
+   At best that update is lost, which already gives a false fault if the timeout is short; a
+   monitor that waits for a value above the highest one seen so far never sees a change again
+   and stays faulted. For a 2 s update, a timeout of about three update periods plus the
+   network delay, for example 6–7 s, rides through one or two lost updates without delaying
+   the fault too long.
 9. The pressure rises by less than 0.05 bar per scan, so every scan-to-scan comparison says
    "not moved", and the timer is never restarted. Compare with a **reference** value taken at
    the last significant move; the slow rise then adds up to more than 0.05 bar and counts as
@@ -1970,4 +2008,4 @@ Counter;`, a `TON` with `IN := NOT Changed` for the fault, and a `SeenChange` fl
   faults for Logix 5000 controllers.
 
 ---
-Previous: [15 — PID and Closed-Loop Control](../15-pid-control/) · Next: [17 — Industrial Communications](../17-industrial-communications/)
+Previous: [15 — PID and Closed-Loop Control](../15-pid-control/) · Next: [17 — Industrial Communications and Networks](../17-industrial-communications/)

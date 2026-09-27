@@ -1,6 +1,6 @@
 # 18 — HMI and SCADA Integration
 
-> **Level:** 4 — Advanced · **Time:** ~10 hours · **Prerequisites:** [11 — Program Organisation](../11-program-organization/), [12 — Data Structures](../12-data-structures/), [16 — Alarms and Diagnostics](../16-alarms-and-diagnostics/), [17 — Industrial Communications](../17-industrial-communications/)
+> **Level:** 4 — Advanced · **Time:** ~10 hours · **Prerequisites:** [11 — Program Organisation and Reusable Function Blocks](../11-program-organization/), [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/), [16 — Alarms, Diagnostics and Fault Handling](../16-alarms-and-diagnostics/), [17 — Industrial Communications and Networks](../17-industrial-communications/)
 
 Operators rarely touch a PLC. They work through a screen: a touch panel on the machine, a
 SCADA client in a control room, or a DCS operator station. Whatever they do (start a
@@ -1692,4 +1692,4 @@ enumeration) for the mode.
 
 ---
 
-Previous: [17 — Industrial Communications](../17-industrial-communications/) · Next: [19 — Motion and Drives](../19-motion-and-drives/)
+Previous: [17 — Industrial Communications and Networks](../17-industrial-communications/) · Next: [19 — Motion Control, Drives and Positioning](../19-motion-and-drives/)

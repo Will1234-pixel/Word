@@ -3,6 +3,9 @@
 # TrackWord (bit n = the part n pitches past the camera is bad), RejectCount.
 # A camera result and an encoder pulse never change in the same scan, and every
 # change is followed by two scans, so the order of your statements does not matter.
+# Requirement 2 is tested as a level: a fail signal that is still on when the belt
+# moves marks the next part too. Requirement 7 is tested as a level as well: a camera
+# result that arrives while ResetPB is held must not survive the reset.
 # "pulse" below means: EncoderPulse TRUE for two scans, then FALSE for two scans.
 
 scenario power-up: nothing is tracked and good parts are never rejected
@@ -155,6 +158,24 @@ set EncoderPulse FALSE
 scan 2
 expect RejectGate TRUE
 expect RejectCount 1
+
+scenario a fail signal still on when the belt moves marks the next part too (level, not edge)
+set InspectFail TRUE          # the camera's fail output is on ...
+scan 2
+expect TrackWord 16#0001
+set EncoderPulse TRUE         # ... and still on when the belt moves one pitch
+scan 2
+expect TrackWord 16#0003      # the bad part moved to bit 1; the part now at the camera is marked too
+set EncoderPulse FALSE
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0003
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0006
 
 scenario two bad parts in a row: the gate stays on for two pitches and counts two rejects
 set InspectFail TRUE          # part A is bad
@@ -621,3 +642,50 @@ set EncoderPulse FALSE
 scan 2
 expect TrackWord 16#0000
 expect RejectCount 1
+
+scenario while reset is held, camera results and pulses are ignored and the gate stays off
+set InspectFail TRUE          # part A is bad
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0001
+set ResetPB TRUE              # reset pressed and held
+scan 2
+expect TrackWord 16#0000
+set InspectFail TRUE          # a camera result while reset is still held
+scan 2
+set InspectFail FALSE
+scan 2
+expect TrackWord 16#0000
+expect RejectGate FALSE
+set EncoderPulse TRUE         # the belt moves while reset is still held
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect TrackWord 16#0000
+set ResetPB FALSE
+scan 2
+expect TrackWord 16#0000
+set EncoderPulse TRUE         # pulse 2
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 3
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 4
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 5
+scan 2
+set EncoderPulse FALSE
+scan 2
+set EncoderPulse TRUE         # pulse 6
+scan 2
+set EncoderPulse FALSE
+scan 2
+expect RejectGate FALSE
+expect TrackWord 16#0000
+expect RejectCount 0

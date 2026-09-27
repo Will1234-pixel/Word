@@ -592,8 +592,9 @@ average). With ten samples 100 ms apart, the window is about one second.
 Compared with the first-order lag: after a step the moving average ramps in a straight line
 and arrives *exactly* after N samples, and for random noise it reduces the scatter by a
 factor of √N (ten samples: about 3.2 times). On a steady ramp it lags by about half its
-window ((N − 1)/2 sample intervals, 0.45 s for the example above). It costs memory for the buffer and a loop each
-scan. Adding the whole buffer every scan, as above, is simple and cannot drift; for long
+window ((N − 1)/2 sample intervals, 0.45 s for the example above). It costs memory for the
+buffer and a loop each scan. Adding the whole buffer every scan, as above, is simple and
+cannot drift; for long
 windows, keep a running sum instead (subtract the oldest sample, add the newest) and
 recalculate it now and then.
 
@@ -1171,8 +1172,9 @@ Micro800 controllers (CCW) use plug-in or expansion modules; check each module's
 **CODESYS.** The raw format depends entirely on the I/O module or fieldbus device; read its
 manual. The Util library has `LIN_TRAFO` (linear scaling), `HYSTERESIS` (INT inputs, output
 TRUE below `LOW`: the opposite sense to the MATIEC block of the same name, Section 7.4) and
-`LIMITALARM`, and the free OSCAT BASIC library adds many filter and scaling blocks. `TIME_TO_REAL` returns
-milliseconds, so the ratio trick in Section 4.2 keeps filter code portable. With edition 3
+`LIMITALARM`, and the free OSCAT BASIC library adds many filter and scaling blocks.
+`TIME_TO_REAL` returns milliseconds, so the ratio trick in Section 4.2 keeps filter code
+portable. With edition 3
 object orientation you could build the analog input as a class with methods; see
 [Module 21](../21-architecture-and-standards/).
 
@@ -1183,9 +1185,10 @@ at 4 mA (1 V) and about 32768 at 20 mA (5 V), so the 4–20 mA span uses only 40
 counts, and a 10-bit ADC gives only about 400 real steps across it. There are no
 card diagnostics, so software range checks are your only line-fault detection. The MATIEC
 library adds `HYSTERESIS`, `RAMP`, `INTEGRAL`, `DERIVATIVE` and `PID` blocks; all but
-`HYSTERESIS` take a `CYCLE` input for the sample time. In the MATIEC build used by `plctest`, `TIME_TO_REAL`
-returns seconds, and `+`/`-` between two TIME values compile but then fail in the C build;
-`ADD_TIME` and `SUB_TIME` work.
+`HYSTERESIS` take a `CYCLE` input for the sample time. In MATIEC and OpenPLC,
+`TIME_TO_REAL` returns seconds. TIME arithmetic (`+`, `-`, `ADD_TIME`, `SUB_TIME`) works in
+both `plctest` and OpenPLC; `plctest` works around an upstream MATIEC code-generation bug for
+`+`/`-` ([Appendix E](../appendices/E-matiec-openplc-notes.md)).
 
 ## Labs
 
@@ -1266,11 +1269,10 @@ Work in the order the requirements are listed. Work out `Good` first; then one `
 `IN := NOT Good` gives the confirmation delay, and `Fault` is its `Q`. The direction flags
 are `Fault AND (Current_mA <= 3.6)` and `Fault AND (Current_mA >= 21.0)`. (One timer per
 band looks natural, but then a jump from one band to the other restarts the delay and the
-fault clears for a while.) For the filter keep a REAL
-state variable and a BOOL "filter ready": when `Good` and not ready, load the state with the
-scaled value and set ready; when `Good` and ready, apply
-`State := State + Alpha * (Scaled - State)`; when `Good` is FALSE, don't touch the state (that
-*is* the hold). Clear "ready" whenever `Fault` is TRUE. Finally `Value` is `SubstValue` if
+fault clears for a while.) For the filter keep a REAL state variable and a BOOL "filter
+ready": when `Good` and not ready, load the state with the scaled value and set ready; when
+`Good` and ready, apply `State := State + Alpha * (Scaled - State)`; when `Good` is FALSE,
+don't touch the state (that *is* the hold). Clear "ready" whenever `Fault` is TRUE. Finally `Value` is `SubstValue` if
 `Fault AND UseSubst`, otherwise the state. For alpha, see Section 4.2.
 </details>
 
@@ -1467,9 +1469,9 @@ Demand := TRUE; ELSIF Level <= 1.0 THEN Demand := FALSE; END_IF;` and finally
    broken wire reads 0 mA, which is a valid 0 %, so the PLC cannot tell it from a real zero.
    On 4–20 mA it reads 0 mA, far below 3.6 mA: an obvious under-range fault.
 3. It shows **0**. `Raw / 27648` is an integer division, and any value below 27648 gives 0;
-   only full scale (and over-range) gives 250. Even `Raw * 250 / 27648` is risky, because the intermediate
-   product does not fit an INT on platforms that calculate in 16 bits, and the result has only
-   whole-unit resolution. Write `Flow := INT_TO_REAL(Raw) * 250.0 / 27648.0;` with `Flow` a
+   only full scale (and over-range) gives 250. Even `Raw * 250 / 27648` is risky, because
+   the intermediate product does not fit an INT on platforms that calculate in 16 bits, and
+   the result has only whole-unit resolution. Write `Flow := INT_TO_REAL(Raw) * 250.0 / 27648.0;` with `Flow` a
    REAL.
 4. No. The failure signal is ≤ 3.6 mA; 3.7 mA lies in the gap between 3.6 and 3.8 mA, which
    is neither a valid measurement nor a failure signal. A typical program shows the bottom of
@@ -1517,4 +1519,4 @@ Demand := TRUE; ELSIF Level <= 1.0 THEN Demand := FALSE; END_IF;` and finally
   transmitter manual for its square-root and low-flow cut-off settings.
 
 ---
-Previous: [13 — Sequential Control](../13-sequential-control/) · Next: [15 — PID Control](../15-pid-control/)
+Previous: [13 — Sequential Control: State Machines and SFC](../13-sequential-control/) · Next: [15 — PID and Closed-Loop Control](../15-pid-control/)

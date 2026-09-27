@@ -940,8 +940,8 @@ the operator stops the pump to clear the strainer. At t = 66 s the pump is resta
 
 While the timer is not called, it keeps its last state: IN TRUE and timing since t = 0. It
 never saw IN go FALSE, so it never reset. When it is called again at t = 66 s (the flow has
-not had time to build up yet, so IN is still TRUE), the MATIEC timer used by OpenPLC and
-`plctest` compares the clock with the time it started, finds 66 s have passed, and sets `Q`
+not had time to build up yet, so IN is still TRUE), the MATIEC timer used by `plctest` and
+the OpenPLC Runtime v3 compares the clock with the time it started, finds 66 s have passed, and sets `Q`
 at once: the pump trips on "low flow" the moment it restarts. Other platforms may behave
 differently in detail, for example continuing from the frozen 6 s, which is itself a reason
 never to rely on it. The fault only appears when the pump was stopped *during* a low-flow
@@ -1111,9 +1111,11 @@ single-stepping halt the task at that point, so the outputs it drives are no lon
 never use them on a running machine. Trace, cross-reference and the device log are the main
 diagnostic tools.
 
-**OpenPLC and this course.** The OpenPLC Runtime lets you watch variable values while the
-program runs; the monitoring and forcing features depend on the Runtime and Editor versions,
-so check the documentation for yours. In this course, `plctest` gives you the commissioning
+**OpenPLC and this course.** The OpenPLC Editor's built-in simulator shows live variable
+values in its debugger panel, where you can also change them to simulate field inputs, so you
+can practise monitoring without any hardware. With the Runtime on real hardware, the
+monitoring and forcing features depend on the Runtime and Editor versions, so check the
+documentation for yours. In this course, `plctest` gives you the commissioning
 engineer's best friend: a repeatable acceptance test. Every scenario starts from a cold start
 ([Appendix E](../appendices/E-matiec-openplc-notes.md)), so a power cut with retained memory is simulated by writing the retained values
 before the first scan, as Lab 23-2 does.

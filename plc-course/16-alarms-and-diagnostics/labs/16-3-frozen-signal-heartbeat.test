@@ -550,3 +550,18 @@ wait 7500ms                        # about 9.8 s
 expect HeartbeatOut 9
 wait 500ms                         # about 10.3 s
 expect HeartbeatOut 10
+
+scenario this PLC's own heartbeat goes from 32767 back to 0 and never goes negative
+# The test presets HeartbeatOut, so the logic must count in HeartbeatOut
+# itself (README, requirement 8).
+set PumpRunFb FALSE
+set PartnerHB 0
+set ScadaHB 0
+scan
+set HeartbeatOut 32766
+wait 1500ms                        # about 1.5 s: one count
+expect HeartbeatOut 32767
+wait 1000ms                        # about 2.5 s: the wrap
+expect HeartbeatOut 0
+wait 1000ms                        # about 3.5 s
+expect HeartbeatOut 1

@@ -1,0 +1,79 @@
+scenario P1 start/stop seal-in
+set StartPB TRUE
+wait 100ms
+set StartPB FALSE
+wait 1s
+expect Motor TRUE
+expect RunLamp TRUE
+set StopPB_NC FALSE
+wait 100ms
+expect Motor FALSE
+set StopPB_NC TRUE
+wait 1s
+expect Motor FALSE
+
+scenario P2 on-delay needs 3 s, off-delay runs on 5 s
+set DelayPB TRUE
+wait 2800ms
+expect DelayLamp FALSE
+wait 400ms
+expect DelayLamp TRUE
+set DelayPB FALSE
+wait 100ms
+expect DelayLamp FALSE
+set FanSwitch TRUE
+wait 100ms
+expect Fan TRUE
+set FanSwitch FALSE
+wait 4800ms
+expect Fan TRUE
+wait 400ms
+expect Fan FALSE
+
+scenario P3 beacon flashes about 0.5 s on, 0.5 s off
+wait 200ms
+expect Beacon TRUE
+until Beacon FALSE within 1s
+until Beacon TRUE within 1s
+until Beacon FALSE within 1s
+set Enable FALSE
+wait 200ms
+expect Beacon FALSE
+
+scenario P4 five bottles fill a box
+set BottleSensor TRUE
+wait 100ms
+set BottleSensor FALSE
+wait 100ms
+set BottleSensor TRUE
+wait 100ms
+set BottleSensor FALSE
+wait 100ms
+set BottleSensor TRUE
+wait 100ms
+set BottleSensor FALSE
+wait 100ms
+set BottleSensor TRUE
+wait 100ms
+set BottleSensor FALSE
+wait 100ms
+expect Count = 4
+expect BoxFull FALSE
+set BottleSensor TRUE
+wait 100ms
+expect Count = 5
+expect BoxFull TRUE
+set ResetPB TRUE
+wait 100ms
+set ResetPB FALSE
+wait 100ms
+expect Count = 0
+
+scenario P5 tank cycles between 20 and 80 percent
+expect InletPump FALSE
+until InletPump TRUE within 20s
+print Level
+until InletPump FALSE within 30s
+print Level
+expect HighAlarm FALSE
+until InletPump TRUE within 40s

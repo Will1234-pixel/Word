@@ -121,7 +121,7 @@ PROGRAM DosingSkid
     LOW_LEVEL_SET   : REAL := 10.0;     (* %: stop the pumps below this *)
     LOW_LEVEL_CLEAR : REAL := 15.0;     (* %: allow starts again above this *)
     P1_FB_TIMEOUT   : TIME := T#3s;
-    P2_FB_TIMEOUT   : TIME := T#5s;     (* larger pump, slower contactor *)
+    P2_FB_TIMEOUT   : TIME := T#5s;     (* legacy value, kept on purpose: see the header *)
   END_VAR
   VAR
     LowLevel : FB_LowAlarm;         (* LAL-200 *)

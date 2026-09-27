@@ -31,8 +31,8 @@ PROGRAM PedCrossing
     PedClearTime : TIME := T#4s;   (* flashing green figure *)
   END_VAR
   VAR (* internal - add your own helper variables here *)
-    State      : E_Crossing := E_Crossing#Startup;
-    PrevState  : E_Crossing := E_Crossing#Startup;
+    State      : E_Crossing := Startup;
+    PrevState  : E_Crossing := Startup;
     FirstScan  : BOOL := TRUE;
     StepEntry  : BOOL;           (* TRUE on the first scan in a state *)
     StepTimer  : TON;            (* time spent in the current state *)

@@ -1,6 +1,6 @@
 # 13 — Sequential Control: State Machines and SFC
 
-> **Level:** 3 — Structured programming · **Time:** ~12 hours · **Prerequisites:** [07 — Timers](../07-timers/), [10 — Structured Text in Depth](../10-structured-text/), [12 — Data Structures](../12-data-structures/)
+> **Level:** 3 — Structured programming · **Time:** ~12 hours · **Prerequisites:** [07 — Timers](../07-timers/), [10 — Structured Text in Depth](../10-structured-text/), [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/)
 
 Much of what a plant does happens in **steps**. A duty pump opens its suction valve, starts
 against a closed discharge valve, waits for pressure, then opens the discharge. A batch
@@ -77,8 +77,8 @@ Read it with a pencil and mark four kinds of words:
 | "open", "start", "close" | an **action**: what the outputs do *in* a state | `SuctionOpen := TRUE` in *OpenSuction* and later states |
 | "maximum 20 s", "if ... trips" | a **watchdog** or monitoring transition to a fault state | `StepTimer.ET >= T#20s` → *Fault* |
 
-Starting a centrifugal pump against a closed discharge valve keeps the starting power and
-pressure surge low, which is why the description asks for it. (A positive-displacement pump
+Starting a centrifugal pump (of the usual radial-flow type) against a closed discharge valve
+keeps the starting power and pressure surge low, which is why the description asks for it. (A positive-displacement pump
 must never run against a closed discharge.) The watchdog in that step also limits how long
 the pump churns against the closed valve.
 
@@ -204,8 +204,8 @@ END_TYPE
 - The online view shows `RUNNING` instead of a bare number, and the compiler refuses a number
   where a state is expected.
 - Many plants and platforms use integer step numbers instead, often in steps of 10
-  (10, 20, 30...) to leave room for inserting steps. Logix has no user-defined enumerations,
-  and TIA Portal has traditionally had none, so there you declare named constants
+  (10, 20, 30...) to leave room for inserting steps. Logix and TIA Portal have traditionally
+  had no user-defined enumerations, so there you declare named constants
   (`STEP_FILL := 20`). In CODESYS you can give enumeration values explicit numbers; MATIEC
   cannot (Module 12).
 - Don't call the variable `Step`: `STEP` is a reserved word in IEC 61131-3 (it belongs to
@@ -292,6 +292,12 @@ Points to notice:
 - On scan k the old time (12.34 s) is still in `ET`, but the *StartPump* branch does not run
   on scan k (`CASE` runs only one branch), so no *StartPump* transition can see it. On scan
   k+1, `ET` is already 0. A transition therefore never fires on the previous state's time.
+- Code **after** the `CASE` does run on scan k, with the new state and the old time. An
+  output that depends on the step time, such as "feed down 0.5 s after the spindle starts",
+  written as `FeedDown := (State = E_Drill#Drill) AND (StepTimer.ET >= SpinUpTime);`,
+  flashes on for that one scan whenever the state before lasted longer than 0.5 s. Add
+  `AND (State = PrevState)`: `PrevState` holds the state the scan started in, so the term is
+  FALSE on the scan of a transition. Better still, give such a delay its own state.
 - The step time starts two scans after the transition, so a 5 s step lasts 5 s plus two
   scans. For process sequences this does not matter. Where it does, give that step its own
   TON with `IN := State = E_PumpSeq#StopPump`, which starts timing one scan earlier.
@@ -397,7 +403,8 @@ Every state that waits for the plant has a **watchdog** transition to a fault st
 
 **Abort** is an operator command that ends the sequence from any active state, now. It is
 usually handled *before* the `CASE`, so that it does not have to be repeated in every
-branch:
+branch (`Running` here is a BOOL that is TRUE in the process states, *Filling* to
+*Draining*, as in Lab 13-2):
 
 ```iecst
   IF AbortCmd AND (Running OR (State = E_Batch#Held)) THEN
@@ -641,7 +648,10 @@ gives a **qualifier** (and a time for the timed qualifiers). An action is either
 
 The same action can be associated with several steps. The standard defines how all its
 associations combine through an "action control" block. In short, all the reasons for being
-active are ORed, and an **R** association wins over everything else.
+active are ORed, and an **R** association wins over everything else. The standard also asks
+for a named action's body to be executed **one final time** after the action becomes
+inactive, so that the body can tidy up (for example switch off what it switched on). Tools
+differ here: CODESYS applies this rule, MATIEC does not (sections 3.10 and 3.11).
 
 ### 3.5 Action qualifiers
 
@@ -650,7 +660,7 @@ active are ORed, and an **R** association wins over everything else.
 | **N** (or none) | Non-stored | exactly while the step is active | a valve open during one step |
 | **S** | Set (stored) | from step activation until an **R** for the same action, even after the step has ended | a motor that runs through several steps |
 | **R** | overriding Reset | not at all: R switches the action off, overriding everything else, and ends an **S**, **SD**, **DS** or **SL** action | the step where the motor stops |
-| **P** | Pulse | once, when the step is activated | count, capture, log |
+| **P** | Pulse | once, when the step is activated | count, capture, log (but see the final execution in section 3.4) |
 | **L** | time Limited | from step activation for the given time, or until the step ends if sooner | a blow-off lasting at most 1 s |
 | **D** | time Delayed | from the given time after step activation until the step ends; never if the step ends first | start the feed after the spindle has run up |
 | **SD** | Stored and time Delayed | from the given time after activation until **R**, even if the step ended before the time | start the cooling fan 2 min after the burner starts, whatever happens next |
@@ -855,8 +865,9 @@ section only through its convergence.
 
 ### 3.10 Textual SFC, as MATIEC compiles it
 
-IEC 61131-3 defines a textual form of SFC alongside the graphical one. MATIEC compiles it,
-the OpenPLC Editor generates it from a graphical chart, and it is what Lab 13-3 uses:
+IEC 61131-3 defines a textual form of SFC alongside the graphical one. MATIEC compiles it
+(earlier OpenPLC Editor versions generated it from a graphical chart, see section 3.11), and
+it is what Lab 13-3 uses:
 
 ```iecst
   INITIAL_STEP Idle:                       (* exactly one initial step *)
@@ -908,31 +919,31 @@ Behaviour of MATIEC's textual SFC, all checked with `plctest`:
 | A step is left, at the earliest, on the scan after it was activated | Nothing: this is the one-step-per-scan behaviour you want |
 | A **P** action on the *initial* step does not run at power-up (the initial step counts as already active); it runs when the step is activated again later | Don't rely on it for initialisation; use a first-scan flag |
 | A Boolean variable with **N** is written TRUE while its step is active and FALSE in the scan its step is deactivated, step by step in the order the steps are written. If one variable is N-associated with two consecutive steps, and the chart moves from the later-written step to the earlier-written one, the output drops for one scan | Use **S** and **R** for an output that spans several steps, or drive it from step flags outside the chart |
-| An action body runs only while the action is active; there is no extra "final" execution after it ends | Switch off in another step (R) or use qualifiers on Boolean variables |
+| An action body runs only while the action is active; there is no "final" execution after it ends, although the standard asks for one. A variable assigned inside the body keeps its last value | Switch off in another step (R) or use qualifiers on Boolean variables |
 | **P0** on a Boolean variable sets it TRUE when the step is deactivated and nothing sets it FALSE again | Use P0 only with named actions |
 | Step names share the namespace with variables, and `STEP` is a keyword | Use distinct names: a step `Clamp`, a variable `ClampValve` |
 | `plctest` cannot address `Drill.X` in a `.test` file | Test outputs. For debugging only, `print Drill_X` shows MATIEC's internal name for the flag |
 
 ### 3.11 Graphical SFC: OpenPLC Editor and CODESYS
 
-In the **OpenPLC Editor** you draw the chart graphically: steps, transitions, action blocks,
-divergences and jumps from the SFC toolbox, with conditions and action bodies in ST, LD or
-FBD. When the program is built, the editor generates the textual form of section 3.10 for
-MATIEC. You can therefore draw Lab 13-3 in the editor, save the generated `.st` file, and run
-it against the lab's test as described in
-[Module 00](../00-start-here/README.md#testing-ladder-you-drew-in-openplc-editor).
+The current **OpenPLC Editor** (v4) offers LD, FBD, ST and IL, but SFC is not listed among
+its languages ([Module 00](../00-start-here/README.md#option-2--openplc-editor-graphical-ladder-and-fbd-free-with-a-simulator)).
+Earlier versions, built on the Beremiz editor, had a graphical SFC editor that generated the
+textual form of section 3.10 for MATIEC, which is why you will still see OpenPLC SFC charts
+in older tutorials. With the current Editor, write Lab 13-3 as textual SFC and run it with
+`plctest`, or draw the chart in CODESYS.
 
-**CODESYS** has a full SFC editor, with some differences from the plain standard worth
-knowing:
+**CODESYS** has a full SFC editor, with some extensions and behaviour worth knowing:
 
 - Besides **IEC actions** with qualifiers, each step can have **step actions**: an *entry*
   action (once on activation), an *active* action (every scan while active) and an *exit*
   action (once on deactivation). Entry and exit actions are the natural home for counting
   and logging in CODESYS.
-- CODESYS documents that an IEC action is executed **one more time after it is
-  deactivated**, and consequently that a **P** action runs twice: once when its step is
-  activated and once when it is deactivated. A counter incremented in a P action counts
-  double. Use an entry action for Lab 13-3's hole counter if you rebuild it in CODESYS.
+- CODESYS applies the standard's final execution: an IEC action is executed **one more
+  time after it is deactivated**. Its documentation spells out the consequence: a **P**
+  action runs twice, once when its step is activated and once when it is deactivated. A
+  counter incremented in a P action counts double. Use an entry action for Lab 13-3's hole
+  counter if you rebuild it in CODESYS.
 - Implicit **SFC flags** can be declared to control the chart from outside, for example
   `SFCInit` and `SFCReset` (return to the initial step), `SFCPause` (freeze the chart),
   `SFCError` with `SFCEnableLimit` (step time monitoring), and `SFCTip`/`SFCTipMode` for
@@ -956,7 +967,7 @@ What differs:
 | Purpose | Specify behaviour, for any technology | Program a PLC |
 | Actions | Continuous actions (optionally with an assignment condition), stored actions on activation, deactivation or an event | Qualifiers N, S, R, P, L, D, SD, DS, SL |
 | Structuring | Macro-steps, enclosing steps, forcing orders between partial GRAFCETs | Actions, sub-charts in some tools, vendor features |
-| Evolution | Five rules, plus the rule that a step activated and deactivated at once stays active; unstable ("transient") situations are passed through without executing continuous actions | Evaluated once per scan in most PLCs; each step lasts at least one scan |
+| Evolution | Five evolution rules, the fifth being that a step activated and deactivated at the same time stays active; unstable ("transient") situations are passed through without executing continuous actions | Evaluated once per scan in most PLCs; each step lasts at least one scan |
 
 In practice, a GRAFCET in a machine specification maps almost one-to-one onto an SFC or a
 `CASE` state machine. Watch for the places where GRAFCET's instantaneous evolution and a
@@ -1001,7 +1012,7 @@ notices when production has stopped.
   Both can exist: the valve FB raises "failed to open", and the sequence decides what the
   batch does about it.
 
-Vendor tools have this built in: step maximum times in CODESYS, the `.AlarmHi`/`.LimitHi`
+Vendor tools have this built in: step maximum times in CODESYS, the `.LimitHigh`/`.AlarmHigh`
 members of a Rockwell step, and supervision conditions in Siemens GRAPH (see Vendor notes).
 
 ### 4.2 Interlocks live outside the sequence
@@ -1289,7 +1300,8 @@ How it behaves:
 - **Motor trip.** In *Running*, the trip check comes before the stop check: a trip must be
   reported even if the operator happened to press Stop in the same scan.
 - **Reset** is accepted only with the run request removed, so a reset cannot restart the
-  pump by surprise.
+  pump by surprise. `ResetPB` is used as a level to keep the example short; on a real panel,
+  act on its rising edge (section 4.4), as Lab 13-2 does.
 - **Missing on purpose:** interlocks (low suction level, for example) belong in the device
   layer on `PumpRun` (section 4.2), and in a real plant the valves and the motor would be
   device FBs with their own feedback supervision ([Module 11](../11-program-organization/)).
@@ -1558,7 +1570,7 @@ PROGRAM TankControl
   VAR (* I/O *)
     StartPB         AT %IX0.0 : BOOL;
     LevelHighLS     AT %IX0.1 : BOOL;
-    LevelHighHighOK AT %IX0.2 : BOOL;  (* independent high-high switch, TRUE while NOT high-high *)
+    LevelHH_NC      AT %IX0.2 : BOOL;  (* independent high-high switch, NC: TRUE while NOT high-high *)
     InletValve      AT %QX0.0 : BOOL;
     Agitator        AT %QX0.1 : BOOL;
   END_VAR
@@ -1569,7 +1581,7 @@ PROGRAM TankControl
   Chart(StartCmd := StartPB, LevelHigh := LevelHighLS);
 
   (* Interlocks live outside the chart and apply whatever step it is in. *)
-  InletValve := Chart.FillReq AND LevelHighHighOK;
+  InletValve := Chart.FillReq AND LevelHH_NC;
   Agitator   := Chart.MixReq;
 END_PROGRAM
 
@@ -1581,7 +1593,7 @@ CONFIGURATION Config0
 END_CONFIGURATION
 ```
 
-The high-high switch is wired normally-closed style (`_OK`, TRUE when healthy), so a broken
+The high-high switch is wired normally-closed (`_NC`, TRUE when healthy), so a broken
 wire also closes the inlet. As a *basic process control* interlock this is good practice.
 If the hazard analysis makes high-high level a safety function, it goes to an independent
 safety system instead ([Module 20](../20-functional-safety/)).
@@ -1594,6 +1606,7 @@ safety system instead ([Module 20](../20-functional-safety/)).
 | Outputs set and reset inside the transitions | Aborts and jumps leave outputs on; "why is this on?" needs the whole program | One assignment per output, derived from the state |
 | Separate `IF`s instead of `CASE`/`ELSIF` | Several states in one scan; outputs and entry actions skipped | `CASE State OF` |
 | A step timer that is not reset on every change, or one timer shared by two states | Steps end early because the time carries over | `StepTimer(IN := NOT StepEntry, ...)` every scan |
+| An output timed from `StepTimer.ET` after the `CASE` | It flashes on for one scan on the transition, using the previous state's time | `AND (State = PrevState)`, or a separate state (section 2.3) |
 | Entry actions evaluated after the transitions | Counting twice when a state lasts one scan | Entry actions before the transitions (section 2.4) |
 | No `ELSE` in the `CASE` | An impossible value freezes the sequence silently | `ELSE` → fault or initial state |
 | No watchdog on a step that waits for the plant | The sequence waits forever with no alarm | A timeout on every such step |
@@ -1613,7 +1626,8 @@ safety system instead ([Module 20](../20-functional-safety/)).
 ### Siemens (TIA Portal): GRAPH and SCL
 
 - **GRAPH** is Siemens' SFC language, available in TIA Portal for S7-300, S7-400 and
-  S7-1500 controllers (not the S7-1200). A GRAPH sequence is a function block with an
+  S7-1500 controllers; the S7-1200 has not supported it, so check your CPU before planning
+  on it. A GRAPH sequence is a function block with an
   instance data block. It has steps, transitions, alternative and simultaneous branches and
   jumps, and actions with qualifiers including **N**, **S**, **R**, **D** and **L**, plus
   **CALL** to call a block and event-triggered actions (for example on step activation).
@@ -1634,15 +1648,15 @@ safety system instead ([Module 20](../20-functional-safety/)).
 - A routine can be of type **SFC**. Each step has a tag of type `SFC_STEP` with members such
   as `.X` (active), `.FS` (first scan), `.LS` (last scan), `.T` (time active, in
   milliseconds), `.PRE` and `.DN` (a built-in step timer), `.Count` (number of activations)
-  and `.TMax`, plus alarm members (`.AlarmEn`, `.LimitHi`, `.AlarmHi`) that serve as step
-  watchdogs. Actions have `SFC_ACTION` tags and use the IEC qualifiers.
+  and `.TMax` (longest time active), plus alarm members (`.AlarmEn`, `.LimitHigh` and
+  `.AlarmHigh`, `.LimitLow` and `.AlarmLow`) that serve as step watchdogs. Actions have `SFC_ACTION` tags and use the IEC qualifiers.
 - Instructions `SFR` (SFC Reset) and `SFP` (SFC Pause) control a chart from outside, for
   example to reset it to its initial step after an abort.
 - Controller properties include SFC execution options, for example whether a scan executes
   only the currently active steps or continues until a false transition, and how the last
   scan of a step is handled. Check them before porting a chart between projects.
-- **ST state machines** use `CASE` on a `DINT` step number: Logix has no user-defined
-  enumerations. Describe each value in the tag description.
+- **ST state machines** use `CASE` on a `DINT` step number, because Logix has traditionally
+  had no user-defined enumerations. Describe each value in the tag description.
 
 ### CODESYS (and TwinCAT 3)
 
@@ -1657,14 +1671,19 @@ safety system instead ([Module 20](../20-functional-safety/)).
 
 ### OpenPLC and MATIEC (`plctest`)
 
-- The OpenPLC Editor draws SFC graphically and generates textual SFC; `plctest` compiles the
-  same textual form (section 3.10).
+- The current OpenPLC Editor (v4) does not list SFC among its languages; earlier versions
+  drew SFC graphically and generated textual SFC (section 3.11). `plctest` compiles the
+  textual form of section 3.10, and so does the OpenPLC Runtime's compiler.
 - MATIEC's behaviour for alternative branches, **N** associations, the initial step and final
   executions differs from other tools as listed in section 3.10. The labs are written so that
   none of these differences matters, but remember them when you port a chart.
-- TIME arithmetic: use `ADD_TIME` and `SUB_TIME` rather than `+` and `-` on TIME values
+- TIME arithmetic: infix `+` and `-` on TIME values and the functions `ADD_TIME` and
+  `SUB_TIME` both work in `plctest` and OpenPLC
   ([Module 07, section 2.3](../07-timers/README.md#23-arithmetic-and-comparisons)). Lab 13-2
-  needs this for the banked mixing time.
+  uses `ADD_TIME` for the banked mixing time. Remember the MATIEC quirk described there: a
+  sum whose fractional parts add up to exactly one second (`T#4500ms + T#500ms`) compares
+  as *less* than the equal value (`T#5s`), so a `>=` test on a sum can fire one scan late.
+  Never test a TIME sum for exact equality.
 - Enumerations: plain values only, `=` and `<>` only (Module 12).
 
 ## Labs
@@ -1853,8 +1872,12 @@ Not drawn: **Abort** leads from every running state and from *Held* to *Idle*.
 1. At power-up the sequence is in *Idle* with every output off, and nothing starts by
    itself.
 2. Every output follows the state/output table in every state.
-3. **Commands act on the press** (rising edge). A Start button held down through a whole
-   batch does not start another batch.
+3. **Commands act on the press** (rising edge), and a button kept pressed acts only once.
+   A Start button held down through a whole batch does not start another batch; a Hold
+   button still held does not hold again after Resume; a Resume button still held does not
+   resume the next hold; a Reset button held down does not clear a fault that happens
+   later. (Abort may also act for as long as it is held; the test accepts both, and a
+   stuck Abort button that stops every batch fails in the safe direction.)
 4. Start is accepted only in *Idle* and *Complete*. *Filling* ends when `LevelHighLS` is
    TRUE; the inlet valve closes in that same scan. The inlet valve is never open while
    `LevelHighLS` is TRUE, not even for one scan (a start with a full tank goes straight on to
@@ -1988,6 +2011,14 @@ The test checks outputs only, so a `CASE` state machine would also pass. Write t
 anyway: the point of the lab is choosing qualifiers. If you draw it in CODESYS, count the
 hole in the *Dwell* step's entry action instead of a P action (section 3.11).
 
+To keep the chart simple, Start and Reset are level-sensitive here: the transitions read
+`StartPB` and `ResetPB` directly. Requiring the drilled part to be removed first means a held
+button cannot drill the same part twice, but a Start button held while a new part is loaded
+would still start the cycle, and a jammed Reset button would clear the next feed fault as
+soon as it appeared. A real station uses edges (section 4.4) and, where hands are near
+the clamp, a two-hand control or a guard, which are safety functions
+([Module 20](../20-functional-safety/)).
+
 <details>
 <summary>Hint (open only if stuck)</summary>
 
@@ -2061,8 +2092,9 @@ The *Unload* step has no actions at all.
    when the step ended before 5 s; N, L and D ended with the step. t = 6 s: only SD, which
    came on at 5 s and stays on until reset; SL ended at 5 s.
 6. MATIEC fires both transitions: *Accept* and *Reject* both become active, and the chart
-   now has two active steps where there should be one, which makes the result depend on
-   luck. Make the conditions mutually exclusive:
+   now has two active steps where there should be one. The part is both accepted and
+   rejected, and from then on the chart no longer follows its design. Make the conditions
+   mutually exclusive:
    `WeightOK` and `NOT WeightOK AND (Weigh.T >= T#3s)`. The good part is then accepted, which
    is the right priority, and the chart is correct in every tool.
 7. The convergence transition can only fire when all its preceding steps are active. The
@@ -2096,4 +2128,4 @@ The *Unload* step has no actions at all.
 - CODESYS online help: "SFC" (qualifiers, step actions, SFC flags, processing order).
 
 ---
-Previous: [12 — Data Structures](../12-data-structures/) · Next: [14 — Analog Signals and Process I/O](../14-analog-and-process-io/)
+Previous: [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/) · Next: [14 — Analog Signals and Process I/O](../14-analog-and-process-io/)

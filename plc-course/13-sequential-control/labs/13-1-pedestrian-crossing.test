@@ -3,8 +3,9 @@
 # the minimum green, every phase duration (just before and just after each
 # preset), the lamps in every phase, the flashing clearance phase, the
 # request latch and WAIT lamp, requests during the walk phase (ignored) and
-# during the clearance phase (kept for the next cycle), and that the
-# pedestrian green never lights together with vehicle green or amber.
+# during the clearance phase (kept for the next cycle), that the
+# pedestrian green never lights together with vehicle green or amber, and
+# that every phase time is taken from its setting.
 # Interface: PedPB, CarRed, CarAmber, CarGreen, PedRed, PedGreen, WaitLamp,
 # StartupTime (3 s), RedAmberTime (2 s), MinGreen (10 s), AmberTime (3 s),
 # AllRedTime (2 s), WalkTime (6 s), PedClearTime (4 s).
@@ -77,6 +78,7 @@ expect WaitLamp TRUE
 wait 1800ms                    # 90 % of all red
 expect PedGreen FALSE
 expect PedRed TRUE
+expect WaitLamp TRUE           # still waiting: the request is kept until the walk
 until PedGreen = TRUE within 500ms
 expect PedRed FALSE            # walk
 expect WaitLamp FALSE          # WAIT goes out when the green figure lights
@@ -215,3 +217,51 @@ wait 18s
 expect CarGreen TRUE
 expect CarAmber FALSE
 until CarAmber = TRUE within 3s
+
+scenario every phase time comes from the settings
+set StartupTime T#1s
+set RedAmberTime T#1500ms
+set MinGreen T#4s
+set AmberTime T#2s
+set AllRedTime T#1s
+set WalkTime T#3s
+set PedClearTime T#2s
+scan
+wait 850ms                     # about 85 % of the 1 s start-up
+expect CarRed TRUE
+expect CarAmber FALSE
+until CarAmber = TRUE within 350ms
+wait 1300ms                    # about 87 % of the 1.5 s red+amber
+expect CarGreen FALSE
+expect CarAmber TRUE
+until CarGreen = TRUE within 450ms
+set PedPB TRUE
+wait 100ms
+set PedPB FALSE
+wait 3400ms                    # about 3.5 s into the 4 s minimum green
+expect CarGreen TRUE
+expect WaitLamp TRUE
+until CarAmber = TRUE within 750ms
+expect CarGreen FALSE
+wait 1750ms                    # about 88 % of the 2 s amber
+expect CarAmber TRUE
+until CarAmber = FALSE within 450ms
+expect CarRed TRUE             # all red
+expect PedGreen FALSE
+wait 850ms                     # about 85 % of the 1 s all red
+expect PedGreen FALSE
+until PedGreen = TRUE within 350ms
+wait 2650ms                    # about 88 % of the 3 s walk
+expect PedGreen TRUE           # still steady (a flash would not last this long)
+wait 250ms
+expect PedGreen TRUE
+until PedGreen = FALSE within 750ms   # clearance: the first flash may start off or on
+expect PedRed FALSE
+expect CarRed TRUE
+wait 1250ms                    # at most 1.75 s into the 2 s clearance
+expect CarAmber FALSE
+expect CarRed TRUE
+until CarAmber = TRUE within 900ms
+expect CarRed TRUE             # red + amber after the shorter cycle
+expect PedGreen FALSE
+expect PedRed TRUE

@@ -141,6 +141,36 @@ wait 500ms
 expect P1_Run TRUE
 expect P2_Run FALSE
 
+scenario inside the 10-15 % band the pumps follow the low-level alarm, not the level
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set LevelRaw 13824               # 50 %
+scan
+set LevelRaw 3318                # falls to 12 %: the alarm has not come on
+wait 500ms
+expect LowLevelLamp FALSE
+set P1_StartPB TRUE              # so a start is allowed at 12 %
+scan
+set P1_StartPB FALSE
+set P1_RunFb TRUE
+wait 500ms
+expect P1_Run TRUE
+set LevelRaw 2000                # 7.2 %: low level stops the pump
+wait 500ms
+set P1_RunFb FALSE
+expect P1_Run FALSE
+set LevelRaw 3318                # recovers to 12 %: the alarm is still on
+wait 500ms
+expect LowLevelLamp TRUE
+set P1_StartPB TRUE              # so starts are blocked at 12 % now
+set P2_StartPB TRUE
+scan
+set P1_StartPB FALSE
+set P2_StartPB FALSE
+wait 500ms
+expect P1_Run FALSE
+expect P2_Run FALSE
+
 # ------------------------------------------------------------ start and stop
 scenario pump 1 starts, seals in and stops; pump 2 is not affected
 set LevelRaw 13824
@@ -356,6 +386,27 @@ set P1_RunFb TRUE
 wait 1s
 expect P1_Run TRUE
 expect P1_FaultLamp FALSE
+
+scenario pressing stop does not clear a latched fault; only reset does
+set LevelRaw 13824
+set P1_StopPB_NC TRUE
+set P2_StopPB_NC TRUE
+set P1_StartPB TRUE
+scan
+set P1_StartPB FALSE
+until P1_FaultLamp = TRUE within 3500ms
+wait 500ms
+set P1_StopPB_NC FALSE           # operator presses stop on the faulted pump
+wait 500ms
+set P1_StopPB_NC TRUE
+wait 500ms
+expect P1_FaultLamp TRUE
+set P1_StartPB TRUE              # and a start is still blocked
+scan
+set P1_StartPB FALSE
+wait 500ms
+expect P1_Run FALSE
+expect P1_FaultLamp TRUE
 
 scenario one reset press clears the faults of both pumps
 set LevelRaw 13824

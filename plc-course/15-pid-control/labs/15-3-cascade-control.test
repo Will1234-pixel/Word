@@ -8,6 +8,7 @@
 # At power-up FIC-101 is in MAN with the valve at 50 %: 2.5 t/h and 50 degC, all steady.
 # Modes: MAN (FlowManual), AUTO (local setpoint), CAS (setpoint from TIC-101).
 # The tests use only the interface tags; TempMax/TempMin are monitors in the test bench.
+# Transitions tested: MAN->AUTO, AUTO->MAN, AUTO->CAS, CAS->AUTO, CAS->MAN->CAS.
 
 scenario power-up in MAN: steady, and the flow setpoint tracks the measured flow
 scan
@@ -21,7 +22,20 @@ expect FlowPV ~ 3.0 0.01            # 0.05 x 60
 expect FlowSP ~ 3.0 0.02            # PV tracking in MAN
 expect FlowSPLocal ~ 3.0 0.02
 
-scenario MAN to AUTO holds the present flow, then AUTO follows the local setpoint
+scenario MAN with the measured flow above range: FlowSP still stays within 0..5 t/h
+scan
+set SupplyFactor 1.2                # supply pressure above normal (simulation)
+set ValveManual 100.0               # 0.05 x 1.2 x 100 = 6 t/h, above the 5 t/h range
+wait 10s
+expect FlowPV ~ 6.0 0.02
+expect FlowSP <= 5.0                # PV tracking, but never outside the setpoint range
+expect FlowSP >= 4.99
+set FlowManual FALSE                # to AUTO: the flow loop brings the flow back into range
+until FlowPV <= 5.02 within 10s
+wait 5s
+expect FlowPV ~ 5.0 0.02
+
+scenario MAN to AUTO holds the present flow, AUTO follows the local setpoint, AUTO to MAN holds the valve
 wait 1s
 set ValveManual 60.0
 wait 10s
@@ -35,6 +49,15 @@ set FlowSPLocal 2.0
 until FlowPV <= 2.02 within 10s
 wait 5s
 expect FlowPV ~ 2.0 0.02
+expect ValvePos ~ 40.0 0.5
+set FlowManual TRUE                 # AUTO to MAN: the valve stays where the flow loop left it
+scan
+expect ValvePos ~ 40.0 0.5
+wait 5s
+expect ValvePos ~ 40.0 0.5
+expect FlowSP ~ 2.0 0.03            # PV tracking again in MAN
+set FlowManual FALSE                # and back to AUTO: still no bump
+scan
 expect ValvePos ~ 40.0 0.5
 set FlowSPLocal 7.0                 # beyond the 0-5 t/h range
 scan
@@ -90,7 +113,7 @@ set SupplyFactor 0.7                # 30 % less steam at the same valve position
 wait 10s
 expect FlowPV ~ 2.5 0.05            # the flow loop has already restored the flow
 wait 200s
-expect TempMin >= 49.0              # a single temperature loop would sag by about 3.5 degC
+expect TempMin >= 49.0              # a single temperature loop would sag by about 3.7 degC
 expect TempMax <= 51.0
 expect TempPV ~ 50.0 0.1
 expect ValvePos ~ 71.4 0.5          # the valve opened to 2.5 / (0.05 x 0.7) = 71.4 %

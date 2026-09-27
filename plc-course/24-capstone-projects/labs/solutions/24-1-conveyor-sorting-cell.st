@@ -300,8 +300,10 @@ FUNCTION_BLOCK FB_Tracker
        4. a part older than the jam time for its destination sets Jam;
        5. a new part is registered at Travel 0.
      Position (for the pushers) and time (for jams) are measured
-     independently on purpose: a slipping belt or a stuck part shows up as
-     a part that is late, even though the encoder says the belt moved. *)
+     independently on purpose. A part stuck against a guide while the belt
+     slides under it (the encoder keeps counting), and a belt slipping on
+     its drive drum while the motor runs (the measuring wheel stops, so the
+     encoder stops too), both show up the same way: a part that is late. *)
   VAR_INPUT
     EncCount    : UINT;          (* high-speed counter, 1 count = 1 mm, wraps 65535 -> 0 *)
     BeltRunning : BOOL;          (* conveyor motor on: running time accumulates *)
@@ -349,18 +351,19 @@ FUNCTION_BLOCK FB_Tracker
     Started := TRUE;
   END_IF;
   Delta := UINT_TO_DINT(EncCount) - UINT_TO_DINT(LastCount);
-  IF Delta > 32767 THEN
-    Delta := Delta - 65536;
-  ELSIF Delta < -32768 THEN
-    Delta := Delta + 65536;
+  IF Delta < -32768 THEN
+    Delta := Delta + 65536;      (* wrapped forwards, 65535 -> 0: this cell *)
+  ELSIF Delta > 32767 THEN
+    Delta := Delta - 65536;      (* wrapped backwards (a counter that can count down) *)
   END_IF;
   LastCount := EncCount;
 
   (* 1b. Time since the last scan, from a stopwatch that restarts itself
-         once an hour (Module 07, run-hours lab). *)
+         once an hour (the Lab 07-4 technique). The restart costs two scans
+         of running time an hour (about 20 ms), far below the jam times. *)
   Stopwatch(IN := NOT Stopwatch.Q, PT := T#1h);
   IF Stopwatch.ET > LastET THEN
-    ScanTime := SUB_TIME(Stopwatch.ET, LastET);
+    ScanTime := Stopwatch.ET - LastET;
   ELSE
     ScanTime := T#0s;
   END_IF;
@@ -377,7 +380,7 @@ FUNCTION_BLOCK FB_Tracker
     IF Parts[i].Active THEN
       Parts[i].Travel := Parts[i].Travel + Delta;
       IF BeltRunning THEN
-        Parts[i].Age := ADD_TIME(Parts[i].Age, ScanTime);
+        Parts[i].Age := Parts[i].Age + ScanTime;
       END_IF;
     END_IF;
   END_FOR;
@@ -534,16 +537,32 @@ PROGRAM SortingCell
     NewDest : E_Dest;
     Flash : BOOL;
 
-    StartEdge, ResetEdge : R_TRIG;
-    LaneAEdge, LaneBEdge, RejectEdge : R_TRIG;
+    (* FB instances are declared one per line: OpenPLC's compiler can crash on
+       'A, B : R_TRIG;' lists (see Appendix E). *)
+    StartEdge : R_TRIG;
+
+    ResetEdge : R_TRIG;
+    LaneAEdge : R_TRIG;
+    LaneBEdge : R_TRIG;
+    RejectEdge : R_TRIG;
     EntryFall   : F_TRIG;
     WarnTmr     : TON;
     EntryJamTmr : TON;
     FlashTmr    : TON;
-    LaneAFull, LaneBFull : FB_Debounce;
+    LaneAFull : FB_Debounce;
+    LaneBFull : FB_Debounce;
 
-    AlmEStop, AlmOverload, AlmEntryJam, AlmJam, AlmOverflow : FB_Alarm;
-    AlmPusherA, AlmPusherB : FB_Alarm;
+    AlmEStop : FB_Alarm;
+
+    AlmOverload : FB_Alarm;
+
+    AlmEntryJam : FB_Alarm;
+
+    AlmJam : FB_Alarm;
+
+    AlmOverflow : FB_Alarm;
+    AlmPusherA : FB_Alarm;
+    AlmPusherB : FB_Alarm;
 
     Tracker : FB_Tracker;
     PusherA : FB_Pusher;

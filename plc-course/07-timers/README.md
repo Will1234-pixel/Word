@@ -12,12 +12,12 @@ block**: a few lines of code that you can copy, monitor and change from an HMI.
 
 PLC timers look simple, and that is why they cause so many subtle bugs. A PLC timer is only
 as accurate as the scan. It only updates when your program calls it. It forgets everything
-if it is reset, or skipped, at the wrong moment. This module teaches the three IEC 61131-3
-timers (TON, TOF and TP) precisely, including their corner cases. It then covers how timers
-interact with the scan cycle, how the Rockwell and Siemens timers map onto them, how to build
-a retentive (accumulating) timer, and a toolbox of timer patterns used on real plant. The
-five labs build a star-delta starter, a flasher, a motor with feedback supervision, a
-run-hours meter and a two-hand control timing circuit.
+if it is reset at the wrong moment, and it freezes if it is skipped. This module teaches the
+three IEC 61131-3 timers (TON, TOF and TP) precisely, including their corner cases. It then
+covers how timers interact with the scan cycle, how the Rockwell and Siemens timers map onto
+them, how to build a retentive (accumulating) timer, and a toolbox of timer patterns used on
+real plant. The five labs build a star-delta starter, a flasher, a motor with feedback
+supervision, a run-hours meter and a two-hand control timing circuit.
 
 ## Learning objectives
 
@@ -316,7 +316,7 @@ the job.
 | `Q` goes FALSE | at once when `IN` falls | `PT` after `IN` falls, if `IN` stays FALSE | `PT` after the edge, whatever `IN` does |
 | `ET` counts while | `IN` is TRUE and the timer is not done | `IN` is FALSE and the timer is not done | the pulse is running |
 | `ET` when done | holds `PT` while `IN` is TRUE, 0 when `IN` falls | holds `PT` while `IN` is FALSE, 0 when `IN` rises | holds `PT` while `IN` is TRUE, 0 once `IN` is FALSE |
-| A short `IN` pulse | is ignored | stretches `Q` to at least `PT` after it | gives a full `PT` pulse |
+| A short `IN` pulse | is ignored | keeps `Q` on until `PT` after the pulse ends | gives a full `PT` pulse |
 | Typical use | start delay, confirmation, timeout | run-on, drop-out bridging | fixed-length pulse |
 
 ## 5. Timers and the scan cycle
@@ -427,8 +427,8 @@ new rising edge and starts again. The timer never gets anywhere, so while B is n
 requested pump A never starts. It starts only once pump B is requested as well, 5 s after
 B's request, and when B's request goes away the second call resets the shared timer and pump
 A stops too. (Running this in `plctest` shows exactly that.) The ladder version is the same
-timer tag used on two rungs, the timer equivalent of the double-coil bug from Module 04. Declare one instance per job, named after the job: `PumpA_StartDelay`,
-`PumpB_StartDelay`.
+timer tag used on two rungs, the timer equivalent of the double-coil bug from Module 04.
+Declare one instance per job, named after the job: `PumpA_StartDelay`, `PumpB_StartDelay`.
 
 ### 5.4 Resetting a timer
 
@@ -651,9 +651,9 @@ process safety time (Module 20). Never add a delay to a safety trip just because
 ### 7.2 Delay-off: run-on
 
 "Keep X going for T after C goes away." A TOF. Examples: a burner's combustion-air fan
-purges for five minutes after the flame goes out, a cooling fan runs on after a heater stops,
-a conveyor keeps running for 20 s after the last product so the belt is cleared, a lube-oil
-pump runs on after the main machine stops.
+purges the furnace for a set time after the flame goes out (post-purge), a cooling fan runs
+on after a heater stops, a conveyor keeps running for 20 s after the last product so the belt
+is cleared, a lube-oil pump runs on after the main machine stops.
 
 ```text
       HeaterOn           FanRunOn                                 Fan
@@ -725,7 +725,7 @@ t (s)      0   1   2   3   4   5   6   7   8   9
 short to show here. Lab 07-2 asks you to add an enable to this and make every enable start
 with a full ON phase. Many platforms also provide a ready-made flasher, such as `BLINK` in
 the CODESYS Util library, and Siemens CPUs can provide clock-memory bits that toggle at fixed
-frequencies. Because every design here restarts a timer each cycle, each phase is a scan or
+frequencies. Because both designs above restart a timer each cycle, each phase is a scan or
 two longer than set: fine for a lamp (section 5.6).
 
 ### 7.4 Debounce and signal confirmation
@@ -889,6 +889,10 @@ The timing is the point of this example:
   line of defence. The first is hard-wired: each contactor's NC auxiliary contact in the
   other's coil circuit, and usually a mechanical interlock between the two contactors.
 
+On the electrical side, the thermal overload relay is normally placed in the winding circuit,
+where it carries the phase current (about 58 % of the line current), and is set accordingly.
+Module 02 covers contactors and overload relays.
+
 The same dead-time idea protects a **reversing starter** (Module 04): after one direction
 drops out, wait a short time, or until the motor has stopped, before the other direction may
 start. A TON that runs while both contactors are off does it, and its `Q` becomes a start
@@ -898,10 +902,6 @@ permissive for either direction:
 ChangeoverDelay(IN := NOT FwdK AND NOT RevK, PT := T#500ms);   (* both off for 0.5 s *)
 StartAllowed := ChangeoverDelay.Q;
 ```
-
-On the electrical side, the thermal overload relay is normally placed in the winding circuit,
-where it carries the phase current (about 58 % of the line current), and is set accordingly.
-Module 02 covers contactors and overload relays.
 
 ### 7.10 Two-hand control timing
 
@@ -935,7 +935,8 @@ t (s)      0         1         2         3         4         5         6
   the moment Left is released.
 - **2 to 4 s:** Right follows Left after 0.7 s: too late, no stroke.
 - **4 to 6 s:** both pressed together: stroke. Right is released, so the stroke stops.
-  Right pressed again while Left is still held: no stroke, because both were not released.
+  Right pressed again while Left is still held: no stroke, because the buttons were not both
+  released first.
 
 > **Safety.** This is only the *timing*. A real two-hand control device is a safety function.
 > It uses safety-rated buttons (usually one NO and one NC contact each, so that faults are
@@ -1057,6 +1058,9 @@ Walk through it:
   15 s: `FailOpen` latches too. One timer covers both "did not get there" and "did not stay
   there".
 - The reset: `FailOpen AND OpenTimer.Q` keeps the alarm while the cause is still present.
+  `AlarmReset` is used as a level to keep the example short. On a real panel, reset on the
+  rising edge of the button (Module 06, section 8.5): with a level reset, a stuck button lets
+  a new alarm clear itself as soon as its cause goes.
 
 A natural extension is a switch-fault alarm when `ZSO` and `ZSC` are both TRUE. In a
 process-safety context, the same timers give the data for valve diagnostics such as stroke
@@ -1112,7 +1116,7 @@ supervision (section 7.5), so that a conveyor that trips stops everything upstre
 8. **Long durations in TIME.** A 32-bit TIME overflows at about 24.8 days. Use integer
    counters for hours and days.
 9. **Converting TIME to integers.** `TIME_TO_DINT` gives milliseconds in CODESYS and TIA
-   Portal but whole seconds in MATIEC. Compare TIME values directly instead.
+   Portal but whole seconds in MATIEC and OpenPLC. Compare TIME values directly instead.
 10. **Unlatched timeout faults.** A timeout that stops the equipment clears itself and the
     equipment restarts: a start/stop oscillation. Latch faults and reset them deliberately.
 11. **Resets that restart equipment.** Resetting a fault while the run command is still

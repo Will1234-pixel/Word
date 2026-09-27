@@ -9,8 +9,9 @@
 # Reference numbers for a step of the input: after t seconds (t measured from the end of
 # the dead time) a first-order lag has covered the fraction 1 - e^(-t/Tau) of the change:
 #   0.5 Tau: 39.35 %   1 Tau: 63.21 %   3 Tau: 95.02 %   5 Tau: 99.33 %
-# Tolerances allow for either the exact (EXP) or the Euler discretisation, and for a
-# one-sample difference in where the delay line is read.
+# Tolerances allow for either the exact (EXP) or the Euler discretisation, and for the
+# delay line being read up to one sample early or late (whether a new input first affects
+# PV in the same sample or the next one is a discretisation choice, not an error).
 
 scenario at power-up the model starts at steady state for its input
 set Gain 2.0
@@ -51,8 +52,8 @@ set DeadTime 0.0
 scan
 expect PV ~ 20.0 0.01
 set CV 25.0                        # step: the final value is 20 + 2 * 25 = 70
-scan
-expect PV > 20.0                   # no dead time: PV starts to move at once
+wait 20ms
+expect PV > 20.0                   # no dead time: PV starts to move within a sample or two
 expect PV < 21.0                   # ...but only a little: it is a lag, not a jump
 wait 5s                            # 0.5 Tau
 expect PV ~ 39.67 0.4
@@ -100,7 +101,25 @@ expect PV ~ 0.0 0.001
 expect SlowPV ~ 0.0 0.001
 wait 100ms                         # 1.05 s
 expect PV ~ 40.0 0.001
-wait 100ms                         # 1.15 s (the slow instance may be up to one call later)
+wait 200ms                         # 1.25 s (the slow instance is only called every 100 ms)
+expect SlowPV ~ 40.0 0.001
+wait 5s
+expect PV ~ 40.0 0.001             # and it stays there: no lag, no drift
+expect SlowPV ~ 40.0 0.001
+
+scenario a negative Tau is treated as no lag, never as an unstable model
+set Gain 1.0
+set PV0 0.0
+set Tau -5.0
+set DeadTime 0.5
+scan
+set CV 40.0
+wait 450ms
+expect PV ~ 0.0 0.001
+wait 200ms                         # 0.65 s: past the dead time
+expect PV ~ 40.0 0.001
+wait 10s
+expect PV ~ 40.0 0.001
 expect SlowPV ~ 40.0 0.001
 
 scenario negative process gain (a cooling process): PV falls when CV rises
@@ -117,17 +136,22 @@ wait 70s
 expect PV ~ 60.0 0.05
 expect SlowPV ~ 60.0 0.05
 
-scenario Load adds to CV and goes through the same dynamics
+scenario Load adds to CV and goes through the same dynamics (dead time and lag)
 set Gain 2.0
 set PV0 20.0
 set Tau 10.0
+set DeadTime 2.0
 set CV 30.0
 set Load -10.0                     # e.g. a heat loss worth 10 % of heater power
 scan
 expect PV ~ 60.0 0.01              # 20 + 2 * (30 - 10)
-set Load 0.0                       # the load disappears: PV rises to 80, with a lag
-wait 10s
+set Load 0.0                       # the load disappears: PV rises to 80, after the dead time
+wait 1900ms
+expect PV ~ 60.0 0.001             # the load change is delayed like a CV change
+expect SlowPV ~ 60.0 0.001
+wait 10100ms                       # 12 s = DeadTime + Tau
 expect PV ~ 72.64 0.4              # 60 + 63.2 % of 20
+expect SlowPV ~ 72.64 0.8
 wait 70s
 expect PV ~ 80.0 0.05
 expect SlowPV ~ 80.0 0.05

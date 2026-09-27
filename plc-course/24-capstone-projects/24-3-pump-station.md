@@ -745,8 +745,9 @@ A suggested interface:
 | `StartsLastHour`, `Status` | out | INT, WORD | for SCADA |
 
 MATIEC does not allow arrays of function block instances, so declare `Pump1`, `Pump2` and
-`Pump3` separately, and copy their outputs into small BOOL arrays when you want to loop over
-pumps. CODESYS lets you write `ARRAY[1..3] OF FB_Pump` and loop over the instances.
+`Pump3` separately, one per line (a list of FB instances on one line has crashed OpenPLC's
+compiler; see [Appendix E](../appendices/E-matiec-openplc-notes.md)). Copy their outputs into
+small BOOL arrays when you want to loop over pumps. CODESYS lets you write `ARRAY[1..3] OF FB_Pump` and loop over the instances.
 
 **Pump selection in pseudo-code.** Run this every scan, after the demand:
 
@@ -829,10 +830,13 @@ four-line function block.
 
 **MATIEC hints** (all verified with the course compiler):
 
-- Use `ADD_TIME(a, b)` and `SUB_TIME(a, b)` for TIME arithmetic. The `+` and `-` operators on
-  TIME values compile to C code that does not build with this MATIEC version.
+- TIME arithmetic works in either form: `a + b` and `a - b`, or `ADD_TIME(a, b)` and
+  `SUB_TIME(a, b)`. Upstream MATIEC generates C code for the `+` and `-` forms that does not
+  build, but `plctest` corrects it and OpenPLC's compiler is not affected
+  ([Appendix E](../appendices/E-matiec-openplc-notes.md), section E.3).
 - `TIME_TO_DINT` returns **seconds** in MATIEC, but milliseconds in CODESYS. Don't rely on it.
-- A function cannot take a bare array input. Wrap the array in a STRUCT, or use a function block.
+- A function cannot take a bare array input. Wrap the array in a STRUCT, pass it as `VAR_IN_OUT`,
+  or use a function block.
 - Avoid identifiers that are keywords or standard names: `DT` (a data type), `STEP` (an SFC
   keyword), `Limit` (the `LIMIT` function; names are not case-sensitive). Avoid one-letter POU
   names: a program called `P` clashes with a parameter name of the standard string functions.
@@ -1115,5 +1119,6 @@ against this table.
   to be visible, as in extension 11.
 
 ---
-Previous: [24 — Capstone projects overview](README.md) ·
-Next: [Appendix C — Study plan and self-assessment](../appendices/C-study-plan-and-self-assessment.md)
+Previous: [24-2 — Capstone: Batch Mixing Plant](24-2-batch-mixing-plant.md) ·
+Next: [Appendix C — Study Plan and Self-Assessment](../appendices/C-study-plan-and-self-assessment.md) ·
+Up: [Module 24 — Capstone Projects](README.md)

@@ -13,7 +13,9 @@
    Raw-count convention (the same as Module 14, Siemens style):
      Raw = 0     ->  4 mA -> 0 bar
      Raw = 27648 -> 20 mA -> 10 bar      (1 mA = 1728 counts)
-   The card is linear outside that range, so a wire break (0 mA) reads -6912. *)
+   This exercise treats the card as linear outside that range, so a wire
+   break (0 mA) reads -6912. A real card reports an underflow or overflow
+   code instead (Module 14); F_RawGood flags those as bad quality too. *)
 
 (* ---- Given helpers: use them as they are ---------------------------- *)
 

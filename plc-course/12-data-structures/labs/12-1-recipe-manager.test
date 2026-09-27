@@ -6,7 +6,8 @@
 # value limit (both sides, inclusive boundaries, each of the three doses, the
 # total) are rejected with the right result; a rejected or refused load
 # leaves Active and ActiveNo completely unchanged; loads are refused while a
-# batch runs; SelectedOk follows the selection and HMI edits live.
+# batch runs; SelectedOk follows the selection and HMI edits live; a new
+# SelectNo written in the same scan as LoadCmd is checked before the load.
 # Only interface names are used: Recipes, SelectNo, LoadCmd, BatchRunning,
 # SelectedOk, Active, ActiveNo, LoadResult, the members of ST_Recipe and the
 # values of E_LoadResult. Checks allow two scans after a change.
@@ -125,6 +126,30 @@ expect ActiveNo 1
 expect Active.Dose[1] 400.0
 expect Active.MixTime T#20m
 
+scenario a selection and a load written in the same scan are checked together
+set SelectNo 2                     # a good recipe is selected first...
+scan 2
+expect SelectedOk TRUE
+set SelectNo 4                     # ...then the HMI writes a new number AND Load at once
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadValue         # the load checks the slot it is given, not last scan's
+expect ActiveNo 0
+expect Active.Name ''
+set SelectNo 2
+scan 2
+set SelectNo 7
+set LoadCmd TRUE
+scan 2
+expect LoadResult BadIndex
+expect ActiveNo 0
+set SelectNo 3
+set LoadCmd TRUE
+scan 2
+expect LoadResult Loaded
+expect ActiveNo 3
+expect Active.Name 'Cheese sauce'
+
 scenario an empty slot is refused as EmptySlot
 set SelectNo 5
 scan 2
@@ -187,6 +212,7 @@ expect ActiveNo 4
 expect Active.Name 'Trial batch'
 
 scenario temperature limits are inclusive, 20.0 to 85.0 degC
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 3
 set Recipes[3].Temp 85.0
 scan 2
@@ -206,6 +232,7 @@ scan 2
 expect SelectedOk FALSE
 
 scenario each dose must be 0.0 to 500.0 kg, and all three doses are checked
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 3
 set Recipes[3].Dose[1] 500.0
 scan 2
@@ -232,6 +259,7 @@ scan 2
 expect SelectedOk TRUE
 
 scenario the total must fit the vessel (at most 1000 kg) and not be zero
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 3
 set Recipes[3].Dose[1] 500.0
 set Recipes[3].Dose[2] 400.0
@@ -252,6 +280,7 @@ scan 2
 expect SelectedOk FALSE
 
 scenario mixing time must be 1 min to 2 h
+scan                           # the PLC is running before the HMI edits the recipe book
 set SelectNo 2
 set Recipes[2].MixTime T#1m
 scan 2

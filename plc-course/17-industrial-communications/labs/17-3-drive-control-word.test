@@ -2,12 +2,13 @@
 # What is checked:
 #   - Ready / Running / Faulted / AtSpeed decoded from status bits 0..3, other bits ignored;
 #   - DriveCtrl = RUN (bit 0), REV (bit 1), RESET (bit 2), with bits 3..15 always 0;
+#   - RUN is not gated by READY (a drive that is not ready is caught by StartFail);
 #   - REV changes only while the drive does not report RUNNING;
 #   - a fault drops RUN at once, and a run request that saw a fault is spent: a fault reset
 #     never restarts the drive until RunReq is released and given again;
 #   - the RESET bit is a single 500 ms pulse per press, however long the button is held;
 #   - StartFail latches when RUN has been sent for 3 s without RUNNING, drops RUN,
-#     and is cleared by the reset button;
+#     stays latched if RUNNING comes back, and is cleared only by the reset button;
 #   - DriveSpeedRef = SpeedSP clamped to 0..100 % x 163.84, rounded.
 # The test plays the part of the drive by writing DriveSts. Timing checks allow >= 100 ms.
 
@@ -176,8 +177,22 @@ wait 400ms
 expect DriveCtrl 16#0004
 wait 200ms
 expect DriveCtrl 16#0000            # ended although the button is still held
-wait 2s
-expect DriveCtrl 16#0000            # no second pulse while held
+wait 250ms                          # no second pulse while held: sampled every 250 ms,
+expect DriveCtrl 16#0000            # so any repeated 500 ms pulse would be seen
+wait 250ms
+expect DriveCtrl 16#0000
+wait 250ms
+expect DriveCtrl 16#0000
+wait 250ms
+expect DriveCtrl 16#0000
+wait 250ms
+expect DriveCtrl 16#0000
+wait 250ms
+expect DriveCtrl 16#0000
+wait 250ms
+expect DriveCtrl 16#0000
+wait 250ms
+expect DriveCtrl 16#0000            # t = 2.6 s after the press
 set ResetPB FALSE
 scan 2
 expect DriveCtrl 16#0000
@@ -238,6 +253,40 @@ expect DriveCtrl 16#0001
 wait 600ms
 expect StartFail TRUE
 expect DriveCtrl 16#0000
+set DriveSts 16#000B                # someone runs it from the keypad: StartFail stays latched
+wait 1s
+expect StartFail TRUE
+expect DriveCtrl 16#0000
+set DriveSts 16#0001
+wait 1s
+expect StartFail TRUE               # only the reset button clears it
+set ResetPB TRUE
+scan 2
+expect StartFail FALSE
+expect DriveCtrl 16#0004            # RunReq is still TRUE but spent: reset pulse only
+
+scenario RUN is sent even when the drive is not ready, and StartFail catches it
+set DriveSts 16#0000                # not ready (for example switched to local), no fault
+set RunReq TRUE
+scan 2
+expect Ready FALSE
+expect DriveCtrl 16#0001            # RUN is not gated by READY: supervision must see it
+wait 2600ms
+expect StartFail FALSE
+wait 700ms
+expect StartFail TRUE
+expect DriveCtrl 16#0000
+
+scenario run and reverse requested together from standstill: the drive starts in reverse
+set DriveSts 16#0001
+scan 2
+set RunReq TRUE
+set RevReq TRUE
+scan 2
+expect DriveCtrl 16#0003            # not running yet, so REV follows the request
+set DriveSts 16#0003
+wait 1s
+expect DriveCtrl 16#0003
 
 scenario speed reference: 100 % = 16384, clamped and rounded
 set SpeedSP 50.0

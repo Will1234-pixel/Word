@@ -143,7 +143,9 @@ PROGRAM PidLab
        Plant : FB_FOPDT the simulated process: K = 0.8 degC per %, Tau = 20 s,
                         dead time 3 s, 20 degC with the heater off
        Bench : FB_PID   a second, unconnected instance for open-loop tests; the
-                        tests write its inputs directly (Bench.SP, Bench.PV, ...) *)
+                        tests write its inputs directly (Bench.SP, Bench.PV, ...)
+       SlowBench : FB_PID  a third, unconnected instance, called every 10th
+                        scan with Ts = T#100ms, to check that the block uses Ts *)
   VAR (* loop tags, as an HMI faceplate would read and write them *)
     SP        : REAL := 40.0;      (* setpoint, degC *)
     Manual    : BOOL := TRUE;      (* TRUE = manual, FALSE = automatic *)
@@ -160,11 +162,14 @@ PROGRAM PidLab
     PlantInit : BOOL := FALSE;     (* TRUE: hold the plant at steady state for the present CV *)
     PVMax     : REAL := 0.0;       (* highest PV seen since a test last wrote this *)
     PVMin     : REAL := 1000.0;    (* lowest PV seen since a test last wrote this *)
+    BenchPVRate : REAL := 0.0;     (* when not 0, Bench.PV ramps at this rate, units per second *)
   END_VAR
   VAR
-    Loop  : FB_PID;
-    Plant : FB_FOPDT;
-    Bench : FB_PID;
+    Loop      : FB_PID;
+    Plant     : FB_FOPDT;
+    Bench     : FB_PID;
+    SlowBench : FB_PID;
+    SlowCount : INT := 0;          (* counts scans for SlowBench *)
   END_VAR
 
   (* 1. Simulated plant: the "outside world". It responds to the output written on
@@ -185,8 +190,24 @@ PROGRAM PidLab
   PVMax := MAX(PVMax, PV);
   PVMin := MIN(PVMin, PV);
 
-  (* 4. Open-loop test instance: only the sample time is wired. *)
+  (* 4. Open-loop test instances: only the sample time is wired, the tests write
+        the other inputs. BenchPVRate ramps Bench.PV smoothly (rate x the 10 ms task
+        interval each scan), so the tests can check the size of the derivative
+        action whatever derivative filter the block uses. *)
+  IF BenchPVRate <> 0.0 THEN
+    Bench.PV := Bench.PV + BenchPVRate * 0.01;
+  END_IF;
   Bench(Ts := T#10ms);
+
+  (* SlowBench is called on scans 1, 11, 21, ...: every 100 ms of PLC time, as if it
+     lived in a 100 ms task. *)
+  IF SlowCount = 0 THEN
+    SlowBench(Ts := T#100ms);
+  END_IF;
+  SlowCount := SlowCount + 1;
+  IF SlowCount >= 10 THEN
+    SlowCount := 0;
+  END_IF;
 END_PROGRAM
 
 

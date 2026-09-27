@@ -8,7 +8,7 @@
 #   - LossCount counts healthy -> lost transitions once each, not the power-up state;
 #   - fallback values while lost (LevelPct = 100.0, InletOpen = FALSE), live values otherwise;
 #   - FillPump hysteresis (start below 40 %, stop at 90 %), stop on comm loss or closed inlet,
-#     and no restart half-way up the band after recovery.
+#     and no restart half-way up the band after recovery or after the inlet reopens.
 # The test plays the part of the Modbus client: it writes RxHeartbeat / RxLevel / RxStatus as
 # if a poll had just returned. Timing checks allow at least +/-300 ms.
 
@@ -27,6 +27,7 @@ expect FillPump FALSE
 expect LossCount 0                  # the power-up state is not a loss event
 
 scenario our own heartbeat counts about once per second
+# Any period from 0.9 s to 1.1 s passes: 10.5 s gives 9..11 counts, 20.5 s gives 18..22.
 scan
 wait 490ms                          # t = 0.5 s
 expect TxHeartbeat <= 1
@@ -34,11 +35,11 @@ wait 10s                            # t = 10.5 s
 expect TxHeartbeat >= 9
 expect TxHeartbeat <= 11
 wait 10s                            # t = 20.5 s
-expect TxHeartbeat >= 19
-expect TxHeartbeat <= 21
+expect TxHeartbeat >= 18
+expect TxHeartbeat <= 22
 
 scenario our heartbeat wraps from 32767 to 0 instead of overflowing
-until TxHeartbeat = 32767 within 10h     # about 9 hours of PLC time
+until TxHeartbeat = 32767 within 11h     # about 9 hours of PLC time (10 h at a 1.1 s period)
 until TxHeartbeat <> 32767 within 1500ms
 expect TxHeartbeat 0
 
@@ -135,6 +136,22 @@ set RxStatus 16#0000
 scan 2
 expect InletOpen FALSE
 expect FillPump FALSE
+set RxStatus 16#0001                # valve open again at 30 %: a normal start
+scan 2
+expect FillPump TRUE
+set RxLevel 600                     # filling, inside the band
+scan 2
+expect FillPump TRUE
+set RxStatus 16#0000                # the valve closes half-way up the band: stop...
+scan 2
+expect FillPump FALSE
+set RxStatus 16#0001                # ...and it reopens: no restart at 60 %, the stop ended the cycle
+scan 2
+expect InletOpen TRUE
+expect FillPump FALSE
+set RxLevel 390                     # only below the start point again
+scan 2
+expect FillPump TRUE
 
 scenario comm loss 3 s after the last change: flag, fallback values, pump stops, counted once
 set RxLevel 500

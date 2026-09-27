@@ -2,9 +2,12 @@
 # Eight NC trip inputs Trip1_NC..Trip8_NC (TRUE = healthy). Every scenario
 # first makes all eight healthy. Status arrays Latched[], Unacked[] and
 # FirstOut[] are indexed 1..8.
-# "Flashing" is checked by waiting for the lamp to go off, on and off again
-# (each within 700 ms). "Steady" is checked by sampling the lamp every
-# 200 ms for 1.2 s. A button "press" is TRUE for one scan, then FALSE.
+# "Flashing" (about 0.5 s on, 0.5 s off) is checked by timing one on-period
+# and one off-period from a rising edge: each must hold its level at four
+# samples up to 0.32 s (so a lamp that flickers every scan fails) and end
+# within 0.72 s.
+# "Steady" is checked by sampling the lamp every 200 ms for 1.2 s. A button
+# "press" is TRUE for one scan, then FALSE.
 
 scenario all healthy at power-up: lamps off, horn off, compressor may run
 set Trip1_NC TRUE
@@ -32,6 +35,26 @@ expect Lamp8 FALSE
 expect Latched[1] FALSE
 expect Latched[8] FALSE
 
+scenario a trip that is already present at power-up latches, is the first-out and blocks the start
+# Requirement 1 is about the input's level: a trip input that is FALSE when
+# the PLC starts must be caught, not only one that changes while it runs.
+set Trip1_NC TRUE
+set Trip2_NC TRUE
+set Trip3_NC TRUE
+set Trip4_NC TRUE
+set Trip5_NC TRUE
+set Trip6_NC FALSE                 # scrubber level already high-high at power-up
+set Trip7_NC TRUE
+set Trip8_NC TRUE
+wait 100ms
+expect Latched[6] TRUE
+expect Unacked[6] TRUE
+expect FirstOut[6] TRUE
+expect Horn TRUE
+expect RunPermit FALSE
+expect Latched[5] FALSE
+expect Latched[7] FALSE
+
 scenario a single trip latches, sounds the horn, removes the permit and is the first-out
 set Trip1_NC TRUE
 set Trip2_NC TRUE
@@ -52,9 +75,25 @@ expect RunPermit FALSE             # on the same scan as the trip
 expect Latched[2] FALSE
 expect Latched[4] FALSE
 until Lamp3 = FALSE within 700ms   # Lamp3 flashes
-until Lamp3 = TRUE within 700ms
-until Lamp3 = FALSE within 700ms
-until Lamp3 = TRUE within 700ms
+until Lamp3 = TRUE within 700ms    # a rising edge: an on-period starts
+wait 50ms
+expect Lamp3 TRUE
+wait 100ms
+expect Lamp3 TRUE
+wait 100ms
+expect Lamp3 TRUE
+wait 70ms
+expect Lamp3 TRUE                  # still on after 0.32 s ...
+until Lamp3 = FALSE within 400ms   # ... and off within 0.72 s
+wait 50ms
+expect Lamp3 FALSE
+wait 100ms
+expect Lamp3 FALSE
+wait 100ms
+expect Lamp3 FALSE
+wait 70ms
+expect Lamp3 FALSE                 # still off after 0.32 s ...
+until Lamp3 = TRUE within 400ms    # ... and on again within 0.72 s
 expect Lamp1 FALSE
 expect Lamp2 FALSE
 expect Lamp4 FALSE
@@ -78,9 +117,26 @@ expect Latched[4] TRUE
 expect FirstOut[4] TRUE
 expect Horn TRUE
 expect RunPermit FALSE
-until Lamp4 = FALSE within 700ms
-until Lamp4 = TRUE within 700ms
-until Lamp4 = FALSE within 700ms
+until Lamp4 = FALSE within 700ms   
+until Lamp4 = TRUE within 700ms    # a rising edge: an on-period starts
+wait 50ms
+expect Lamp4 TRUE
+wait 100ms
+expect Lamp4 TRUE
+wait 100ms
+expect Lamp4 TRUE
+wait 70ms
+expect Lamp4 TRUE                  # still on after 0.32 s ...
+until Lamp4 = FALSE within 400ms   # ... and off within 0.72 s
+wait 50ms
+expect Lamp4 FALSE
+wait 100ms
+expect Lamp4 FALSE
+wait 100ms
+expect Lamp4 FALSE
+wait 70ms
+expect Lamp4 FALSE                 # still off after 0.32 s ...
+until Lamp4 = TRUE within 400ms    # ... and on again within 0.72 s
 
 scenario later trips are subsequent; after acknowledge the first-out keeps flashing and the others go steady
 set Trip1_NC TRUE
@@ -101,8 +157,25 @@ expect FirstOut[5] FALSE
 expect Latched[5] TRUE
 expect Unacked[5] TRUE
 until Lamp5 = FALSE within 700ms   # unacknowledged: flashing too
-until Lamp5 = TRUE within 700ms
-until Lamp5 = FALSE within 700ms
+until Lamp5 = TRUE within 700ms    # a rising edge: an on-period starts
+wait 50ms
+expect Lamp5 TRUE
+wait 100ms
+expect Lamp5 TRUE
+wait 100ms
+expect Lamp5 TRUE
+wait 70ms
+expect Lamp5 TRUE                  # still on after 0.32 s ...
+until Lamp5 = FALSE within 400ms   # ... and off within 0.72 s
+wait 50ms
+expect Lamp5 FALSE
+wait 100ms
+expect Lamp5 FALSE
+wait 100ms
+expect Lamp5 FALSE
+wait 70ms
+expect Lamp5 FALSE                 # still off after 0.32 s ...
+until Lamp5 = TRUE within 400ms    # ... and on again within 0.72 s
 set AckPB TRUE
 scan
 set AckPB FALSE
@@ -114,8 +187,25 @@ expect Latched[3] TRUE
 expect Latched[5] TRUE
 expect FirstOut[3] TRUE            # acknowledge does not remove the first-out mark
 until Lamp3 = FALSE within 700ms   # first-out still flashing
-until Lamp3 = TRUE within 700ms
-until Lamp3 = FALSE within 700ms
+until Lamp3 = TRUE within 700ms    # a rising edge: an on-period starts
+wait 50ms
+expect Lamp3 TRUE
+wait 100ms
+expect Lamp3 TRUE
+wait 100ms
+expect Lamp3 TRUE
+wait 70ms
+expect Lamp3 TRUE                  # still on after 0.32 s ...
+until Lamp3 = FALSE within 400ms   # ... and off within 0.72 s
+wait 50ms
+expect Lamp3 FALSE
+wait 100ms
+expect Lamp3 FALSE
+wait 100ms
+expect Lamp3 FALSE
+wait 70ms
+expect Lamp3 FALSE                 # still off after 0.32 s ...
+until Lamp3 = TRUE within 400ms    # ... and on again within 0.72 s
 expect Lamp5 TRUE                  # subsequent, acknowledged: steady
 wait 200ms
 expect Lamp5 TRUE
@@ -401,5 +491,23 @@ expect Latched[1] FALSE
 expect Latched[3] TRUE
 expect Unacked[3] TRUE
 expect FirstOut[3] TRUE
-until Lamp3 = FALSE within 700ms
-until Lamp3 = TRUE within 700ms
+until Lamp3 = FALSE within 700ms   # the first-out is flashing again
+until Lamp3 = TRUE within 700ms    # a rising edge: an on-period starts
+wait 50ms
+expect Lamp3 TRUE
+wait 100ms
+expect Lamp3 TRUE
+wait 100ms
+expect Lamp3 TRUE
+wait 70ms
+expect Lamp3 TRUE                  # still on after 0.32 s ...
+until Lamp3 = FALSE within 400ms   # ... and off within 0.72 s
+wait 50ms
+expect Lamp3 FALSE
+wait 100ms
+expect Lamp3 FALSE
+wait 100ms
+expect Lamp3 FALSE
+wait 70ms
+expect Lamp3 FALSE                 # still off after 0.32 s ...
+until Lamp3 = TRUE within 400ms    # ... and on again within 0.72 s

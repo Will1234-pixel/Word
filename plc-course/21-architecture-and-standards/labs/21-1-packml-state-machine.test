@@ -7,14 +7,21 @@
 #   - the machine powers up in Stopped and never moves without a command or SC,
 #   - every standard path works: Reset/Start/Complete, Hold/Unhold,
 #     Suspend/Unsuspend, Stop, Abort/Clear, each acting state waiting for SC,
-#   - Stop and Abort are accepted exactly where the model says,
+#   - Stop and Abort are accepted exactly where the model says (Abort is
+#     tried in every state that accepts it),
 #   - illegal commands and unknown codes are refused, flagged with
-#     CmdRejected, and leave the state unchanged,
+#     CmdRejected, and leave the state unchanged; Hold, Unhold, Suspend and
+#     Unsuspend work only in their own states (no Hold "extensions"),
+#   - CmdRejected keeps its value until the next request,
 #   - every request is consumed (CmdChangeRequest cleared) on the scan it is seen,
-#   - SC means nothing in a wait state,
+#   - SC means nothing in a wait state, and a command accepted on the same
+#     scan as SC wins,
 #   - loss of SafetyOK aborts from any state and blocks Clear,
 #   - Starved/Blocked suspend the machine in Execute and it unsuspends by
-#     itself when both clear.
+#     itself when both clear, but a remote Suspend always waits for a remote
+#     Unsuspend.
+# SC is always raised for one scan with a FALSE scan before it, so a solution
+# that treats SC as a level and one that uses its rising edge both pass.
 # Only interface tags are used, so any correct design passes.
 #
 # StateCurrent codes (PackTags):
@@ -1050,3 +1057,591 @@ set StateComplete TRUE
 scan
 set StateComplete FALSE
 expect StateCurrent 2
+
+scenario Abort is accepted in every remaining state, and each abort is cleared back to Stopped
+set SafetyOK TRUE
+scan
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 15           # Resetting
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Resetting -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 4            # Idle
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Idle -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 3            # Starting
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Starting -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 16           # Completing
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Completing -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 17           # Complete
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Complete -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 4
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 10           # Holding
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Holding -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 4
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 5
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 12           # Unholding
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Unholding -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 6
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 13           # Suspending
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Suspending -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 6
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 5            # Suspended
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Suspended -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 6
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 7
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 14           # Unsuspending
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 8            # Unsuspending -> Aborting
+expect CmdRejected FALSE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 9
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2            # Stopped
+
+scenario Hold, Unhold, Suspend and Unsuspend are refused outside their own states
+set SafetyOK TRUE
+scan
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 3            # Starting
+set CntrlCmd 4                   # Hold in Starting: only Execute accepts Hold
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 3            # Starting
+expect CmdRejected TRUE
+set CntrlCmd 6                   # Suspend in Starting
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 3            # Starting
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 6            # Execute
+set CntrlCmd 6
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 13           # Suspending
+set CntrlCmd 4                   # Hold in Suspending
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 13           # Suspending
+expect CmdRejected TRUE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 5            # Suspended
+set CntrlCmd 4                   # Hold in Suspended
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 5            # Suspended
+expect CmdRejected TRUE
+set CntrlCmd 5                   # Unhold in Suspended: Unsuspend is the right command
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 5            # Suspended
+expect CmdRejected TRUE
+set CntrlCmd 6                   # Suspend in Suspended
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 5            # Suspended
+set CntrlCmd 7
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 14           # Unsuspending
+set CntrlCmd 4                   # Hold in Unsuspending
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 14           # Unsuspending
+expect CmdRejected TRUE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 6            # Execute
+set CntrlCmd 4
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 10           # Holding
+set CntrlCmd 4                   # Hold in Holding
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 10           # Holding
+set CntrlCmd 6                   # Suspend in Holding
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 10           # Holding
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 11           # Held
+set CntrlCmd 6                   # Suspend in Held
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 11           # Held
+expect CmdRejected TRUE
+set CntrlCmd 5
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 12           # Unholding
+set CntrlCmd 4                   # Hold in Unholding
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 12           # Unholding
+expect CmdRejected TRUE
+set CntrlCmd 7                   # Unsuspend in Unholding
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 12           # Unholding
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 6            # Execute
+
+scenario CmdRejected keeps its value until the next request
+set SafetyOK TRUE
+scan
+set CntrlCmd 2                   # Start in Stopped: refused
+set CmdChangeRequest TRUE
+scan
+expect CmdRejected TRUE
+wait 500ms
+expect CmdRejected TRUE          # still TRUE: the line controller may read it later
+set CntrlCmd 1                   # Reset: accepted
+set CmdChangeRequest TRUE
+scan
+expect CmdRejected FALSE
+set StateComplete TRUE           # SC and state changes are not requests
+scan
+set StateComplete FALSE
+expect StateCurrent 4
+set CntrlCmd 9                   # Clear in Idle: refused
+set CmdChangeRequest TRUE
+scan
+expect CmdRejected TRUE
+set CntrlCmd 2                   # the value in CntrlCmd changes, but no request
+wait 500ms
+expect CmdRejected TRUE
+expect StateCurrent 4
+
+scenario SC means nothing in Complete and Aborted either
+set SafetyOK TRUE
+scan
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 17           # Complete
+scan
+set StateComplete TRUE           # SC held TRUE in Complete: no automatic reset
+wait 300ms
+expect StateCurrent 17
+set StateComplete FALSE
+scan
+expect StateCurrent 17
+set CntrlCmd 8
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 9            # Aborted
+scan
+set StateComplete TRUE           # SC held TRUE in Aborted: Clear is still needed
+wait 300ms
+expect StateCurrent 9
+set StateComplete FALSE
+scan
+expect StateCurrent 9
+
+scenario a command accepted on the same scan as SC wins
+set SafetyOK TRUE
+scan
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+expect StateCurrent 3            # Starting
+set CntrlCmd 3                   # Stop arrives on the scan that homing finishes
+set CmdChangeRequest TRUE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 7            # Stopping: the command won, SC did not move it on
+expect CmdRejected FALSE
+wait 300ms
+expect StateCurrent 7            # and Stopping still waits for its own SC
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 6            # Execute
+scan
+set CntrlCmd 4                   # Hold on the scan that the order finishes
+set CmdChangeRequest TRUE
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 10           # Holding, not Completing and not Held
+wait 300ms
+expect StateCurrent 10
+
+scenario a remote Suspend after an earlier automatic suspend still waits for a remote Unsuspend
+set SafetyOK TRUE
+scan
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set Starved TRUE                 # the machine suspends itself
+scan
+scan
+expect StateCurrent 13
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 5
+set CntrlCmd 3                   # the operator stops it while it is suspended
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 2
+set Starved FALSE
+set CntrlCmd 1
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+set CntrlCmd 2
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 6
+set CntrlCmd 6                   # now a remote Suspend, with the line healthy
+set CmdChangeRequest TRUE
+scan
+set StateComplete TRUE
+scan
+set StateComplete FALSE
+expect StateCurrent 5
+wait 1s
+expect StateCurrent 5            # the old automatic suspend must not unsuspend it

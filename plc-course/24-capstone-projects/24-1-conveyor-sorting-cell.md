@@ -44,7 +44,7 @@ By the end of this project you will be able to:
   rules, and a stack light that follows the usual conventions.
 - Define an HMI interface as command, status, alarm and configuration structures, with the
   PLC-clears command handshake from Module 18.
-- Prove the program against a 37-scenario FAT and explain how your design behaves when
+- Prove the program against a 40-scenario FAT and explain how your design behaves when
   things fail.
 
 ## 1. The cell
@@ -109,8 +109,8 @@ that counts up to 65 535 and then wraps to 0. At 0.5 m/s it wraps about every 13
 | HMI | A small touch panel on the cell frame, in sight of the whole conveyor |
 
 **Parts.** Bungs up to 120 mm long along the belt (the tests use 100 mm). The washer releases
-them at least 300 mm apart, so a pusher always has time to return before the next part for the
-same lane arrives.
+them with a gap of at least 300 mm between one part and the next (0.6 s at 0.5 m/s), so a
+pusher, whose stroke takes about 0.2 s, is always home again before the next part reaches it.
 
 ### 1.3 How a part travels: a worked example
 
@@ -160,7 +160,7 @@ The cell uses two independent measurements on purpose:
 - **Time (belt running time)** decides *whether something has gone wrong*. Each part must
   reach its exit within a fixed running time after registration: 3 s for lane A, 4 s for
   lane B and 5 s for the reject bin. At 0.5 m/s the real journeys take about 1.3 s, 2.3 s and
-  3.1 s, so each limit has about 2 s of margin.
+  3.1 s, so each limit leaves 1.7 to 1.9 s of margin.
 
 Why not use the encoder for both? Consider two faults. A bung jams against the side guide
 and the belt slides underneath it: the encoder keeps counting, the pusher fires at empty
@@ -668,10 +668,12 @@ around these numbers. If you change a default in `ST_CellCfg`, the FAT will fail
 | Part length | 100 mm (the eye is blocked while the belt moves 100 mm) | |
 | Classification sensors | TRUE from the moment the part blocks `EntryPE` until one scan after it clears it, except in one scenario where `MetalPX` is TRUE only for a moment in the middle | FS-12 |
 | Gate positions | Registration count + 500 (A) and + 1000 (B). Some scenarios move the count exactly onto the gate, others jump 7 mm past it in one scan | FS-15 |
-| Pusher stroke | Retracted switch opens as soon as the solenoid is on; extended switch made 100 ms later; after release, extended switch opens at once and retracted switch made 100 ms later | FS-18, FS-19 |
-| Delivery | The lane eye is blocked for 100 ms, starting 100 ms after the pusher is home. The reject eye is blocked for 100 ms at about count registration + 1550 | FS-21, FS-22 |
+| Pusher stroke | Retracted switch opens as soon as the solenoid is on; extended switch made 100 ms later; after release, extended switch opens at once and retracted switch made 100 ms later. One scenario extends slowly (0.6 s), one has a stuck retracted switch | FS-18, FS-19 |
+| Delivery | The lane eye is blocked for 100 ms, starting 100 ms after the pusher is home. The reject eye is blocked for 100 ms at about count registration + 1550. One scenario has a sticky chute: two lane A parts reach the eye about 1.5 to 2.5 s late, with `JamTimeA` raised to 5 s | FS-21, FS-22 |
 | Part spacing | 400 mm between registrations in the production scenario | Up to three parts on the belt at once |
-| While a pusher strokes | The FAT holds the belt count still for about 0.4 s. This eats into the jam margins (the tightest part in the FAT is delivered at about 4.4 s of its 5 s) | FS-26 |
+| While a pusher strokes | The FAT usually holds the belt count still for about 0.4 s (the stroke and the delivery). With the default jam times, the tightest part in the FAT (a reject part in the production run) is delivered at about 4.3 s of its 5 s | FS-26 |
+| Belt slip | One scenario freezes `EncCount` while `ConveyorRun` is on | FS-26 |
+| Configuration | The defaults of `ST_CellCfg`, except in the scenarios that set `HMI.Cfg` values to prove your program uses them | FS-35 |
 
 ## 8. Suggested architecture
 
@@ -767,13 +769,16 @@ always the true movement, whatever happened at the wrap:
 
 ```iecst
 Delta := UINT_TO_DINT(EncCount) - UINT_TO_DINT(LastCount);
-IF Delta > 32767 THEN
-  Delta := Delta - 65536;        (* the counter wrapped forwards  *)
-ELSIF Delta < -32768 THEN
-  Delta := Delta + 65536;        (* the counter wrapped backwards *)
+IF Delta < -32768 THEN
+  Delta := Delta + 65536;        (* wrapped forwards: 65 535 -> 0 (this cell)       *)
+ELSIF Delta > 32767 THEN
+  Delta := Delta - 65536;        (* wrapped backwards: 0 -> 65 535 (a count-down)   *)
 END_IF;
 LastCount := EncCount;
 ```
+
+Check it against the table in section 1.3: 65 535 → 4 gives a raw difference of −65 531, which
+is below −32 768, so the first branch adds 65 536 and the movement is 5 mm.
 
 (On the first call, set `LastCount := EncCount` so that the counter's power-up value does not
 look like a huge movement.)
@@ -784,18 +789,21 @@ For the running time, the trick from the run-hours lab in Module 07 works: a fre
 ```iecst
 Stopwatch(IN := NOT Stopwatch.Q, PT := T#1h);    (* free-running, restarts once an hour *)
 IF Stopwatch.ET > LastET THEN
-  ScanTime := SUB_TIME(Stopwatch.ET, LastET);
+  ScanTime := Stopwatch.ET - LastET;
 ELSE
-  ScanTime := T#0s;                              (* the hourly restart: lose one scan *)
+  ScanTime := T#0s;                              (* the hourly restart *)
 END_IF;
 LastET := Stopwatch.ET;
 IF BeltRunning THEN
-  Age := ADD_TIME(Age, ScanTime);                (* for every tracked part *)
+  Age := Age + ScanTime;                         (* for every tracked part *)
 END_IF;
 ```
 
-`ADD_TIME` and `SUB_TIME` are used because infix `+` and `-` on `TIME` do not build with the
-course toolchain. CODESYS and TIA Portal accept `Age + ScanTime`.
+The hourly restart costs two scans: on the scan after `Q`, `IN` is FALSE and `ET` drops to
+0, and on the next scan the timer starts again from 0. That is about 20 ms of running time an
+hour, which is nothing next to a 3 s jam time (Module 07, section 5.6, traces the same
+two-scan loss). Older code writes `SUB_TIME(a, b)` and `ADD_TIME(a, b)` instead of the infix
+operators; both forms work here.
 
 **Alternatives.** Other good designs exist, and the FAT accepts them. You could store the
 count *at registration* in each record and compute the travel as a modular difference each
@@ -881,13 +889,16 @@ so a fault always wins.
 - **Classification memory:** `IF EntryPE THEN SawMetal := SawMetal OR MetalPX; ... END_IF;`
   and clear the memories on the falling edge after using them.
 - **Falling edges at power-up:** `F_TRIG` can give a pulse on its very first call when its
-  input is FALSE. The standard's reference implementation does, and so does the `plctest`
-  toolchain. Gating registration with "state is RUNNING" makes that harmless. Never let a
-  first-scan edge trigger anything that matters ([Appendix E](../appendices/E-matiec-openplc-notes.md)).
+  input is FALSE. The standard's reference implementation does, and so does the MATIEC
+  library that `plctest` uses (`Q := NOT CLK AND NOT M`, with `M` starting FALSE); other
+  implementations may not. Gating registration with "state is RUNNING" makes it harmless
+  either way. Never let a first-scan edge trigger anything that matters
+  ([Appendix E](../appendices/E-matiec-openplc-notes.md), section E.3).
 - **Names MATIEC rejects:** `Step` (a keyword of the SFC language), `Dt` (the `DT` data type)
   and `Limit` (the `LIMIT` function) all look like good variable names and all fail with
-  confusing errors. The same goes for any name used by a POU or a standard-library parameter
-  ([Appendix E](../appendices/E-matiec-openplc-notes.md)).
+  confusing errors. So does any variable named after a function or FB (`Max`, `Ton` …), and
+  any POU you name after a variable or parameter, including the standard library's (`P`, `Q`,
+  `IN` …). [Appendix E](../appendices/E-matiec-openplc-notes.md) (section E.4) explains why.
 
 ## 9. Milestones
 
@@ -897,10 +908,10 @@ Build the cell in this order. Each milestone matches the scenario names in the t
 | Milestone | Build | Requirements | FAT scenarios |
 |---|---|---|---|
 | **M1** | Command handling, first-scan rules, mode selector, cell state machine (STOPPED, STARTING, RUNNING), warning timer, green lamp, `Ready`, `HMI.Sts.State` | FS-01 to FS-07, FS-33 to FS-35 | 8 |
-| **M2** | `FB_Pusher` with supervision; MANUAL state, jog, manual strokes; a first alarm path: pusher fault → FAULTED → reset | FS-09, FS-10, FS-18 to FS-20 | 5 |
+| **M2** | `FB_Pusher` with supervision; MANUAL state, jog, manual strokes; a first alarm path: pusher fault → FAULTED → reset | FS-09, FS-10, FS-18 to FS-20 | 6 |
 | **M3** | Classification, registration, `FB_Tracker` for single parts, gate decisions, delivery confirmation, all six counters | FS-12 to FS-15, FS-17, FS-21, FS-22 | 4 |
-| **M4** | Several parts at once, counter wrap-around, lane-full debounce and re-routing, amber lamp, gate distances from `Cfg` | FS-14, FS-15, FS-23 | 5 |
-| **M5** | Entry jam, belt running time, delivery jam | FS-25, FS-26 | 3 |
+| **M4** | Several parts at once, counter wrap-around, lane-full debounce and re-routing, amber lamp, gate distances from `Cfg`, confirming the oldest part | FS-14, FS-15, FS-22, FS-23 | 6 |
+| **M5** | Entry jam, belt running time, delivery jam, supervision times from `Cfg` | FS-25, FS-26, FS-35 | 4 |
 | **M6** | The full alarm system: e-stop, overload, `FB_Alarm`, acknowledge, reset rules, red lamp | FS-27 to FS-32 | 8 |
 | **M7** | What stops keep and what they forget; manual and tracking; counter clearing; the single-writer rule | FS-08, FS-11, FS-24, FS-33 | 4 |
 
@@ -912,8 +923,10 @@ Write your design notes as you go (see the rubric). They are much harder to writ
 
 ## 10. Running the acceptance test (FAT)
 
-The test has 37 scenarios and 546 checks. It simulates about four minutes of cell operation in
-a second or two.
+The test has 40 scenarios and 629 checks. It simulates about five and a half minutes of cell
+operation in a second or two.
+
+Run these from the `plc-course` folder:
 
 ```bash
 # the untouched starter compiles and fails (that proves the test checks something)
@@ -939,15 +952,19 @@ than by your internals:
 |---|---|
 | Start-up warning | Horn on and belt off 2.7 s after Start; belt on and horn off at 3.3 s |
 | Stops (Stop, e-stop, overload, selector, fault) | Belt (and horn, solenoids) off within 30 ms |
+| Registration | Counted and tracked within 50 ms of the falling edge while RUNNING; a part that passes the entry eye while the cell is stopped, or in Manual, is not registered |
 | Pusher position | Not fired 10 mm before the gate; fired within 50 ms of the count reaching the gate, or jumping past it |
-| Pusher stroke | Solenoid still on 100 ms after firing; off within 50 ms of the extended switch |
-| Pusher supervision | No alarm at 0.8 s; alarm by 1.2 s |
-| Lane full | Not full after 0.8 s blocked; full by 1.2 s; clear again within 1.5 s |
+| Pusher stroke | Solenoid still on 100 ms after firing, and while both switches are made; off within 50 ms of the extended switch |
+| Pusher supervision | No alarm at 0.8 s; alarm by 1.2 s. Each movement is timed on its own: a 0.6 s extend followed by a failed retract must not alarm until about 1 s after the release |
+| Manual interlocks | Jog does not run the belt while a pusher is out; a pusher command is refused while jogging |
+| Lane full | Not full after 0.8 s blocked; full by 1.2 s. Still full through a 0.5 s gap in the blocking and 0.8 s after the eye clears; not full by 1.2 s. A brief blocking at the moment a part reaches its gate does not stop the push |
+| Oldest part | Two pushed parts wait in one chute; the first lane-eye edge must confirm the older one, which is checked through the jam time |
+| `Cfg` values | Lane-full time, pusher timeout, entry-jam time and reject jam time changed from the defaults; the checks use the new values |
 | Entry jam | No alarm after 1.8 s of running with the eye blocked; alarm by 2.2 s |
 | Delivery jam | Lane A: no alarm at 2.7 s, alarm at 3.3 s after registration. Reject: 4.7 s and 5.3 s |
 | Counters, `PartsInTransit`, `Ready`, state | Within 50 ms of the event (a few scans) |
 | HMI commands | Cleared after one scan |
-| Red lamp | Flashing = changes state at least every 1.1 s; steady = on at five checks over 1.2 s |
+| Red lamp | Flashing = changes state at least every 1.1 s, and each flash lasts more than 0.3 s; steady = on at five checks over 1.2 s |
 
 **Debugging a failure.** Open the test file at the line number. The lines above it tell you
 the situation. Copy the scenario into your own small `.test` file, add `print` lines (for
@@ -969,12 +986,12 @@ to) against this table.
 
 | Area | Points | Full marks when |
 |---|---|---|
-| FAT | 40 | All 37 scenarios pass (pro rata) |
+| FAT | 40 | All 40 scenarios pass (pro rata) |
 | Structure | 15 | One pusher FB used twice; tracking in its own FB (or a clearly separated section); an explicit state machine; alarms handled in one place; every output written exactly once |
 | Readability | 10 | Meaningful names, no magic numbers (use `Cfg` and named constants), comments that explain *why*, FS numbers in comments |
 | Robustness beyond the FAT | 10 | Sensible behaviour in cases the FAT does not test: tracking overflow, two parts reaching a gate in the same scan, a pusher busy when the next part arrives, silly `Cfg` values (DistB smaller than DistA?), a failed-off lane-full eye. Explain each in your notes |
 | Documentation | 10 | A one-page control narrative in your own words, the completed I/O list with your device tags, and a table of every alarm with its cause, effect and reset condition |
-| Your own tests | 10 | At least five extra scenarios for behaviour the FAT does not cover (for example FS-16 overflow, jog blocked with a pusher out, a manual stroke refused while jogging), all passing |
+| Your own tests | 10 | At least five extra scenarios for behaviour the FAT does not cover (for example FS-16 overflow, two parts reaching the same gate in one scan, a power-up with the e-stop pressed, `JamTimeA`/`JamTimeB` taken from `Cfg`, a Start from the HMI in Manual), all passing |
 | Design review | 5 | You can explain every requirement's *why* and answer the questions in section 15 |
 | **Total** | **100** | 85+ excellent, 70–84 good, 55–69 pass, below 55 not yet |
 
@@ -1006,12 +1023,14 @@ to) against this table.
    it is full: stop, or keep going and send an alarm?
 10. **Safety redesign (paper exercise).** Draw the real emergency-stop circuit with a safety
     relay, a safety-rated dump valve for the pushers and a guard around the gates. Decide the
-    stop category (IEC 60204-1: 0, 1 or 2) for each stop, and list what changes in the PLC
-    program (Module 20).
+    stop category (IEC 60204-1: 0, 1 or 2) for each stop, remembering that an emergency stop
+    must be category 0 or 1, and list what changes in the PLC program (Module 20).
 11. **Unit tests per FB.** Write separate `.test` files that exercise `FB_Pusher` and
     `FB_Tracker` on their own through a small test program (Module 22).
 12. **Other languages.** Redraw `FB_Pusher` as an SFC (Module 13), or the cell's start/stop
-    logic as Ladder in OpenPLC Editor, and run the same FAT against the generated code.
+    logic as Ladder in OpenPLC Editor. Prove the Ladder version in the Editor's simulator and,
+    if your Editor version can save the generated ST, run the same FAT against it
+    ([Module 00](../00-start-here/), *Testing Ladder you drew in OpenPLC Editor*).
 
 ## 13. Common mistakes and how to avoid them
 
@@ -1022,9 +1041,12 @@ to) against this table.
    every pusher position by one part length. Sampling `MetalPX` on one scan misses a sensor
    that is slightly offset from the eye. Remember what was seen for the whole time the part is
    in the eye.
-3. **Forgetting the wrap-around.** Comparing raw counts, or storing `EncCount` in an `INT`,
-   works for two minutes and then fails. The FAT's wrap scenario starts near 65 000 for that
-   reason.
+3. **Forgetting the wrap-around.** Comparing raw counts works until the counter first wraps,
+   which happens every 131 s at 0.5 m/s. Copying `EncCount` into an `INT` fails sooner: a
+   count above 32 767 becomes a negative number (or a conversion error, depending on the
+   platform), and the counter spends about 65 s of every 131 s in that range. Both mistakes
+   pass a short test and fail in production. The FAT's wrap scenario starts near 65 000 for
+   that reason.
 4. **Jam timers on the wall clock.** A plain `TON` started at registration keeps running while
    the belt is stopped. After a coffee break every part on the belt is "jammed".
 5. **Forgetting too much, or too little.** Clearing the tracking on every stop wastes good
@@ -1046,42 +1068,59 @@ to) against this table.
 11. **Treating HMI tags as buttons.** HMI commands are messages, not switches: act once and
     clear them (Module 18). Status tags are PLC-owned: never read back a status tag as if it
     were your state.
-12. **Fighting MATIEC.** Arrays of FB instances, `CASE` labels that are named constants, infix
-    `TIME` arithmetic, and variables called `Step`, `Dt` or `Limit` all fail here even though
-    other tools accept some of them. [Appendix E](../appendices/E-matiec-openplc-notes.md) lists
-    the workarounds.
+12. **Confirming the first record you find.** A `FOR` loop that stops at the first matching
+    record works while slots fill up in order. Once a freed slot is reused, the first record
+    found can be the *youngest* part for that exit. The old part stays in the table and trips
+    the jam check later. Pick the oldest on purpose: largest travel, or a sequence number.
+13. **Debouncing in one direction only.** An on-delay alone makes "full" reliable, but the
+    lane then reads "not full" the moment a gap opens between the backed-up bungs, and the
+    next steel bung is pushed into a chute that is still full. FS-23 asks for the same filter
+    in both directions.
+14. **One timer for the whole stroke.** If the supervision timer is not restarted when the
+    pusher changes from extending to retracting, a slow but healthy extend eats into the
+    retract time and the pusher faults for no reason. Time each movement on its own.
+15. **Fighting MATIEC.** Arrays of FB instances, `CASE` labels that are named constants, and
+    variables called `Step`, `Dt` or `Limit` all fail here even though other tools accept
+    some of them. [Appendix E](../appendices/E-matiec-openplc-notes.md) lists the
+    workarounds.
 
 ## 14. Vendor notes
 
 **Siemens (TIA Portal, S7-1200/1500).** The HMI structures become PLC data types (UDTs) in a
 global data block that the HMI accesses symbolically. `FB_Pusher` becomes an FB with its
-`TON` as a multi-instance in its static data, and TIA also accepts an `Array` of an FB type
-as a multi-instance array, which MATIEC does not. The S7-1200 CPUs have built-in high-speed
-counters that you configure in the device configuration, and the program reads the current
-count. Check the size and wrap behaviour of the value you read: the folding trick in section
-8.3 works for any counter width if you change the constants. Bit access in SCL is `Word.%X3`.
-The part table becomes an `Array[1..16] of "ST_TrackedPart"` in the FB's static area.
+`TON` as a multi-instance in its static data. Recent TIA Portal versions also accept an
+`Array` of an FB type as a multi-instance (check what your CPU family and version support),
+which MATIEC does not. The S7-1200 CPUs have built-in high-speed counters that you configure
+in the device configuration, and the program reads the current count. Check the size and wrap
+behaviour of the value you read: the folding trick in section 8.3 works for any counter width
+if you change the constants. Bit access in SCL is `Word.%X3`. The part table becomes an
+`Array[1..16] of "ST_TrackedPart"` in the FB's static area.
 
 **Rockwell (Studio 5000 Logix Designer, CCW).** The HMI structures become user-defined
 data types (UDTs), and the pusher becomes an Add-On Instruction (AOI) with its own timer
 members. Logix has dedicated instructions for classic conveyor tracking: `BSL`/`BSR` (bit
 shift left/right, typically clocked by an encoder or a pulse from a sprocket) and `FFL`/`FFU`
 (FIFO load/unload). A bit shift register with one bit per increment of belt, loaded with a 1
-for "lane A part here" at the entry station, is the textbook ladder solution to this cell.
-Edges are `ONS`, `OSR` and `OSF`. CompactLogix and ControlLogix use high-speed counter
-modules; Micro800 controllers have embedded high-speed counter inputs.
+at the entry station, is the textbook ladder solution to this cell. You need one register per
+destination (a 1 in the lane A register means "lane A part here"), and a part that is re-routed
+has its bit moved from one register to another at the gate. Edges are `ONS`, `OSR` and `OSF`.
+ControlLogix and CompactLogix systems normally count encoders with a high-speed counter
+module; Micro830 and Micro850 controllers have high-speed counter inputs built in.
 
 **CODESYS and Beckhoff TwinCAT.** Everything in the reference solution ports directly. You
 can declare `aPusher : ARRAY[1..2] OF FB_Pusher;` and, with edition 3 features, give
 `FB_Pusher` methods such as `Fire()` and properties such as `Available` (CODESYS/TwinCAT
-syntax, not testable here). Encoder inputs usually come from EtherCAT or fieldbus counter
-terminals that deliver the count as a process-data word.
+syntax, not testable here). Encoder inputs often come from EtherCAT or other fieldbus
+counter terminals that deliver the count as a process-data word; its width (often 16 or 32
+bits) depends on the terminal and how it is configured.
 
-**OpenPLC.** The same compiler family as `plctest`, so the files run unchanged. Two practical
-points. First, the OpenPLC Runtime's Modbus server exposes *located* variables (the `%IX`,
-`%QX`, `%IW`, `%QW` and `%M` areas), not structures. To connect a real HMI you would add an
-I/O-mapping section that copies `HMI.Cmd` from, and `HMI.Sts`/`HMI.Alm` to, located `%MW`/`%QX`
-variables, which is also a good place to apply the single-writer rule. Second, check whether
+**OpenPLC.** The capstone files compile with both OpenPLC compilers: MATIEC in the v3 Runtime
+and STruC++ in the v4 Editor. Two practical points. First, the Modbus server of the OpenPLC Runtime (version 3) exposes *located*
+variables, not structures: `%IX` as discrete inputs, `%QX` as coils, `%IW` as input registers, and `%QW`,
+`%MW`, `%MD` and `%ML` as holding registers (there are no `%MX` memory bits). To connect a real
+HMI you would add an I/O-mapping section that unpacks the command bits from a `%MW` word the
+HMI writes into `HMI.Cmd`, and packs `HMI.Sts` and `HMI.Alm` into `%MW` words the HMI reads.
+That section is also a good place to apply the single-writer rule. Second, check whether
 your hardware target provides a high-speed counter input at all, and how its value appears in
 the program. Without one, a 500 Hz encoder cannot be counted by a scanned input.
 
@@ -1117,9 +1156,12 @@ the program. Without one, a 500 Hz encoder cannot be counted by a scanned input.
    notices. The time check does, because the part never arrives. It also catches a part stuck
    on a moving belt, and a part pushed but stuck in its chute.
 2. 4 − 65 530 = −65 526; −65 526 + 65 536 = 10 mm. Folding into the signed range keeps the
-   result right in both directions: a belt that rolls back 3 mm when it stops gives a small
-   *negative* movement instead of a huge positive one. It works as long as the belt moves less
-   than 32 767 mm between two scans, which it always does.
+   result right in both directions. This cell's counter only counts up, but with a
+   quadrature encoder (Module 19) that counts down when the belt rolls back a few millimetres
+   as it stops, the same code gives a small *negative* movement (−3 mm) instead of a huge
+   positive one (65 533 mm), where "add 65 536 if negative" would get the roll-back wrong.
+   It works as long as the belt moves less than 32 767 mm between two scans, which it always
+   does.
 3. Their simulation moved the count in steps that landed exactly on the gate. A real belt moves
    about 5 mm per scan at 0.5 m/s, so the count almost never equals `RegCount + 500` on a scan
    when the PLC is looking: the pusher never fires and every part goes to reject (or, with a
@@ -1160,5 +1202,5 @@ the program. Without one, a 500 Hz encoder cannot be counted by a scanned input.
 
 ---
 
-Previous: [24 — Capstone projects overview](README.md) ·
+Previous: [24 — Capstone Projects](README.md) ·
 Next: [24-2 — Capstone: Batch Mixing Plant](24-2-batch-mixing-plant.md)

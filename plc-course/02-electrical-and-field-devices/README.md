@@ -1402,4 +1402,4 @@ clears, so the operator never sees it. Module 06 makes the reset act only on a n
 - IEC 60204-1 (or NFPA 79 in North America) for the electrical equipment of machines.
 
 ---
-Previous: [01 — What Is a PLC?](../01-what-is-a-plc/) · Next: [03 — Data Types and Addressing](../03-data-types-and-addressing/)
+Previous: [01 — What Is a PLC?](../01-what-is-a-plc/) · Next: [03 — Numbers, Data Types and Addressing](../03-data-types-and-addressing/)

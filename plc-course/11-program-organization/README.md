@@ -471,6 +471,27 @@ about which way a default fails. In Lab 11-1, `FbTimeout` defaults to 2 s, which
 `InterlockOK` deliberately has **no** `TRUE` default. If someone forgets to connect the
 interlock, the motor must refuse to start, not run with no protection.
 
+OpenPLC's own build of MATIEC is stricter than the standard and `plctest` about structure
+initialisers. It rejects initialisers for arrays of structures, structure initialisers with
+array members, and some others, among them the all-zero constant
+`(Count := 0, ..., Mean := 0.0)` that Lab 11-3 needs
+([Appendix E](../appendices/E-matiec-openplc-notes.md); [Module 12](../12-data-structures/),
+section 3.2). OpenPLC Editor v4's compiler (STruC++) pulls the other way: a `VAR CONSTANT`
+*must* have an initialiser. There are two ways round both. If every member should start at
+its type's default, declare it in a plain `VAR` with no initialiser: `CLEARED_STATS : ST_Stats;`
+is already all zeros, and as long as nothing writes to it, it behaves like a constant.
+Otherwise declare the variable without an initialiser and set its values in a
+**first-scan block** at the very top of the program body, so they are in place before any
+logic reads them:
+
+```iecst
+IF NOT Initialised THEN            (* Initialised : BOOL, NOT retentive (Module 06, section 6) *)
+  Batch.FillVolume_L := 2500.0;
+  Batch.MixTime := T#5m;
+  Initialised := TRUE;
+END_IF;
+```
+
 ## 4. Configuration, resources and tasks
 
 ### 4.1 The IEC software model
@@ -552,7 +573,7 @@ Priority numbers are **not** consistent between platforms. Check before you assu
 | Siemens S7 | the **largest** number | OB1, the main cycle, has the lowest priority, 1 |
 
 The standard allows either pre-emptive or non-pre-emptive scheduling. MATIEC's generated code
-(used by OpenPLC and by `plctest`) runs every task of a resource from one loop. On each base
+(used by `plctest` and by the OpenPLC Runtime v3) runs every task of a resource from one loop. On each base
 tick it runs the tasks that are due, one after another. Tasks therefore never interrupt each
 other there, whatever their priorities.
 
@@ -879,6 +900,12 @@ handshakes.
   reset. That is a plant-philosophy decision, so document it (see worked example 7.1).
 - **Reset works only when the cause has gone.** A latch that re-trips at once is honest. It
   tells the operator the problem is still there.
+- **Reset on the edge, not the level** ([Module 06](../06-edges-and-one-shots/), section 8.5).
+  The lab FBs clear `Fault` while `Reset` is TRUE, which keeps them short. But if a reset
+  button sticks, a new failure to start latches and is cleared again on the next scan, because
+  switching the command off removes the disagreement. In a real library, put an `R_TRIG` on
+  `Reset` inside the FB, or feed it a one-scan pulse, such as an HMI reset bit that the program
+  clears once used (worked example 7.1).
 - **Reset scope.** A common reset button per area is normal. Per-device resets from the HMI
   are also common. Keep safety-function resets separate and hardwired according to the safety
   design ([Module 20](../20-functional-safety/)).
@@ -1256,7 +1283,8 @@ instruction (section 4.5).
 ### CODESYS and Beckhoff TwinCAT
 
 - **POUs**: *Program*, *Function Block* and *Function*, plus edition-3 object orientation
-  (*Method*, *Property*, *Interface*, `EXTENDS`, `IMPLEMENTS`) and *Actions*. An OOP motor
+  (*Method*, *Interface*, `EXTENDS`, `IMPLEMENTS`), the CODESYS extension *Property*, and
+  *Actions*. An OOP motor
   block might offer methods such as `Pump1.Start()`. That syntax is for CODESYS/TwinCAT and is
   not testable here. [Module 21](../21-architecture-and-standards/) shows where OOP helps.
 - **Tasks** are set up in the *Task Configuration*: *cyclic*, *event* (rising edge of a
@@ -1288,6 +1316,8 @@ instruction (section 4.5).
   writing to your own `VAR_INPUT` inside an FB (the copy trap), and calling an FB with its
   `VAR_IN_OUT` unconnected.
 - An FB's `VAR_IN_OUT` is implemented as copy-in/copy-back.
+- OpenPLC's own build of MATIEC rejects some structure initialisers that `plctest` accepts.
+  Leave them out or use a first-scan block (section 3.6).
 - All tasks of a resource run from one loop, with no pre-emption (4.3). `plctest` runs them
   the same way. When a configuration has several program instances, test paths need the
   instance name, as in `set CounterInst.BottlePE TRUE`.
@@ -1559,10 +1589,13 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
 - Inside the FB, put an `R_TRIG` on `Sample` and do all the work inside `IF Edge.Q THEN`.
 - Test `Stats.Count = 0` *before* incrementing it, to know whether this is the first sample.
   Don't test `MinValue = 0.0` instead: an empty container weighs 0 g, and that is a real sample.
-- Clearing a whole structure: declare a `VAR CONSTANT` of type `ST_Stats` with every field
-  zero and assign it, `LineStats := CLEARED_STATS;`, or assign the fields one by one. Do the
-  clear *after* the two calls, so that a weight arriving in the same scan cannot leave the
-  record non-zero while the button is held.
+- Clearing a whole structure: declare a variable of type `ST_Stats` that is never written, so
+  every field stays zero, and assign it: `LineStats := CLEARED_STATS;`. Or assign the fields
+  one by one. Every member of `ST_Stats` starts at zero, so `CLEARED_STATS : ST_Stats;` in a
+  plain `VAR` needs no initialiser. Section 3.6 explains why not `VAR CONSTANT`: OpenPLC v3
+  and v4 disagree about the initialiser. Do the clear
+  *after* the two calls, so that a weight arriving in the same scan cannot leave the record
+  non-zero while the button is held.
 - Why `Sum` is `LREAL`: a `REAL` holds about 7 significant digits. After about 17,000 samples
   of 500 g the total passes 8.4 million, and from there a `REAL` can only change in whole
   grams, so every weight added is rounded to a whole gram. An `LREAL` keeps 15–16 digits
@@ -1663,4 +1696,4 @@ python3 tools/plctest.py my-work/11-3-function-library.st 11-program-organizatio
   Retain and Persistent variables*.
 
 ---
-Previous: [10 — Structured Text](../10-structured-text/) · Next: [12 — Data Structures](../12-data-structures/)
+Previous: [10 — Structured Text in Depth](../10-structured-text/) · Next: [12 — Data Structures: Arrays, Structures and Enumerations](../12-data-structures/)

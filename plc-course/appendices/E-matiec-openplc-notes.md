@@ -9,8 +9,9 @@ by compiling and running test programs, not copied from documentation.
 
 **MATIEC** is an open-source IEC 61131-3 compiler from the Beremiz project. Its `iec2c`
 program translates Structured Text, Instruction List and textual SFC into C. The OpenPLC
-Runtime ships its own copy (a fork) of MATIEC. When you upload a `.st` file to the Runtime,
-that compiler runs with these options:
+Runtime ships its own copy (a fork) of MATIEC. When the Runtime builds a program (the v3
+Runtime from an uploaded `.st` file; v4 is driven from the Editor), the v3 build script runs
+that compiler with these options:
 
 ```text
 iec2c -f -l -p -r -R -a program.st
@@ -27,8 +28,8 @@ iec2c -f -l -p -r -R -a program.st
 
 `plctest` uses the **same flags** with the upstream Beremiz MATIEC. `tools/setup-matiec.sh`
 clones it and builds it into `tools/.matiec`. For every language feature used in this course
-the two compilers accepted and rejected exactly the same programs. The one runtime-library
-difference found is `F_TRIG` (see E.3).
+the two compilers accepted and rejected exactly the same programs (see E.3 for one
+library difference, and E.2 for one crash seen only in OpenPLC's fork).
 
 ### How a test runs
 
@@ -72,13 +73,22 @@ The lab files avoid all of them.
 | `STRING[n]` or `STRING(n)` length declarations | Plain `STRING` (up to 126 characters here) | CODESYS `STRING(n)`, TIA `String[n]` |
 | Generic conversions `TO_INT(x)`, `TO_REAL(x)` | Typed conversions: `REAL_TO_INT`, `INT_TO_REAL`, `DINT_TO_REAL`, `WORD_TO_INT`, `TIME_TO_DINT`, `TRUNC` … | CODESYS accepts both forms. TIA uses typed conversions such as `REAL_TO_INT`, plus implicit conversion between many types |
 | Bit access `MyWord.3` | Masks and shifts: `(SHR(MyWord, 3) AND 16#1) <> 0`, or a BOOL array | CODESYS `MyWord.3`, TIA `MyWord.%X3`, Logix `MyDint.3` |
-| Enumerations with explicit values `(Idle := 0, Run := 10)` | Plain enumerations, or integer constants | Allowed in CODESYS and TIA |
+| Enumerations with explicit values `(Idle := 0, Run := 10)` | Plain enumerations, or integer constants | Allowed in CODESYS. In TIA Portal, recent versions offer comparable named-value data types for S7-1500; check your version |
 | `LTIME`, `LDATE`, `LTOD`, `LDT` | `TIME`, `DATE`, `TOD`, `DT` | Available in edition-3 tools |
-| Object orientation: `METHOD`, `PROPERTY`, `INTERFACE`, `EXTENDS`, `IMPLEMENTS`, `THIS`, `SUPER` | Plain function blocks | CODESYS and TwinCAT (see Module 21) |
+| Object orientation from edition 3: `METHOD`, `INTERFACE`, `EXTENDS`, `IMPLEMENTS`, `THIS`, `SUPER`, and the CODESYS/TwinCAT extension `PROPERTY` | Plain function blocks | CODESYS and TwinCAT (see Module 21) |
 | `VAR_GLOBAL` inside a `PROGRAM` | `VAR_GLOBAL` in the `CONFIGURATION`, `VAR_EXTERNAL` in the POU | Global variable lists (CODESYS), global DBs (TIA), controller tags (Logix) |
 | An empty program body, or a bare `;` statement | At least one real statement. That is why starters contain placeholder assignments | Empty bodies are allowed elsewhere |
 | An array as a FUNCTION `VAR_INPUT` (it compiles, then the C build fails) | Pass the array to a FUNCTION_BLOCK input (use a named array type), or as `VAR_IN_OUT` | Allowed |
-| `MUL_TIME` / `DIV_TIME` function names | `T * n`, `T / n` | Named functions available in some tools |
+| A `DT` (DATE_AND_TIME) member inside a structure or array (it compiles, then the C build fails: "initializer element is not constant") | Keep a `DT` as a plain variable, or store `TOD`/`DATE` or a DINT timestamp in the structure | Allowed |
+| A local `VAR CONSTANT` used as an array bound, `ARRAY[1..N_MAX]` ("Subrange upper limit is not a constant value"), even with `-a` | Literal bounds; or a `VAR_GLOBAL CONSTANT` in the CONFIGURATION, read through `VAR_EXTERNAL CONSTANT` | Allowed |
+| An array **element** passed to a FUNCTION's `VAR_IN_OUT`, `F(Arr[2])` (it compiles, then the C build fails) | Copy the element to a variable, call, copy back; or pass the whole array | Allowed |
+| Located arrays, `Inputs AT %IX0.0 : ARRAY[0..7] OF BOOL` | Separate located BOOLs, copied into an array in the I/O-mapping code | Allowed in CODESYS; TIA and Logix map I/O differently |
+| Ordering or converting enumeration values: `State > Idle`, `E_State_TO_INT(State)` | Compare with `=` / `<>`, or use `CASE`; keep a separate INT if you need a number | CODESYS allows conversion and, with care, ordering |
+| `MUL_TIME` / `DIV_TIME` function names | `T * n`, `T / n`, or the older names `MULTIME` / `DIVTIME` | Named functions available in some tools |
+| (OpenPLC's fork only) Some structure initialisers that upstream MATIEC accepts: initialisers for **arrays of structures**, struct initialisers with **array members** (`(Dose := [1.0, 2.0])`), and in some programs even TIME or REAL members of a constant structure ("Initialization element identifier … is not declared"). Which ones fail depends on the rest of the file | Leave the initialiser out and set the values in a first-scan block (`IF NOT Loaded THEN … Loaded := TRUE; END_IF`). If the data is `RETAIN`, make the flag `RETAIN` too (see capstone 24-2) | Allowed |
+| (OpenPLC's fork only) Several instances of your own FB declared in one list, `Cause1, Cause2, Cause3 : FB_TripCause;`, crashed the Runtime's compiler in two labs, while upstream MATIEC compiled them. The crash is in the code that writes `VARIABLES.csv` and depends on the rest of the program, so it is hard to predict | Declare FB instances one per line. All lab files follow this rule | Not affected |
+| A named constant (`VAR CONSTANT`) used as a `CASE` label ("invalid case element(s)") | Literal labels, or better, an enumeration | Allowed |
+| Edge-qualified FB inputs `X : BOOL R_EDGE;` / `F_EDGE` (compiler error or crash) | An `R_TRIG`/`F_TRIG` instance inside the FB | Supported in CODESYS |
 | `WSTRING` (internal compiler error) | `STRING` | `WSTRING` / `WString` available |
 | A based literal outside the signed range, assigned to a signed type: `MyInt := 16#FFFF;` or `MySint := 16#80;` (rejected as "Incompatible data types") | Use the matching bit-string type (`WORD`, `BYTE`), a decimal value (`-1`), or a conversion (`WORD_TO_INT(16#FFFF)`) | Usually accepted, sometimes with a warning |
 
@@ -127,11 +137,14 @@ M := NOT CLK;
 ```
 
 With `M` initially FALSE and `CLK` FALSE on the first call, `Q` is TRUE for that first
-execution: a "falling edge" appears out of nothing. The OpenPLC Runtime library uses this
-form. Upstream MATIEC's library (used by `plctest`) instead uses
-`Q := NOT CLK AND M; M := CLK;`, which never pulses on the first call. CODESYS and other tools
-document their own behaviour. Treat the first scan after a restart as special, and don't let a
-falling-edge detector trigger anything important unless you have checked it on your platform.
+execution: a "falling edge" appears out of nothing. Upstream MATIEC (and therefore `plctest`)
+and the OpenPLC Runtime library both use this form, and a quick test confirms `Q` is TRUE on
+the first scan and FALSE afterwards. The library copy inside OpenPLC's MATIEC source tree
+contains a different version (`Q := NOT CLK AND M; M := CLK;`) that never pulses on the first
+call, and other tools document their own behaviour. Treat the first scan after a restart as
+special. Module 06 shows how to mask the first-call pulse with a first-scan flag. Never let a
+falling-edge detector trigger anything important without checking what it does on your
+platform.
 
 **TIME conversions are in seconds.** In MATIEC and the OpenPLC Runtime:
 
@@ -151,9 +164,62 @@ C function name for `T1 + T2` and `T1 - T2`, so the C build fails. OpenPLC's for
 the right name, and `plctest` maps the wrong one for you, so you can write TIME arithmetic
 normally.
 
+**Subranges are not checked at all.** A variable of type `INT(0..100)` happily holds 150:
+MATIEC accepts `Pct := 150;`, an out-of-range initial value, and assignments from other
+variables, and nothing stops it at runtime. A subrange documents intent but gives no
+protection here. Clamp with `LIMIT` yourself.
+
+**`VAR_TEMP` does not remember anything.** Temporary variables are re-initialised every time
+the POU runs (in a `PROGRAM`, that is every scan). A "previous value" bit kept in `VAR_TEMP`
+therefore looks like a new edge on every scan. This is standard IEC behaviour, not a MATIEC
+quirk. Keep anything that must survive between scans in `VAR`.
+
+**A TIME sum can compare as smaller than it is.** When the millisecond parts of a TIME
+addition add up to exactly one second, MATIEC's library leaves the result un-normalised
+(4 s + 1 000 000 000 ns instead of 5 s). It prints as 5000 ms, but compares as neither
+equal to nor greater than `T#5s`:
+
+| Expression | MATIEC result |
+|---|---|
+| `T#4500ms + T#500ms` | prints as T#5000ms |
+| `(T#4500ms + T#500ms) >= T#5s` | FALSE |
+| `(T#4500ms + T#500ms) = T#5s` | FALSE |
+
+The cause is an off-by-one test (`> 1000000000` instead of `>=`) in the normalising
+function; OpenPLC's runtime library has the same code. The effect is that a `>=` test on an
+accumulated time can fire one scan late. For timing, prefer a timer's `ET`, which is not
+affected. [Module 07](../07-timers/) shows how to design accumulated-time logic around it.
+`ADD_TIME`, `SUB_TIME`, `MULTIME` and `DIVTIME` all work; the edition-3 names `MUL_TIME` and
+`DIV_TIME` do not.
+
 **Integer overflow.** Arithmetic wraps around silently (`INT` 32767 + 1 = −32768) because the
 generated C uses fixed-size integers. Some PLCs set a status flag or fault instead. Size your
 variables so overflow cannot happen (Modules 03 and 09).
+
+### SFC in MATIEC
+
+MATIEC compiles textual SFC. Earlier OpenPLC Editor versions drew graphical SFC and compiled
+it the same way; the current v4 Editor lists LD, FBD, ST and IL, and CODESYS is the easiest
+free tool for graphical SFC. MATIEC differs from the standard in some SFC details, so write
+charts that don't depend on them:
+
+- **Alternative (selection) branches:** if two alternative transitions from the same step are
+  TRUE in the same scan, MATIEC activates **both** following steps. That was verified here.
+  Always make alternative transition conditions mutually exclusive, for example
+  `Go AND RouteA` / `Go AND NOT RouteA`.
+- The Module 13 authors also found, and checked in MATIEC, that:
+  - the final execution of an action with its `Q` flag FALSE after its step deactivates is not
+    performed;
+  - a `P` action on the `INITIAL_STEP` does not run at power-up;
+  - a Boolean action variable driven with `P0` stays TRUE;
+  - an `N` action can drop out for a scan when the chart moves from a step written later in
+    the source to one written earlier.
+
+  Module 13 shows how to structure charts so that none of this matters: outputs are driven
+  from step flags or `N` actions on the steps where they must be on, and there are no
+  overlapping alternative conditions.
+- Step flags (`MyStep.X`) and step times (`MyStep.T`) can be used inside the program, but
+  `plctest` scenarios cannot address them, so SFC lab tests check outputs only.
 
 ## E.4 Name clashes caused by the `-p` flag
 
@@ -173,7 +239,8 @@ naming conventions (`FB_…`, `ST_…`, `E_…`, descriptive program names, `Con
 `MainTask`, `Inst0`) keep you clear of this.
 
 The same happens with names of standard functions and FBs (`Limit`, `Max`, `Sel`, `Sin`,
-`Ton`), type keywords (`Dt`, `Date`) and language keywords (`Step`, `By`) used as variables.
+`Ton`), type keywords (`Dt`, `Date`, `Word`) and language keywords (`Step`, `By`, `Program`,
+`Transition`, `Action`) used as variable or enumeration-value names.
 Remember that IEC identifiers are **not case-sensitive**: `Motor`, `MOTOR` and `motor` are
 the same variable, and `Sin` is the same name as the `SIN` function.
 
@@ -214,7 +281,35 @@ the same variable, and `Sin` is the same name as the `SIN` function.
 Vendor details change between versions. Treat the table as a starting point and check your
 tool's help for the exact instruction names.
 
-## E.7 Troubleshooting the setup
+## E.7 OpenPLC Editor v4 and the STruC++ compiler
+
+The current **OpenPLC Editor (v4)** no longer uses MATIEC. It compiles Structured Text, and the
+Ladder and FBD it translates into Structured Text, with **STruC++**, a newer IEC 61131-3 to
+C++ compiler. MATIEC remains what `plctest` uses and what the older OpenPLC Runtime v3 used.
+
+Every lab file was also compiled with STruC++ 0.6.9, the version bundled with OpenPLC Editor
+4.3.1. All of them compile except the textual-SFC lab (13-3), because STruC++ and the v4
+Editor have no SFC. These are the differences that were found, and how the labs avoid them:
+
+| Construct | MATIEC (`plctest`, OpenPLC v3) | STruC++ (OpenPLC v4) | What the labs do |
+|---|---|---|---|
+| Qualified enum value `E_State#Idle` (the IEC form) | Accepted | Rejected ("unexpected character #") | Plain `Idle` |
+| Qualified enum value `E_State.Idle` (CODESYS style) | Rejected | Accepted | Plain `Idle` |
+| `VAR CONSTANT` with no initial value | Accepted | Rejected ("must have an initializer") | A plain `VAR` that nothing writes to |
+| A variable named like a function or block in STruC++'s bundled libraries (for example `Window`: OSCAT Basic has a `WINDOW` function) | Accepted | Rejected: the name clashes with the library function | Distinct names (`PressWindow`) |
+| Textual SFC (`INITIAL_STEP`, `STEP`, `TRANSITION`) | Supported | Not supported | Only Lab 13-3 uses it |
+
+Plain enum values (`Idle`) are the form every compiler here accepts, as long as two enum types
+don't share a value name.
+
+**Using a lab in OpenPLC Editor v4.** Create a project, add a program in Structured Text,
+then copy the lab's variable declarations and its logic into the program. Data types
+(`TYPE … END_TYPE`) and function blocks become separate items in the project tree. The
+CONFIGURATION section at the end of each lab file isn't needed: the Editor sets up tasks in its
+own configuration. For a ready-to-open example of the v4 project format, see the
+[PLC Playground](../playground/).
+
+## E.8 Troubleshooting the setup
 
 - **`MATIEC (iec2c) not found`**: run `tools/setup-matiec.sh` from the `plc-course` folder,
   or set `MATIEC_HOME` to an existing MATIEC build (a folder that contains `iec2c` and `lib/`).

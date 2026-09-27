@@ -134,10 +134,15 @@ PROGRAM CheckWeigher
     Head1        : FB_SampleStats;
     Head2        : FB_SampleStats;
   END_VAR
-  VAR CONSTANT
-    CLEARED_STATS : ST_Stats := (Count := 0, InSpec := 0, OutSpec := 0,
-                                 MinValue := 0.0, MaxValue := 0.0,
-                                 Sum := 0.0, Mean := 0.0);
+  VAR
+    (* A record with every field at zero, for clearing LineStats in one
+       assignment. Every member of ST_Stats starts at 0 or 0.0, and nothing
+       ever writes to CLEARED_STATS, so it stays all-zero. In IEC terms this
+       would be a VAR CONSTANT with an initialiser, (Count := 0, ...,
+       Mean := 0.0), but OpenPLC v3's compiler rejects that initialiser and
+       OpenPLC v4's compiler insists a CONSTANT has one, so a plain VAR is the
+       form every tool accepts (see Appendix E). *)
+    CLEARED_STATS : ST_Stats;
   END_VAR
 
   (* Both instances update the SAME record. VAR_IN_OUT must be connected

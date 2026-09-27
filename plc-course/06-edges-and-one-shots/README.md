@@ -453,8 +453,8 @@ shows an `F_TRIG` that counts a "return to normal" at power-up unless it is mask
   before the cyclic program in OB 1.
 - **Rockwell Logix:** the status flag `S:FS` (first scan) is TRUE on the first scan after the
   controller goes into Run mode. Micro800 controllers (CCW) have a first-scan system variable,
-  `__SYSVA_FIRST_SCAN`. Some printed manuals show it with a single leading underscore, so
-  pick it from CCW's system-variable list rather than typing it.
+  usually written `_SYSVA_FIRST_SCAN`. Some documents show it with two leading underscores,
+  so pick it from CCW's system-variable list rather than typing it.
 - **CODESYS, OpenPLC, MATIEC:** roll your own as in section 6.2. Some runtimes and libraries
   also provide a first-cycle flag. Check yours.
 
@@ -1040,8 +1040,10 @@ What happens (checked with `plctest`):
   literally. `F_TRIG` gives Q = TRUE on its first call if CLK is FALSE, and `R_TRIG` gives
   Q = TRUE on its first call if CLK is already TRUE (both verified with `plctest`). Code that
   reads a function-block input declared `R_EDGE` is rejected, so use explicit instances. Ladder
-  you draw in OpenPLC Editor, edge contacts included, is translated to ST when the program is
-  built, so you can test it with the lab `.test` files (see [Module 00](../00-start-here/)).
+  you draw in OpenPLC Editor, edge contacts included, can be checked in the Editor's built-in
+  simulator. It is translated to ST when the program is built, so if your Editor version can
+  save that file you can also test it with the lab `.test` files (see
+  [Module 00](../00-start-here/#testing-ladder-you-drew-in-openplc-editor)).
 
 ## Labs
 
@@ -1098,7 +1100,9 @@ section 7.1.
 </details>
 
 *Try this:* draw the same logic in Ladder in OpenPLC Editor using a rising-edge contact and the
-XOR rung from section 8.1, then run the same test against the generated ST.
+XOR rung from section 8.1, and check it in the simulator. Hold the button down for several
+seconds and make sure the light changes only once. If your Editor version can save the
+generated ST, run the same test against it.
 
 ### Lab 06-2: Carton and product-change counter
 

@@ -13,7 +13,7 @@ ingredients by flow-meter totals, heats the blend under PID control, holds it at
 while it is agitated, then pumps it out. Recipes drive every batch, a state machine in the
 style of ISA-88 runs the procedure, and the operator can hold, restart or abort it at any
 point. There are interlocks, alarms and a batch report. You receive the interface and a plant
-simulation. You write the control program, and a 41-scenario factory acceptance test (FAT)
+simulation. You write the control program, and a 45-scenario factory acceptance test (FAT)
 checks it.
 
 Batch plants make paints, resins, food, beverages, pharmaceuticals and cleaning products.
@@ -111,7 +111,7 @@ PLC only *monitors* it.
 | Tag | Device | What the letters mean |
 |---|---|---|
 | T-201 | Mixing vessel, 2000 L, steam jacket | T = tank |
-| XV-201, XV-202, XV-204 | Actuated on/off valves, spring return (they close on loss of air or power) | XV = on/off valve |
+| XV-201, XV-202, XV-204 | Actuated on/off valves, spring return (they close on loss of air or power) | XV = on/off valve (common practice: in ISA-5.1 the first letter X is "unclassified", and many sites use it for on/off valves) |
 | FT-201 / FQ-201, FT-202 / FQ-202 | Flow meters with a pulse output, and the totals the PLC keeps from those pulses | F = flow, T = transmitter, Q = totalise |
 | LT-201 | Level transmitter, 4–20 mA = 0–100 % | L = level |
 | LSHH-201 | High-high level switch, normally closed contact | S = switch, HH = high-high |
@@ -197,7 +197,7 @@ read `Sim.` anything in your own logic.
 These numbers make the dynamics realistic in shape but faster than a real vessel of this size,
 so that a full batch takes minutes of simulated time instead of hours.
 
-### 5.2 Fault injection and test hooks (inputs the test writes)
+### 5.2 Fault injection and test hooks (values the test writes)
 
 | `Sim.` input | Default | Effect |
 |---|---|---|
@@ -208,7 +208,7 @@ so that a full batch takes minutes of simulated time instead of hours.
 | `HHWireBreak` | FALSE | LSHH-201 circuit open |
 | `TtForce`, `TtForcemA` | FALSE, 12.0 | TT-203 loop current replaced by `TtForcemA`: a loop calibrator, or a failed loop (0.0 = wire break) |
 | `LtForce`, `LtForcemA` | FALSE, 12.0 | The same for LT-201 |
-| `VolumeL`, `TempC` | 0.0, 20.0 | Process state; a test may set them to jump to a new condition |
+| `VolumeL`, `TempC` | 0.0, 20.0 | Process state (outputs of the model that the test may overwrite): a jump to a new condition, such as a leak, a cold addition or a rinse |
 
 ### 5.3 Observer outputs (the referee)
 
@@ -260,7 +260,12 @@ END_STRUCT;
 ```
 
 `Recipes : ARRAY[1..5] OF ST_Recipe` is declared `RETAIN`, so edits survive a power cycle.
-Three recipes are loaded as initial values, and recipes 4 and 5 are empty:
+Three default recipes are given, and recipes 4 and 5 are empty. The starter loads the
+defaults in a small block at the top of the program, guarded by a `RecipesLoaded` flag that
+is also `RETAIN`. So they are written once on a cold start and never overwrite recipes that
+an operator has edited. (An array-of-structures initialiser on the declaration would be the
+textbook IEC form, but OpenPLC's compiler rejects it; see
+[Appendix E](../appendices/E-matiec-openplc-notes.md).)
 
 | No. | Name | QtyA (L) | QtyB (L) | TempSP (°C) | MixTime | HoldTime |
 |---|---|---|---|---|---|---|
@@ -287,8 +292,8 @@ changes the *next* batch, not this one.
 | `PreactB` | 1.0 | In-flight volume of XV-202, L |
 | `SettleTime` | T#3s | After an inlet closes, wait this long before the charge counts as complete |
 | `NoFlowTime` | T#10s | Inlet open and no meter pulse for this long = dosing fault |
-| `MaxChargeTime` | T#5m | Longest a charge phase may run = dosing fault |
-| `MaxHeatTime` | T#15m | Longest the heat phase may run = heating timeout |
+| `MaxChargeTime` | T#8m | Longest a charge phase may run = dosing fault. It must cover the longest valid charge: 1500 L of A takes 375 s, 400 L of B 400 s |
+| `MaxHeatTime` | T#25m | Longest the heat phase may run = heating timeout. The largest, hottest valid batch (1500 L to 80 °C) takes about 17 min |
 | `TempBand` | 2.0 | "At temperature" means within ± this of `TempSP`, °C |
 | `TempHighLimit` | 85.0 | High temperature alarm; it clears 2 °C below |
 | `TempKc`, `TempTi`, `TempTd` | 8.0, 200.0, 0.0 | TIC-203 tuning: gain in % per °C, integral and derivative time in s (ideal form) |
@@ -301,6 +306,7 @@ changes the *next* batch, not this one.
 | `FeedbackTime` | T#3s | Motor command and running feedback may disagree for this long before a fault |
 | `XmtrFaultDelay` | T#2s | An NE43 failure signal must last this long to be a transmitter fault |
 | `MinBatchL`, `MaxBatchL` | 300.0, 1500.0 | Valid total batch size, QtyA + QtyB, L |
+| `MaxQtyB` | 400.0 | Largest valid charge of B, L: the small B line needs 400 s for it |
 | `MinTempSP`, `MaxTempSP` | 20.0, 80.0 | Valid recipe setpoint range, °C (there is no cooling) |
 
 Use these fields, not literal numbers in your code. The test changes some of them and expects
@@ -340,7 +346,7 @@ the command was accepted or not.
 | 0 | Accepted |
 | 5 | Not in Idle (a batch is in progress, or Complete/Aborted waiting for Reset) |
 | 1 | `RecipeNo` outside 1..5 |
-| 2 | Recipe invalid: QtyA ≤ 0, QtyB < 0, QtyA + QtyB outside `MinBatchL`..`MaxBatchL`, `TempSP` outside `MinTempSP`..`MaxTempSP`, or a negative time |
+| 2 | Recipe invalid: QtyA ≤ 0, QtyB < 0, QtyB > `MaxQtyB`, QtyA + QtyB outside `MinBatchL`..`MaxBatchL`, `TempSP` outside `MinTempSP`..`MaxTempSP`, or a negative time |
 | 3 | Vessel not empty: `LevelPct` > `EmptyLevel` |
 | 4 | An alarm is active (any bit of `AlmActive`) |
 
@@ -364,7 +370,8 @@ got and how long the batch took.
 
 ### 7.1 States and commands
 
-The batch follows a subset of the ISA-88 example state model: no Pause and no Stop.
+The batch uses a state model based on the ISA-88 example, without the Pausing/Paused and
+Stopping/Stopped states.
 
 ```mermaid
 stateDiagram-v2
@@ -392,21 +399,23 @@ batch straight to **Aborted** (section 7.9).
 |---|---|---|
 | **Idle** | Everything off | Start accepted → Running (phase ChargeA); Drain accepted → Running (phase Drain) |
 | **Running** | The active phase runs (sections 7.2–7.7) | Last phase done → Complete; Hold command or a hold cause → Holding; Abort → Aborting |
-| **Holding** | Inlets shut, steam off, P-204 stops and XV-204 shuts after `ValveLeadTime`; the agitator keeps running if it is running | Pump stopped and outlet valve shut → Held |
-| **Held** | As Holding; totals keep counting; phase timers are paused | Restart, only if no hold cause is active → Restarting |
-| **Restarting** | Nothing extra is needed in this plant | → Running, in the same phase |
+| **Holding** | Inlets shut, steam off, P-204 stops and XV-204 shuts after `ValveLeadTime`; the agitator keeps running if it is running | Pump stopped and outlet valve shut → Held; Abort → Aborting |
+| **Held** | As Holding; totals keep counting; phase timers are paused | Restart, only if no hold cause is active → Restarting; Abort → Aborting |
+| **Restarting** | Nothing extra is needed in this plant | → Running, in the same phase; Hold or a hold cause → Holding; Abort → Aborting |
 | **Aborting** | Inlets shut, steam off, agitator off, P-204 stops and XV-204 shuts after `ValveLeadTime` | All stopped → Aborted |
 | **Aborted** | Everything off; the batch cannot continue | Reset → Idle |
 | **Complete** | Everything off; the report is written | Reset → Idle |
 
 Holding, Restarting and Aborting are transient: the batch passes through them while their
-actions complete. The test allows up to 5 s for Holding → Held. A design that reaches Held on
-the next scan is fine.
+actions complete. The test allows up to 5 s for Holding → Held. When there is nothing to wait
+for, a design that reaches Held (or Aborted) on the next scan is fine. When P-204 was running,
+the batch stays in Holding (or Aborting) until XV-204 has been told to shut, `ValveLeadTime`
+after the pump stopped.
 
 **Command acceptance.** A command that does not apply in the present state does nothing, and it
 is still cleared. Start while not Idle gives reject code 5. Restart in Held while a hold cause
 is still active is **refused**: the batch stays in Held. It must not pass through Restarting
-and bounce back.
+and bounce back. If Hold and Abort arrive in the same scan, Abort wins.
 
 **Hold causes** are all the alarms except the e-stop: any active bit in `AlmActive` except bit 9
 (section 7.11). A hold cause in Running or Restarting takes the batch to Holding.
@@ -430,7 +439,7 @@ flowchart LR
 | **ChargeB** | The same with XV-202 and `QtyB`. Skipped when `QtyB` = 0 | As charge A | As charge A → dosing fault B |
 | **Heat** | TIC-203 in automatic with SP = `TempSP` | TT-203 ≥ `TempSP − TempBand` | Phase has run for `MaxHeatTime` → heating timeout |
 | **Mix** | TIC-203 in automatic; agitation continues | Agitated for `MixTime` **and** at temperature for `HoldTime` (section 7.6) | — |
-| **Drain** | Steam off; XV-204 then P-204 (section 7.7) | Vessel empty, run-on done, P-204 stopped and XV-204 shut | P-204 feedback (section 7.4) |
+| **Drain** | Steam off; XV-204 then P-204 (section 7.7) | Vessel empty, run-on done, P-204 stopped and XV-204 told to shut | P-204 feedback (section 7.4) |
 
 The agitator (section 7.4) runs in every phase whenever the level allows it. Watchdog times
 count only while the batch is Running in that phase. A hold restarts them, so a batch that
@@ -481,7 +490,11 @@ holding the batch:
   off, a manual valve is shut, or the meter has failed. Restart the timer on every pulse. The
   2 s valve stroke is well inside the 10 s.
 - **Timeout:** the phase has run for `MaxChargeTime`. This catches a *slow* flow, such as a
-  partly blocked strainer, where pulses still arrive so the no-flow check never fires.
+  partly blocked strainer, where pulses still arrive so the no-flow check never fires. One
+  fixed limit has to cover the longest charge any valid recipe can ask for, which is why
+  `MaxQtyB` exists and why the 8-minute default catches a slow flow late on a small charge.
+  Many batching systems calculate the limit for each charge from its target and the nominal
+  flow instead (an extension idea at the end).
 
 **High-high level.** LSHH-201 open closes both inlet valves **directly**, in every state, as an
 interlock on the outputs, not only through the Hold. [Module 13](../13-sequential-control/),
@@ -496,8 +509,9 @@ below `Target − Preact`, so the charge continues with the remainder. A 400 L c
 - The agitator may run only with the impeller covered: start at a level of at least
   `AgitStartLevel` (10 %), stop below `AgitStopLevel` (8 %). The 2 % gap is hysteresis, so
   that ripples on the surface do not start and stop the motor.
-- It runs in Running and Restarting whenever the level allows it, from part way through charge
-  A until the vessel has drained below 8 %.
+- It runs in Running and Restarting whenever the level allows it: from the moment charging
+  brings the level up to 10 % (part way through charge A for every stock recipe) until the
+  vessel has drained below 8 %.
 - In Holding and Held it **keeps running if it is running**, so the product stays mixed and the
   jacket does not scorch a stagnant layer. It is **never started** in Holding or Held. A fault
   reset must not start equipment by itself. The agitator restarts when the operator restarts
@@ -533,9 +547,9 @@ bumpless transfer: when a loop goes from manual to automatic, the output continu
 from the manual value. That is right when an operator switches a running loop to automatic. At
 the start of a heat-up it is wrong. The "manual value" is 0 %, so a bumpless start makes the
 output creep up at the integral rate. With the default tuning, recipe 1 then takes about
-9 minutes to heat instead of about 3. At
-the start of the heat phase, clear the integral part instead (a *cold start*). The output then
-begins at Kc × error, which saturates at 100 %, the full-steam heat-up you want. The
+9 minutes to heat instead of about 3. At the start of the heat phase, clear the integral part
+instead (a *cold start*). The output then begins at Kc × error (8 %/°C × 40 °C = 320 %), which
+saturates at 100 %, the full-steam heat-up you want. The
 conditional-integration anti-windup of Module 15 then brings the temperature in without a big
 overshoot.
 
@@ -556,10 +570,14 @@ heats in about 190 s and overshoots by less than 0.1 °C. If you use another alg
 may need other settings. A **velocity-form** controller, for example, loses whatever the 100 %
 limit clips off during the heat-up, so with these settings it crawls through the last few
 degrees. Velocity-form designs usually add an *approach* strategy: full steam until about
-10 °C below the setpoint, then hand over to the controller. Either way, retune until the three
-requirements are met, and record your final settings in `Cfg`.
+10 °C below the setpoint, then hand over to the controller, whose output then falls by Kc for
+every degree the temperature still rises. Use the approach only when the heat phase starts
+well below the setpoint. A batch that starts close to it (recipe 3 starts *at* its 20 °C
+setpoint) must not get a burst of full steam: with no cooling, it would overshoot by several
+degrees. Either way, retune until the three requirements are met, and record your final
+settings in `Cfg`.
 
-**Heating timeout.** If the heat phase has run for `MaxHeatTime` (15 min), latch the heating
+**Heating timeout.** If the heat phase has run for `MaxHeatTime` (25 min), latch the heating
 timeout and hold the batch. Typical causes: no steam, a stuck valve, a failed trap.
 
 **Measurement.** TT-203 goes through the NE43 checks of [Module 14](../14-analog-and-process-io/):
@@ -572,7 +590,8 @@ of time constant **up to 1 s**. The tests allow for that.
 
 The Mix phase has two timers, and both must be satisfied:
 
-- **Mix time:** agitated time in the phase, measured from its start;
+- **Mix time:** agitated time in the phase (the agitator proven running), measured from its
+  start;
 - **Hold time:** time with `|TT-203 − TempSP|` ≤ `TempBand`. It counts only while the contents
   are at temperature. If a process upset takes the temperature out of the band, the hold time
   stops, and it continues when the temperature is back. This is how a *time at temperature*
@@ -595,15 +614,15 @@ The pump must never run against a shut valve. That is a *deadhead*, which heats 
 can damage its seal. The sequence is:
 
 ```text
-             drain phase starts                    level reads empty
-             |<----lead--->|                       |<-DrainRunOn->|<----lag---->|
-              __________________________________________________________________
-OutletValve  _|                                                                 |_____
-                            ______________________________________
-PumpRun      _______________|                                     |___________________
-                                                    __________________________________
+              drain phase starts                    level reads empty
+              |<----lead--->|                       |<-DrainRunOn->|<----lag---->|
+               __________________________________________________________________
+OutletValve  _|                                                                  |_____
+                             ______________________________________
+PumpRun      _______________|                                      |___________________
+                                                     __________________________________
 Level <= 1 % _______________________________________|
-                                                                          phase complete
+                                                                           phase complete
 ```
 
 Both the lead and the lag are `ValveLeadTime`.
@@ -646,8 +665,9 @@ with it:
   agitator must not also raise an agitator fault. That is the alarm flood
   [Module 16](../16-alarms-and-diagnostics/) warns about.
 - When the e-stop is released and the relay reset, **nothing restarts**. The batch stays
-  Aborted until the operator resets it. Machinery safety standards require that resetting an
-  e-stop does not by itself restart the machine, and the PLC logic must respect that too.
+  Aborted until the operator resets it. The machinery safety standards (IEC 60204-1 and
+  ISO 13850) require that resetting an e-stop does not by itself restart the machine, and the
+  PLC logic must respect that too.
 
 ### 7.10 Emptying the vessel (the Drain command)
 
@@ -702,8 +722,10 @@ the risk assessment to decide whether they need a safety instrumented function a
   Nobody has seen it yet. Process the Ack first, then add the new alarms.
 - `AlarmHorn` = any bit in `AlmUnack`. `AlarmLamp` = any bit in `AlmActive`.
 
-**Reset** (`CmdReset`) clears each latched fault whose cause has gone (see the table). It
-never starts equipment. In Complete or Aborted it also returns the batch to Idle.
+**Reset** (`CmdReset`) clears each latched fault whose cause has gone (see the table). A fault
+whose cause is still there stays active, not even dropping out for one scan. Reset never
+starts equipment and never restarts a held batch: only Restart does that. In Complete or
+Aborted it also returns the batch to Idle.
 
 ### 7.12 Starting a batch
 
@@ -847,7 +869,9 @@ bitwise logic ([Module 09](../09-math-and-data-handling/), section 5):
 
 ```iecst
   IF (State = Running) AND (Phase = PhaseMix) THEN
-    MixAcc := ADD_TIME(MixAcc, Cycle.DeltaT);
+    IF Agitator.Running THEN                      (* mix time = agitated time *)
+      MixAcc := ADD_TIME(MixAcc, Cycle.DeltaT);
+    END_IF;
     IF ABS(TempC - Active.TempSP) <= Cfg.TempBand THEN
       HoldAcc := ADD_TIME(HoldAcc, Cycle.DeltaT);
     END_IF;
@@ -889,7 +913,7 @@ specification for Hold and Restart in a sentence each.
 
 ```bash
 cd plc-course
-# the untouched starter compiles and fails (about 270 of the 461 checks)
+# the untouched starter compiles and fails (about 320 of the 532 checks)
 python3 tools/plctest.py 24-capstone-projects/labs/starter/24-2-batch-mixing-plant.st
 
 # your copy
@@ -898,21 +922,23 @@ cp 24-capstone-projects/labs/starter/24-2-batch-mixing-plant.st my-work/
 python3 tools/plctest.py my-work/24-2-batch-mixing-plant.st 24-capstone-projects/labs/24-2-batch-mixing-plant.test
 ```
 
-The whole test simulates about two hours of plant time and runs in a few seconds.
+The whole test simulates a little over two hours of plant time and runs in a few seconds.
 
 **What the test checks.** It plays the operator (HMI commands, recipe selection and edits),
 the engineer (a few `Cfg` changes) and the plant (fault injection through `Sim`). It checks
 your outputs, the `Hmi` status, the `Report`, and the simulation's observers. It never looks
 inside your program. Timing checks allow for sensible differences between designs. For
-example, the settle check only asks that the next phase does not start within 1.5 s of the
-valve closing. The control-performance checks are the three requirements of section 7.5.
+example, with the default 3 s `SettleTime` the settle check only asks that the next phase
+does not start within 1.5 s of the valve closing; another scenario sets `SettleTime` to 6 s
+and checks that your program follows it. The control-performance checks are the three
+requirements of section 7.5.
 
 **Reading a failure.** Here is part of the output for a design that starts its heat phase
 bumplessly from 0 % (section 7.5):
 
 ```text
-  FAIL    line 378  until Sim.HeatValvePct > 50.0 within 30s   (actual: 40.0101, at t=185930 ms)
-  FAIL    line 379  until Hmi.Phase = PhaseMix within 4m   (actual: PHASEHEAT, at t=425930 ms)
+  FAIL    line 409  until Sim.HeatValvePct > 50.0 within 30s   (actual: 40.0101, at t=185930 ms)
+  FAIL    line 410  until Hmi.Phase = PhaseMix within 4m   (actual: PHASEHEAT, at t=425930 ms)
 ```
 
 The steam valve had reached only 40 % after 30 s, and the heat phase was still running
@@ -943,7 +969,7 @@ FAT sign-off and a code review would judge a real project.
 
 | Area | What earns the marks | Points |
 |---|---|---|
-| **Acceptance test** | Pro rata to the scenarios that pass: all 41 scenarios = 40 points | 40 |
+| **Acceptance test** | Pro rata to the scenarios that pass: all 45 scenarios = 40 points | 40 |
 | **Structure** | Clear layers (commands, measurements, alarms, state machine, equipment, outputs); FBs for repeated equipment; each output written in one place; interlocks on the outputs, not in the sequence | 15 |
 | **Readability** | Meaningful names; comments that explain *why*; no magic numbers (Cfg, constants); consistent style ([Module 22](../22-software-engineering/)) | 10 |
 | **Robustness and safety** | Fail-safe handling of NC inputs and bad signals; resets never start equipment; e-stop agreement; no division by zero; counters that cannot overflow in a realistic batch | 10 |
@@ -974,6 +1000,13 @@ Below 65 means some parts need more work before the project is complete.
   Restart. Read each command once and clear it in the same scan.
 - **Reset that restarts equipment.** Resetting an agitator fault while Held must not start the
   agitator. Only Restart does that.
+- **Faults that unlatch themselves.** The dosing watchdogs stop as soon as the batch holds, so a
+  "dosing fault" that simply follows the watchdog output vanishes in the same moment, and the
+  operator can restart without ever seeing or resetting it. The same goes for the heating
+  timeout. Latch the fault; only Reset clears it.
+- **Reset written after the latch.** `IF Cause THEN F := TRUE; END_IF; IF Reset THEN F := FALSE;
+  END_IF;` lets Reset win: a fault whose cause is still there drops out for one scan and comes
+  back as a *new*, unacknowledged alarm. Clear a fault only when its cause has gone.
 - **Restart that bounces.** Going Held → Restarting → Holding when the fault is still there
   can briefly energise equipment, and it clutters the event log. Refuse the command instead.
 - **Live recipe values.** Reading `Recipes[RecipeNo]` during the batch lets an HMI edit, or a
@@ -1033,6 +1066,9 @@ Below 65 means some parts need more work before the project is complete.
    registers for SCADA ([Module 17](../17-industrial-communications/)).
 10. **Operator prompts.** Hold before Drain until the operator confirms that the QA sample
     passed. This is a semi-automatic transition in ISA-88 terms.
+11. **Charge watchdogs from the recipe.** Add the nominal flow of each line to `Cfg` and set
+    each charge's time limit to, say, 1.5 × target ÷ nominal flow + 30 s, so that a slow flow
+    is caught as quickly on a 40 L charge as on a 1000 L one.
 
 ## 15. Design review questions
 
@@ -1095,6 +1131,6 @@ the code review.
 
 ---
 
-Previous: [24-1 — Conveyor Sorting Cell](24-1-conveyor-sorting-cell.md) ·
-Next: [24-3 — Wastewater Pump Station](24-3-pump-station.md) ·
-Up: [Module 24 — Capstone projects](README.md)
+Previous: [24-1 — Capstone: Conveyor Sorting Cell](24-1-conveyor-sorting-cell.md) ·
+Next: [24-3 — Capstone: Wastewater Pump Station](24-3-pump-station.md) ·
+Up: [Module 24 — Capstone Projects](README.md)

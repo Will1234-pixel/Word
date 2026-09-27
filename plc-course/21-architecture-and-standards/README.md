@@ -175,8 +175,8 @@ step. Three trends are flattening it:
 - **Publish once, consume many times.** PLCs, drives and edge devices publish their data
   directly with **OPC UA** (which carries typed, self-describing information models) or with
   **MQTT** (a lightweight publish/subscribe protocol, often with the Eclipse Sparkplug
-  specification for the payloads). Historians, MES, maintenance systems and cloud analytics
-  subscribe to what they need. A popular pattern, often called a **unified namespace**, gives
+  specification for the topic structure, payloads and connection state). Historians, MES,
+  maintenance systems and cloud analytics subscribe to what they need. A popular pattern, often called a **unified namespace**, gives
   every system one broker whose topic tree follows the ISA-95 hierarchy
   (enterprise/site/area/line/cell), with the current state of everything in it.
 - **Edge computing.** An industrial PC next to the PLC collects high-rate data, runs
@@ -220,7 +220,9 @@ used well beyond batch plants: PackML (section 4) is ISA-88 applied to packaging
 ### 3.2 The physical model
 
 ISA-88 describes the equipment as a hierarchy. The upper three levels are decided by the
-business. The lower four are the ones engineers design, and your PLC code should mirror them.
+business: the **enterprise** (the company), a **site** (one factory or location) and an
+**area** (a part of a site, such as the resin plant). The lower four are the ones engineers
+design, and your PLC code should mirror them.
 
 ```mermaid
 flowchart TD
@@ -868,6 +870,13 @@ The equipment module does not check owners, permits or faults itself. It reads o
 `M201.Sts.Available`, and passes it upwards (`MixReady`). The next section shows what the layers
 above do with it.
 
+One consequence to decide deliberately: `Cmd.Reset` clears the fault, and if the program still
+owns the motor and `ProgRun` is still TRUE, the motor starts again at once. That is the
+plant-philosophy point from [Module 11](../11-program-organization/) (section 6.5). In an ISA-88
+design the phase above has already held itself when `Available` went FALSE, so the batch is
+waiting for a person. Whether its hold logic keeps requesting the motor, so that a Reset
+restarts it, or requests it again only after Restart, is a rule to write down and test.
+
 ### 5.3 Mode, state and failure propagation
 
 Layers must tell each other about changes that matter, in both directions.
@@ -1204,7 +1213,8 @@ machine, so that SC always belongs to the state that is current on this scan.
 ```iecst
 (* fragment: add to the program of Lab 21-1, before Unit(...) is called *)
 StateComplete := FALSE;
-InfeedRun := FALSE;
+InfeedRun := FALSE;                             (* per-state requests: off unless a *)
+HomeReq := FALSE;                               (* handler below asks for them       *)
 CASE Unit.State OF
   Resetting:
     DrivesEnable := TRUE;                       (* power up the servo drives *)
@@ -1250,7 +1260,10 @@ condition on every scan.
 
 The handler writes requests (`DrivesEnable`, `HomeReq`, `InfeedRun`) to the machine's control
 modules. It never writes a drive's enable output directly. The drive's own FB applies the safety
-and permissive checks.
+and permissive checks. `HomeReq` and `InfeedRun` are cleared at the top of every scan, so a
+request lasts only while its state is active: without that line, a Stop during homing would
+leave `HomeReq` TRUE in Stopping and Stopped. `DrivesEnable` is different on purpose: it is
+set in Resetting and stays set until Aborting clears it.
 
 ### 7.3 A Hold, traced through the layers
 
@@ -1270,7 +1283,12 @@ the batch client.
 | 8 | Batch manager | Shows *Dose: Held*; the batch record logs who held it and when |
 | 9 | Operator | Finds a passing drain valve on the solvent tank, closes it, presses **Restart** |
 | 10 | Equipment phase | Held → **Restarting** → **Running**. The target is still the 350 L latched at Start, and the total is still 204 L, so it asks the valve to open and doses the remaining 146 L |
-| 11 | Equipment phase | At 350 L it closes the valve, waits for `Closed`, goes to **Complete** and reports 350.3 L |
+| 11 | Equipment phase | At 350 L it requests the valve closed. As in step 5, about 4 L more arrives while the valve closes. It waits for `Closed`, goes to **Complete** and reports about 354 L: the overshoot is in the vessel, so it is counted and reported |
+
+A 4 L overshoot on a 350 L dose is about 1 %. Real dosing phases make it smaller: they close
+the valve early by the amount that arrived in flight on earlier doses (an *in-flight* or
+*pre-act* correction), or they change to a slow "dribble" flow for the last few litres. Lab 21-2
+keeps it simple and closes at the target.
 
 Now the same event caused by the plant instead of an operator: the reactor's high-level switch
 LSH-201 trips at 200 L. Step 1 disappears. Instead, the valve CM's interlock closes the valve
@@ -1320,9 +1338,9 @@ Nothing restarts when the level falls again: a person must decide, and press Res
 
 ### Siemens (TIA Portal, S7-1200/1500; PCS 7 and PCS neo)
 
-- **Batch.** SIMATIC BATCH is Siemens' ISA-88 batch manager for its PCS 7 and PCS neo process
-  control systems. The equipment phases run in the controllers and are linked to the batch
-  system through Siemens' own interface blocks. In S7-1500 projects without a DCS, phase and
+- **Batch.** SIMATIC BATCH is Siemens' ISA-88 batch manager for the PCS 7 process control
+  system, and PCS neo has its own batch option. The equipment phases run in the controllers
+  and are linked to the batch system through Siemens' own interface blocks. In S7-1500 projects without a DCS, phase and
   sequence logic is commonly written in S7-GRAPH (Siemens' SFC language) or in SCL, following a
   site template like the one in section 3.7.
 - **PackML.** Siemens publishes PackML libraries and application examples for S7-1500 on its
@@ -1344,8 +1362,9 @@ Nothing restarts when the level falls again: a person must decide, and press Res
 - **Device objects.** Rockwell's PlantPAx process library is a large, mature example of the
   device pattern: AOIs for motors, valves and analog inputs, each with standard command and
   status members and a matching HMI faceplate.
-- **Enumerations.** Logix has no enumerated data type. State machines use `DINT` state numbers,
-  documented in tag descriptions. That makes the "fixed integer codes on the interface" rule
+- **Enumerations.** Logix has traditionally had no native enumerated data type, so state
+  machines use `DINT` state numbers, documented in tag descriptions (check the release notes
+  of your version). That makes the "fixed integer codes on the interface" rule
   easy to follow, and readable code harder.
 
 ### CODESYS and Beckhoff TwinCAT 3
@@ -1534,7 +1553,9 @@ stateDiagram-v2
 3. Commands are accepted only as shown in the diagram. **Start** is accepted in Idle only if
    0 < `DoseTarget_L` ≤ 500. It **latches** the target (a later change to `DoseTarget_L` does not
    affect this run), resets the total to 0 and clears `FailureCode`. **Restart** and **Reset**
-   also clear `FailureCode`. Every other command in every other state changes nothing.
+   also clear `FailureCode`. Nothing else does, so the reason stays visible in Held and, after a
+   Stop or Abort, in Stopped or Aborted. Every other command in every other state changes
+   nothing. **Restart** is accepted only in Held, not while the phase is still Holding.
 4. **Running.** The valve is requested open while the total is below the latched target. When
    the total reaches the target the valve is requested closed. When the valve is **proved
    closed** (the valve CM's `Closed` output), the phase goes to **Complete**.
@@ -1550,9 +1571,13 @@ stateDiagram-v2
    low-flow cut-off.)
 8. **Interlock.** The valve CM's `Permit` is `LSH201_NC`, so a high level closes the valve in
    every state, in the same scan. If the valve is refused while Running (the CM's `Interlocked`
-   output), the phase holds itself with `FailureCode` = 2.
+   output), the phase holds itself with `FailureCode` = 2. The phase reads the CM's output, not
+   the level switch: if the switch trips after the target has been reached and the valve is
+   already requested closed, nothing has been refused and the phase completes normally.
 9. **No flow.** If, in Running, the solenoid is on but there has been no flow (below the
-   cut-off) for 5 s continuously, the phase holds itself with `FailureCode` = 1.
+   cut-off) for 5 s continuously, the phase holds itself with `FailureCode` = 1. The 5 s start
+   again whenever flow returns and after every Restart: time without flow before a Hold does
+   not count.
 10. **Nothing restarts by itself.** After holding itself, the phase stays Held until a Restart,
     even when the cause has gone. If the cause is still there after a Restart, it holds again.
 11. `XV201_SOL` comes from the valve CM, and `PhaseState` shows the state code every scan.

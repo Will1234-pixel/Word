@@ -1601,12 +1601,15 @@ detection.
   FBD with explicit execution-order numbers that you can change. CFC is a CODESYS addition, not
   one of the IEC 61131-3 languages. Siemens process-control engineering uses a tool called CFC
   too, and it is used much like a DCS configuration sheet.
-- **OpenPLC / MATIEC (this course's tools).** OpenPLC Editor supports FBD as well as LD, ST, IL
-  and SFC. When you build the project, graphical code is translated into ST, so you can draw a
-  lab in FBD and test the generated file with `plctest` exactly as you would a ladder solution
-  ([Module 00](../00-start-here/)). MATIEC accepts `&` as AND, multi-input `AND(...)`, `OR(...)`
-  and `XOR(...)` calls, and `=`/`<>` between BOOLs. All of these were checked with `plctest` for
-  this module.
+- **OpenPLC / MATIEC (this course's tools).** The current OpenPLC Editor (v4) supports FBD as
+  well as LD, ST and IL (SFC is not among its languages, see
+  [Module 00](../00-start-here/)), and its built-in simulator runs an FBD network on your PC,
+  with a debugger panel for watching and changing variable values. When you build the
+  project, graphical code is translated into ST. If your Editor version can save that
+  generated file, you can test an FBD solution with `plctest` exactly as you would a ladder
+  solution ([Module 00](../00-start-here/#testing-ladder-you-drew-in-openplc-editor)). MATIEC
+  accepts `&` as AND, multi-input `AND(...)`, `OR(...)` and `XOR(...)` calls, and `=`/`<>`
+  between BOOLs. All of these were checked with `plctest` for this module.
 
 ## Labs
 
@@ -1686,7 +1689,8 @@ it applies to both modes. Section 3.2 shows the bug you are avoiding.
 </details>
 
 *Try this:* draw your solution in FBD in OpenPLC Editor, with one network per intermediate bit,
-and run the same test against the generated ST.
+and check it requirement by requirement in the simulator. If your Editor version can save the
+generated ST, run the same test against it.
 
 ### Lab 05-2: Two-out-of-three pressure trip vote
 

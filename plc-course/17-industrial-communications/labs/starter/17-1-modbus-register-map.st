@@ -8,8 +8,9 @@
 
 PROGRAM ModbusMap
   VAR (* field inputs *)
-    PumpRunning AT %IX0.0 : BOOL;   (* P-301 running (contactor auxiliary contact) *)
-    PumpFault   AT %IX0.1 : BOOL;   (* P-301 motor protection tripped *)
+    PumpRunning   AT %IX0.0 : BOOL; (* P-301 running (contactor auxiliary contact) *)
+    OverloadOK_NC AT %IX0.1 : BOOL; (* P-301 motor protection, NC: TRUE while healthy,
+                                       FALSE when tripped or when its wire is broken *)
   END_VAR
   VAR (* holding registers served to SCADA. OpenPLC Runtime v3: %MW0 = holding register 1024 *)
     HR_Status   AT %MW0 : WORD;     (* PLC -> SCADA: status bits *)
@@ -37,7 +38,8 @@ PROGRAM ModbusMap
      TODO 2: join MeterRegA / MeterRegB into MeterTotal (word order: MeterLowFirst).
      TODO 3: PressureBar -> HR_Pressure (x 100, rounded), clamp and set PressOutOfRange.
      TODO 4: HR_SupplySP -> SupplySP (/ 10) if -100..150, otherwise keep it and set SPRejected.
-     TODO 5: build HR_Status from PumpRunning, PumpFault, PressOutOfRange, SPRejected.
+     TODO 5: build HR_Status: PumpRunning, pump fault (= NOT OverloadOK_NC), PressOutOfRange,
+             SPRejected.
      Replace these placeholder lines with your logic. *)
   HR_Status := 16#0000;
   HR_Pressure := 0;

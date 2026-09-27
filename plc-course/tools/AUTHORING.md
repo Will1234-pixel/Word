@@ -30,9 +30,11 @@ don't need it.
 4. Safety content must be conservative. Labs are training exercises, never designs for real
    safety functions. Say so wherever safety logic appears.
 5. IEC 61131-3 editions: edition 2 (2003) is what MATIEC implements; edition 3 (2013) added
-   object orientation (METHOD, INTERFACE, EXTENDS, PROPERTY), references and more, and marked
-   Instruction List (IL) as deprecated. Don't make claims about later editions unless you are
-   certain of them.
+   object orientation (CLASS, METHOD, INTERFACE, EXTENDS, IMPLEMENTS, THIS/SUPER, access
+   specifiers), references and more, and marked
+   Instruction List (IL) as deprecated. `PROPERTY` is **not** part of the standard: it is a
+   CODESYS/TwinCAT extension. Don't make claims about later editions unless you are certain
+   of them.
 6. Every code example that looks complete must compile. Put anything longer than a few lines,
    or anything whose correctness matters, into a lab file and run it through `plctest`.
 
@@ -194,6 +196,12 @@ END_CONFIGURATION
 
 ### 5.3 Running the checks
 
+Lab files must also compile with **STruC++**, the compiler of OpenPLC Editor v4 (Appendix E,
+section E.7). So write enum values without the type prefix (`Idle`, not `E_State#Idle`), give
+every `VAR CONSTANT` an initial value (or use a plain `VAR`), and avoid names of OSCAT Basic
+functions and blocks. To check, install STruC++ (it comes with the OpenPLC Editor source,
+`npm run setup:strucpp`) and run `strucpp file.st -o /tmp/out.cpp` on each file.
+
 From `plc-course/`:
 
 ```bash
@@ -228,6 +236,11 @@ language, with notes such as "CODESYS/TIA also allow…".
 | A POU/type/task name that matches a variable or parameter name used anywhere, **including inside the standard library** (`M`, `P`, `Q`, `IN`, `PT`, `ET`, `CLK`, `CU`, `CV`, `PV` …) | Descriptive POU names (`FB_Pump`, `PumpStation`), never one or two letters |
 | An array as a FUNCTION `VAR_INPUT` (compiles, but the C build fails) | Pass arrays to a FUNCTION_BLOCK input (named array type), or as `VAR_IN_OUT` |
 | `MUL_TIME`, `DIV_TIME` function names | Write `T * n` and `T / n` (TIME times/divided by a number works) |
+| Several FB instances declared in one list (`Pump1, Pump2 : FB_Motor;`); this crashed OpenPLC's compiler in two labs | One FB instance per line |
+| (OpenPLC fork) Structure initialisers with STRING/array members, array-of-structure initialisers, some REAL members in constant structs | A first-scan initialisation block in code |
+| Edge-qualified inputs `X : BOOL R_EDGE;` / `F_EDGE` | `R_TRIG`/`F_TRIG` instances inside the FB |
+| A named constant (`VAR CONSTANT`) as a `CASE` label | Literals or enumeration values as labels (enums are the better design anyway) |
+| Enumeration values or variables named like keywords (`Program`, `Step`, `Transition`, `Action`, `Word`, `By`) | Other names; identifiers are case-insensitive |
 
 Supported and verified: `IF/ELSIF/CASE` with ranges, `FOR ... BY`, `WHILE`, `REPEAT`, `EXIT`,
 `CONTINUE`, `RETURN`, `VAR_TEMP`, `VAR RETAIN`, `VAR CONSTANT`, `VAR_IN_OUT`, functions, FB
@@ -263,5 +276,5 @@ Behaviour notes:
   must set NC inputs TRUE.
 - The first scan in `plctest` runs at t = one task interval (10 ms).
 - Don't write tests that depend on what an edge detector does on the very first scan.
-  Implementations differ: the standard's reference F_TRIG, used by CODESYS and the OpenPLC
-  runtime, can output TRUE on its first call when CLK is FALSE, while upstream MATIEC does not.
+  The standard's reference F_TRIG, used by upstream MATIEC (`plctest`) and the OpenPLC
+  runtime, outputs TRUE on its first call when CLK is FALSE. Other libraries may differ.

@@ -59,7 +59,9 @@ FUNCTION_BLOCK FB_TripCause
   END_IF;
 
   (* 2. Confirmation delay: the contact must be open for the whole delay.
-        A zero delay trips on the scan the contact opens. *)
+        A zero delay trips on the scan the contact opens. The delay keeps
+        timing during a bypass, so a contact that has been open all through
+        the bypass trips on the scan the bypass ends. *)
   DelayTimer(IN := NOT Healthy, PT := TripDelay);
   Present := NOT Healthy AND ((TripDelay = T#0s) OR DelayTimer.Q);
 
@@ -112,7 +114,14 @@ PROGRAM FeedDrumCE
     BYPASS_TIME : TIME := T#60s;   (* shortened for the exercise; real limits come from the SRS *)
   END_VAR
   VAR
-    Cause1, Cause2, Cause3, Cause4, Cause5, Cause6 : FB_TripCause;
+    (* One instance per line: OpenPLC's compiler can crash on a list
+       such as 'Cause1, Cause2 : FB_TripCause;' (see Appendix E). *)
+    Cause1 : FB_TripCause;
+    Cause2 : FB_TripCause;
+    Cause3 : FB_TripCause;
+    Cause4 : FB_TripCause;
+    Cause5 : FB_TripCause;
+    Cause6 : FB_TripCause;
     ResetEdge  : R_TRIG;
     EffectTrip : ARRAY[1..4] OF BOOL;
     AnyLatched : BOOL;

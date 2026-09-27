@@ -581,9 +581,10 @@ Rockwell Logix arrays always start at 0, while Siemens and CODESYS let you choos
 registers.
 
 Keep the size in one place. CODESYS, TwinCAT and TIA Portal let a named constant be used as an
-array bound (`ARRAY[1..NUM_PROBES]`). MATIEC does not (`Subrange upper limit is not a constant
-value`), and Rockwell Logix array dimensions are plain numbers too, so the labs write the bound
-as a literal and use a constant with the same value for the loop limit.
+array bound (`ARRAY[1..NUM_PROBES]`). MATIEC rejects a constant declared in the POU's own
+`VAR CONSTANT` block (`Subrange upper limit is not a constant value`), and Rockwell Logix array
+dimensions are plain numbers too, so the labs write the bound as a literal and use a constant
+with the same value for the loop limit.
 
 ### Out-of-range indexes
 
@@ -1279,8 +1280,8 @@ CODESYS (and Beckhoff TwinCAT 3, which is built on it) implements most of editio
 standard, with extensions. CODESYS calls the result *Extended Structured Text*. Beyond what this module
 uses:
 
-- **Object orientation** (edition 3): methods, properties, interfaces and inheritance on
-  function blocks. [Module 21](../21-architecture-and-standards/) introduces them. A taste:
+- **Object orientation**: methods, interfaces and inheritance on function blocks (edition 3),
+  plus properties (a CODESYS/TwinCAT extension, not part of the standard). [Module 21](../21-architecture-and-standards/) introduces them. A taste:
 
   ```iecst
   // CODESYS / TwinCAT syntax - not testable here (MATIEC has no OOP)
@@ -1304,13 +1305,14 @@ uses:
 
 ### OpenPLC and MATIEC
 
-OpenPLC compiles ST with MATIEC, the same compiler `plctest` uses, so code that compiles here
-should also build for the OpenPLC Runtime. MATIEC follows edition 2 strictly and adds a few
+`plctest` compiles ST with MATIEC, which the OpenPLC Runtime v3 also used. The current OpenPLC
+Editor v4 compiles with a newer compiler, STruC++. The course's lab files are checked with
+both (Appendix E lists the few differences). MATIEC follows edition 2 strictly and adds a few
 limits of its own. This module met these:
 
 - no `//` comments, no nested comments, no OOP, no generic `TO_INT`, no `STRING(n)`;
 - no implicit conversions at all, not even an integer literal into a `REAL`;
-- no named constants as array bounds;
+- no named constants from the POU's own `VAR CONSTANT` block as array bounds;
 - arrays cannot be passed to a function as `VAR_INPUT` (use `VAR_IN_OUT` or an FB);
 - no run-time array bounds checking;
 - variables must not share a name with a standard function or FB (`Max`, `Sel`, ...).

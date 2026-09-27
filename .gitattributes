@@ -1,0 +1,7 @@
+# Keep Unix line endings for scripts so they run under Linux, macOS and WSL
+# even when the repository is cloned on Windows.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.st   text
+*.test text
+*.md   text

@@ -237,8 +237,8 @@ For a sample time Ts the model can be solved exactly, sample by sample:
 
 Each sample, the PV moves the fraction (1 − α) of the way to where the delayed input is
 pulling it. The simpler Euler form `PV := PV + Ts/Tau * (target - PV)` gives almost the same
-answer when Ts is much smaller than τ, but it becomes wrong, and eventually unstable, as Ts
-approaches τ. The dead time is a **delay line**: a ring buffer that stores the last N inputs.
+answer when Ts is much smaller than τ. It becomes inaccurate as Ts approaches τ, overshoots
+and oscillates when Ts is longer than τ, and is unstable when Ts is longer than 2τ. The dead time is a **delay line**: a ring buffer that stores the last N inputs.
 Each sample you write the newest input and read the one written N samples ago:
 
 ```text
@@ -260,15 +260,18 @@ Because of the process lag and dead time, the PV always overshoots the switching
 on/off loop *cycles* forever:
 
 ```text
-  PV                 /\                /\                /\
-  SP + band  - - - -/--\- - - - - - - /--\- - - - - - - /--\- - - -
-  SP                /   \            /    \            /    \
-  SP - band  - - - /- - -\- - - - - /- - - \- - - - - /- - - \- - -
-                  /       \        /        \        /
-                           \______/          \______/
-  heater  ON  ____            ______            ______
-          OFF     |__________|      |__________|      |________
-                  ^ switches off at SP + band, but PV keeps rising for a while (dead time)
+  PV               __            __            __
+                  /  \          /  \          /  \
+  SP + band  - - / - -\- - - - / - -\- - - - / - -\- - - - - -
+  SP            /      \      /      \      /      \
+  SP - band  - / - - - -\- - / - - - -\- - / - - - -\- - - - -
+              /          \  /          \  /          \
+                          __            __            __
+  heater  ON  ___        ______        ______        ______
+          OFF    |______|      |______|      |______|      |__
+                 ^      ^
+                 |      on at SP - band; the PV keeps falling for a while
+                 off at SP + band; the PV keeps rising for a while (lag and dead time)
 ```
 
 The cycle gets bigger as the dead time grows, and a narrow band makes the output switch more
@@ -603,6 +606,9 @@ FUNCTION_BLOCK FB_SPRamp
     SP      : REAL;              (* working setpoint for the PID *)
     Ramping : BOOL;              (* TRUE while SP is still moving towards Target *)
   END_VAR
+  VAR
+    Started : BOOL := FALSE;     (* FALSE until the first call *)
+  END_VAR
   VAR_TEMP
     Goal    : REAL;
     MaxStep : REAL;
@@ -611,8 +617,8 @@ FUNCTION_BLOCK FB_SPRamp
   Goal := LIMIT(SPLo, Target, SPHi);
   IF Track THEN
     SP := LIMIT(SPLo, TrackValue, SPHi);
-  ELSIF Rate <= 0.0 THEN
-    SP := Goal;
+  ELSIF Rate <= 0.0 OR NOT Started THEN
+    SP := Goal;                  (* no ramp; and at power-up start at the target, not at 0 *)
   ELSE
     MaxStep := Rate / 60.0 * TIME_TO_REAL(Ts) / TIME_TO_REAL(T#1s);
     IF ABS(Goal - SP) <= MaxStep THEN
@@ -623,7 +629,8 @@ FUNCTION_BLOCK FB_SPRamp
       SP := SP - MaxStep;
     END_IF;
   END_IF;
-  Ramping := SP <> Goal;
+  Ramping := NOT Track AND (SP <> Goal);
+  Started := TRUE;
 END_FUNCTION_BLOCK
 ```
 
@@ -793,7 +800,7 @@ Then tell tuning from the valve:
 
 Stiction produces a limit cycle. The integral winds the output slowly (the saw-tooth) until the
 valve breaks free and jumps past where it should be. The cure is mechanical (packing,
-positioner, actuator), not a retune. **Backlash** or dead band in linkages and positioners
+positioner, actuator), not a retune. **Backlash** (hysteresis) or dead band in linkages and positioners
 makes a loop sluggish and can also produce a slow cycle, especially on integrating processes
 such as level. If the positioner reports actual valve position, trend it next to the CV. The
 difference is the diagnosis.
@@ -924,16 +931,15 @@ tank-blanketing pressure loop, and a small and a large valve in parallel for wid
 
 ```text
  valve opening
- 100 % |*                                               *
-       |   *    cooling valve                heating  *
-       |      *  (TV-101B)                    valve *
-       |         *                          (TV-101A)
-  50 % |            *                           *
-       |               *                     *
-       |                  *               *
-   0 % +--------------------*-----------*------------------
+ 100 % |*                                                 *
+       |   *  cooling valve         heating valve      *
+       |       * (TV-101B)          (TV-101A)       *
+  50 % |          *                              *
+       |             *                        *
+       |                 *                 *
+   0 % +--------------------*-----------*-------------------
        0                    45    50    55                100   controller output (%)
-                            |<- gap ->|    neither valve open
+                            |<-- gap -->|  neither valve open (gap drawn wider than scale)
 ```
 
 ```iecst
@@ -985,12 +991,13 @@ flowchart LR
 ```
 
 The unselected controller is effectively open-loop and **will wind up** unless something
-stops it. The standard cure is **external reset feedback**. Each controller's integral part is
-replaced by the *selected* output, so an unselected controller's output is the selected output
-plus its own proportional part. As its error shrinks towards the constraint, its output
-approaches the selected value and it takes over smoothly, with nothing to unwind. Vendor blocks
-provide tracking or windup-inhibit inputs to do this. Selectors on real plants are not safety
-functions: a pressure override keeps the process within limits, and a separate protective
+stops it. The standard cure is **external reset feedback**. Each controller builds its integral
+action from the *selected* output (fed back through a first-order lag with time constant Ti)
+instead of from its own output. Once things settle, an unselected controller's output is
+therefore the selected output plus its own proportional part. As its error shrinks towards the
+constraint, its output approaches the selected value and it takes over smoothly, with nothing
+to unwind. Vendor blocks provide tracking or windup-inhibit inputs to do this. Selectors on
+real plants are not safety functions: a pressure override keeps the process within limits, and a separate protective
 system still trips the pump if the limit is breached.
 
 ### 8.6 Beyond PID
@@ -1006,16 +1013,20 @@ underneath.
 
 ### Example 1 — From bump test to a tuned loop
 
-A product heater, TIC-101, has been oscillating since commissioning. The steps:
+A product heater, TIC-101, has swung up and down after every upset since commissioning, and
+at high throughput the swings hardly die away. The steps:
 
 1. **Check the chain.** AI filter 0.5 s (fine), transmitter 0–150 °C, reverse action, output
    0–100 % to an air-to-open valve. Execution: in a 100 ms cyclic task with Ts = 100 ms. ✔
-2. **Diagnose.** In manual the oscillation stops. Trend: smooth, sinusoidal, period about
-   12 s, and the CV is not a saw-tooth. This is tuning, not stiction.
+2. **Diagnose.** In manual the oscillation stops. Trend: smooth and sinusoidal, with a period
+   of about 13–16 s (shorter at high throughput), and the CV is not a saw-tooth. This is
+   tuning, not stiction.
 3. **Bump test.** From the data in §2.3: K = 0.8 °C/%, τ = 20 s, θ = 3 s.
 4. **Present settings** are in a parallel-form block: Kp = 7.5, Ki = 0.75 s⁻¹. In ideal form
    that is Kc = 7.5 and Ti = Kc/Ki = 10 s: the open-loop Ziegler–Nichols PI values. The
-   table in §7.3 predicts roughly 60 % overshoot and a small gain margin. ✔ That explains it.
+   table in §7.3 predicts roughly 60 % overshoot and a gain margin of only 1.6, so a 50 %
+   rise in process gain at high throughput takes the loop close to instability. ✔ That
+   explains it.
 5. **Retune** with lambda, λ = 7 s: Kc = 2.5, Ti = 20 s. In the parallel block that is
    Kp = 2.5, **Ki = 2.5 / 20 = 0.125 s⁻¹**. Enter it, switch to auto, step the setpoint by 2 °C:
    the PV rises smoothly without overshoot.
@@ -1029,8 +1040,9 @@ integral adds Kc × Ts / Ti × E per call, which is now ten times per second ins
 so the effective Ti is **one tenth** of the setting. The derivative divides ΔPV by the
 configured 1 s instead of the real 0.1 s, so the effective Td is **one tenth** too. The loop
 has far too much integral action and almost no derivative. Expect slow, rolling oscillation.
-The reverse mistake (Ts too short) makes integral action sluggish. Lab 15-1's `SlowPlant` and
-the `Ts` input of every lab block exist to make you think about this.
+The reverse mistake (a configured Ts shorter than the real interval) makes the integral action
+sluggish and the derivative too strong. Lab 15-1's `SlowPlant`, Lab 15-2's `SlowBench` and the
+`Ts` input of every lab block exist to make you think about this.
 
 ### Example 3 — Tuning values between vendors
 
@@ -1100,8 +1112,9 @@ version: parameters and defaults change between releases.
 - The **`PIDE`** (enhanced PID, function block diagram and ST) uses the **velocity** form. With
   independent gains, IGain is in **1/min** and DGain in **minutes**. With dependent gains, Ti is
   in minutes per repeat and Td in minutes. It has built-in support for cascade, ratio, override
-  selection, program/operator modes and output initialisation, which saves writing the mode
-  logic of Lab 15-3 yourself. The PlantPAx process library wraps it with faceplates.
+  selection (windup-inhibit inputs), program/operator control and output initialisation,
+  which saves writing the mode logic of Lab 15-3 yourself. The PlantPAx process library
+  wraps it with faceplates.
 - Note that the two instructions from the same vendor use *different* units for the integral
   gain (1/s and 1/min). Check which instruction you are looking at.
 
@@ -1116,13 +1129,15 @@ version: parameters and defaults change between releases.
 - Remember that `TIME_TO_REAL` returns **milliseconds** in CODESYS (§6.1).
 
 **OpenPLC and MATIEC.** The standard library includes `PID`, `RAMP`, `INTEGRAL`, `DERIVATIVE`
-and `HYSTERESIS` blocks taken from an example in the IEC 61131-3 draft. Read the `PID` source
-(`lib/pid_st.txt` in MATIEC) before using it. In the version `plctest` uses:
+and `HYSTERESIS` blocks. Their source files say they were taken from the examples in a draft of
+IEC 61131-3 edition 2. Read the `PID` source (`lib/pid_st.txt` in MATIEC) before using it. In
+the version `plctest` uses:
 - Inputs `AUTO`, `PV`, `SP`, `X0` (manual output), `KP`, `TR` (reset time), `TD`, `CYCLE`;
   output `XOUT`.
 - The error is **PV − SP**, so a positive `KP` makes it **direct** acting. Use a negative `KP`
   for a heater.
 - There are **no output limits and no anti-windup**. Clamp `XOUT` yourself and handle windup.
+- The derivative acts on the **error**, so a setpoint step gives a derivative kick.
 - `TR` divides the integral, so `TR = 0` is a division by zero, not "integral off".
 - In manual (`AUTO = FALSE`) the output is `KP × X0`, not `X0`. This was checked in
   `plctest`: with `KP = 2` and `X0 = 30`, `XOUT` is 60, and with `KP = −2` it is −60. To get a
@@ -1213,9 +1228,12 @@ The test bench `PidLab` (given) connects your controller `Loop` to a heater mode
 `FB_FOPDT`: K = 0.8 °C/%, τ = 20 s, θ = 3 s, 20 °C with the heater off. It is tuned with the
 lambda values from §7.4 (Kc = 2.5 %/°C, Ti = 20 s). A second, unconnected instance, `Bench`,
 lets the tests check the block open-loop by writing its inputs directly: "PV steps by 5, does
-the output step by Kc × 5?" The tests check *behaviour*, not code, so a velocity-form design,
-back-calculation anti-windup or a different derivative filter all pass. Only the meaning of the
-parameters is fixed.
+the output step by Kc × 5?" The test aid `BenchPVRate` ramps `Bench.PV` smoothly. On a ramp
+the derivative part settles at a size of Kc × Td × rate whatever filter you use, so the tests
+can check the derivative's size and sign. A third instance, `SlowBench`, is called only every 10th scan with
+`Ts = T#100ms`, like `SlowPlant` in Lab 15-1, to prove that your block really uses `Ts`. The
+tests check *behaviour*, not code, so a velocity-form design, back-calculation anti-windup or a
+different derivative filter all pass. Only the meaning of the parameters is fixed.
 
 **Interface** (use these names exactly):
 
@@ -1232,7 +1250,9 @@ parameters is fixed.
 | `OutMin`, `OutMax` | FB_PID inputs | REAL | Output limits, % (defaults 0.0 and 100.0) |
 | `Ts` | FB_PID input | TIME | Sample time (default T#10ms) |
 | `Out` | FB_PID output | REAL | Controller output, % |
-| `Loop`, `Bench` | program `PidLab` | FB_PID | Closed-loop controller; open-loop test instance (given) |
+| `Loop`, `Bench` | program `PidLab` | FB_PID | Closed-loop controller; open-loop test instance, called every scan with Ts = T#10ms (given) |
+| `SlowBench` | program `PidLab` | FB_PID | Open-loop test instance called every 10th scan with Ts = T#100ms (given) |
+| `BenchPVRate` | program `PidLab` | REAL | Test aid: when not 0, `Bench.PV` ramps at this rate, units per second (given) |
 | `SP`, `Manual`, `ManualOut`, `Kc`, `Ti`, `Td`, `OutMax` | program `PidLab` | as above | Loop tags wired to `Loop` (given; defaults 40.0, TRUE, 25.0, 2.5, 20.0, 0.0, 100.0) |
 | `PV`, `CV` | program `PidLab` | REAL | Heater temperature, °C, and heater power (`Loop.Out`), % (given) |
 | `Load` | program `PidLab` | REAL | Load disturbance in % of heater power (given) |
@@ -1321,7 +1341,7 @@ all steady. Tuning values (given) come from the worked example in §8.1.
 **Requirements:**
 
 1. **MAN** (`FlowManual`): `ValvePos = ValveManual`, and `FlowSP` tracks `FlowPV`
-   (PV tracking).
+   (PV tracking), limited to 0..`FLOW_RANGE` like every setpoint (requirement 7).
 2. **AUTO** (not `FlowManual`, not `CascadeMode`): FIC-101 controls the flow to
    `FlowSPLocal`, limited to 0..`FLOW_RANGE`.
 3. **CAS** (not `FlowManual`, `CascadeMode`): `FlowSP` = TIC-101's output (0–100 %) scaled to
@@ -1332,7 +1352,7 @@ all steady. Tuning values (given) come from the worked example in §8.1.
 6. `ValveManual` follows `ValvePos` in AUTO and CAS, so switching to MAN keeps the valve.
 7. `FlowSP` is always within 0..`FLOW_RANGE`. Both controllers are reverse acting.
 
-The tests check every transition (MAN→AUTO, AUTO→CAS, CAS→AUTO, CAS→MAN→CAS). A 30 % supply
+The tests check every transition (MAN→AUTO, AUTO→MAN, AUTO→CAS, CAS→AUTO, CAS→MAN→CAS). A 30 % supply
 pressure drop in CAS may move the temperature by no more than 1 °C (a single loop sags about
 3.7 °C), and an unreachable setpoint must never push `FlowSP` beyond 5 t/h.
 
@@ -1349,7 +1369,8 @@ python3 tools/plctest.py my-work/15-3-cascade-control.st 15-pid-control/labs/15-
 
 A clean order within the scan:
 
-1. If MAN, `FlowSP := FlowPV`; else if not CAS, `FlowSP := LIMIT(0.0, FlowSPLocal, FLOW_RANGE)`.
+1. If MAN, `FlowSP := LIMIT(0.0, FlowPV, FLOW_RANGE)`; else if not CAS,
+   `FlowSP := LIMIT(0.0, FlowSPLocal, FLOW_RANGE)`.
 2. Call `TempPID` with `Manual := FlowManual OR NOT CascadeMode` and
    `ManualOut := FlowSP / FLOW_RANGE * 100.0`.
 3. If CAS and not MAN, `FlowSP := TempPID.Out / 100.0 * FLOW_RANGE`.
@@ -1448,4 +1469,4 @@ proportional step.
 - Your vendor's PID block manual, for your firmware version, before you enter a single number.
 
 ---
-Previous: [14 — Analog and Process I/O](../14-analog-and-process-io/) · Next: [16 — Alarms and Diagnostics](../16-alarms-and-diagnostics/)
+Previous: [14 — Analog Signals and Process I/O](../14-analog-and-process-io/) · Next: [16 — Alarms, Diagnostics and Fault Handling](../16-alarms-and-diagnostics/)

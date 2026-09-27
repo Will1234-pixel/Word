@@ -257,9 +257,10 @@ PROGRAM CascadeLab
 
   (* 2a. The flow setpoint in the modes where TIC-101 is not in charge. In MAN the
          setpoint tracks the measured flow (PV tracking), so that switching to AUTO
-         holds the present flow instead of jumping to an old setpoint. *)
+         holds the present flow instead of jumping to an old setpoint. It is limited
+         like every other setpoint, in case the measured flow is ever above range. *)
   IF FlowManual THEN
-    FlowSP := FlowPV;
+    FlowSP := LIMIT(0.0, FlowPV, FLOW_RANGE);
   ELSIF NOT CascadeMode THEN
     FlowSP := LIMIT(0.0, FlowSPLocal, FLOW_RANGE);
   END_IF;

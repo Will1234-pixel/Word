@@ -18,13 +18,13 @@ PROGRAM TwoHandControl
     PressDown AT %QX0.0 : BOOL;  (* press stroke valve *)
   END_VAR
   VAR (* internal *)
-    Window : TON;                (* time since the FIRST button was pressed *)
+    PressWindow : TON;                (* time since the FIRST button was pressed *)
     Ready  : BOOL;               (* both buttons have been released since the last stroke *)
   END_VAR
 
   (* 1. The synchronisation window starts with whichever button is pressed
         first and resets only when both are released. *)
-  Window(IN := LeftPB OR RightPB, PT := T#500ms);
+  PressWindow(IN := LeftPB OR RightPB, PT := T#500ms);
 
   (* 2. Ready is set only when both buttons are released. It starts FALSE,
         so buttons already held (or tied down) at power-up cannot start a
@@ -35,7 +35,7 @@ PROGRAM TwoHandControl
 
   (* 3. Start: both held, ready, and still inside the window.
         Hold: once running, both held is enough (the window has long expired). *)
-  PressDown := LeftPB AND RightPB AND (PressDown OR (Ready AND NOT Window.Q));
+  PressDown := LeftPB AND RightPB AND (PressDown OR (Ready AND NOT PressWindow.Q));
 
   (* 4. A stroke uses up Ready: after any release, both buttons must be
         released before the next stroke. *)
