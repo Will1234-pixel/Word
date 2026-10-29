@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ESD Drawing Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: a drawing-office light table. The sheet fills the left, a reading card sits on the right like a checker's notepad. */
+:root{
+  --bg:#eef0ed; --panel:#ffffff; --fg:#1b1f23; --muted:#5a6470; --line:#cfd5d2;
+  --accent:#0b6e8f; --accent-soft:rgba(11,110,143,.16); --trip:#b8322a; --trip-soft:rgba(184,50,42,.18);
+  --ok:#2f7d4f; --chip:#e4e9e7; --font-body:"IBM Plex Sans",system-ui,Segoe UI,Roboto,sans-serif; --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#15181b; --panel:#1d2126; --fg:#e7eaec; --muted:#a2acb6; --line:#333a40; --accent:#55b9dc; --accent-soft:rgba(85,185,220,.2); --trip:#e4675c; --trip-soft:rgba(228,103,92,.22); --ok:#6cc08b; --chip:#2a3137; color-scheme:dark } }
+:root[data-theme="dark"]{ --bg:#15181b; --panel:#1d2126; --fg:#e7eaec; --muted:#a2acb6; --line:#333a40; --accent:#55b9dc; --accent-soft:rgba(85,185,220,.2); --trip:#e4675c; --trip-soft:rgba(228,103,92,.22); --ok:#6cc08b; --chip:#2a3137; color-scheme:dark }
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.45;display:flex;flex-direction:column;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;box-sizing:border-box}
+*{box-sizing:border-box}
+h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.01em}
+h2{font-size:16px;margin:0 0 6px;font-weight:600;text-wrap:balance}
+h3{font-size:12px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+p{margin:0 0 8px;max-width:62ch}
+code,.mono{font-family:var(--font-mono);font-size:.92em}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:6px 0 10px}
+.sub{color:var(--muted);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;padding:6px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.small{padding:3px 8px;font-size:12px}
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;min-height:0}
+#vpwrap{position:relative;min-height:0;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#vp{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;background:#f7f8f6}
+#vp.drag{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;--bw:3px}
+#world.anim{transition:transform .45s ease}
+@media (prefers-reduced-motion: reduce){#world.anim{transition:none}}
+#sheetimg{display:block;width:3184px;height:2200px;max-width:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.hs{position:absolute;border:var(--bw) solid transparent;border-radius:4px;cursor:pointer}
+.hs:hover{border-color:var(--accent);background:var(--accent-soft)}
+.hs.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 calc(var(--bw)*2) var(--accent-soft)}
+.hs.trace{border-color:var(--trip);background:var(--trip-soft)}
+.hs.dim{opacity:.35}
+#tools{position:absolute;left:10px;top:10px;display:flex;gap:6px;z-index:2}
+#legend{position:absolute;right:10px;bottom:10px;z-index:2;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+aside{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow:auto}
+.chip{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--chip);color:var(--muted);padding:2px 8px;border-radius:999px;margin-bottom:8px}
+.chip.trip{background:var(--trip-soft);color:var(--trip)}
+.facts{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:14px;margin:6px 0 4px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;font-family:var(--font-mono);font-size:13px;min-width:0;overflow-wrap:anywhere}
+.links{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.note{border-left:3px solid var(--line);padding:4px 10px;color:var(--muted);font-size:13px;margin:8px 0}
+.note.warn{border-color:var(--trip)}
+.step{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.step .n{font-family:var(--font-mono);font-size:13px;color:var(--muted);flex:1}
+.gl dt{font-weight:600;margin-top:10px}
+.gl dd{margin:0;color:var(--fg)}
+.q{border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}
+.q .a{display:none;margin-top:6px;color:var(--ok)}
+.q.open .a{display:block}
+footer{font-size:12px;color:var(--muted);padding-top:8px}
+@media (max-width:900px){ main{grid-template-columns:1fr;grid-template-rows:58vh auto} aside{max-height:none} }
+</style></head><body>
+
+<header>
+  <div><h1>ESD Drawing Explorer</h1><div class="sub">HIMA-Sella C10265H/P3, ICI Synetix No.3 plant. Click anything on the sheet. Drag to pan, scroll or pinch to zoom.</div></div>
+  <div class="bar">
+    <span class="sub">Sheet</span>
+    <button id="b051" class="on" data-sheet="051">FLD 051, logic</button>
+    <button id="b075" data-sheet="075">Loop 075, wiring</button>
+    <span class="sub" style="margin-left:8px">Mode</span>
+    <button id="mExplore" class="on">Explore</button>
+    <button id="mTrace">Trace a signal</button>
+    <button id="mGloss">Glossary</button>
+    <button id="mQuiz">Check yourself</button>
+  </div>
+</header>
+<main>
+  <div id="vpwrap">
+    <div id="tools"><button class="small" id="zin" title="Zoom in">+</button><button class="small" id="zout" title="Zoom out">&minus;</button><button class="small" id="zfit">Fit</button></div>
+    <div id="vp"><div id="world"><img id="sheetimg" src="051.png" alt="Drawing sheet"></div></div>
+    <div id="legend">Blue = selected. Red = the signal being traced.</div>
+  </div>
+  <aside id="panel"></aside>
+</main>
+<footer>Rendered from the as-built DXF files. Positions and text come from the drawings; wording is a teaching aid, not part of the drawing.</footer>
+
+<script>
+// ---------- geometry: mm on the A3 sheet -> pixels in the 8 px/mm renders (x 12..410, y 0..275) ----------
+const PXMM=8, X0=12, Y1=275, IMG_W=3184, IMG_H=2200;
+const box=(x0,y0,x1,y1)=>({l:(x0-X0)*PXMM, t:(Y1-y1)*PXMM, w:(x1-x0)*PXMM, h:(y1-y0)*PXMM});
+
+// ---------- content ----------
+const G = {
+ esd:["ESD","Emergency Shutdown system. Watches for dangerous conditions and trips the plant to a safe state. Kept separate from the normal control system."],
+ plc:["Safety PLC","A programmable logic controller certified for ESD duty. Here a HIMA H51q-HS with two CPUs working in parallel."],
+ fld:["FLD","Functional Logic Diagram. One sheet per plant area showing what the PLC does with each signal: inputs on the left, logic in the middle, outputs on the right."],
+ loop:["Loop drawing","Shows the wiring of one signal: instrument, cable, terminals, plug, module slot, channel and pins."],
+ is:["I.S.","Intrinsically safe. A circuit with so little energy it cannot ignite gas. Everything on sheet 051 is NON-I.S."],
+ ann:["Annunciator","The alarm lamp panel in the control room. Each lamp is a numbered window, W01, W02 and so on."],
+ modbus:["Modbus","A simple serial protocol. The ESD system uses it to send signal states to the DeltaV control system."],
+ deltav:["DeltaV","The Fisher-Rosemount distributed control system that runs the plant day to day. Reads from the ESD, cannot override it."],
+ looptype:["Loop type","A code such as AI1 or DI1 that points to a typical wiring diagram on sheet 070, inputs, or 071, outputs."],
+ mA:["4-20 mA","The standard analogue signal. 4 mA is the bottom of the range, 20 mA the top. A broken wire gives 0 mA, which the system can detect."],
+ offdelay:["Off-delay timer","Its output stays on for the set time after the input goes off. T1 on sheet 051 is drawn as T1 OFF 2 mins."],
+ vtoi:["V to I converter","Hardware that turns 1 to 5 volts into 4 to 20 milliamps. Used to repeat a field measurement to DeltaV."],
+ cont:["Continuation reference","A box such as 3A 052.225: the signal continues on sheet 052 at grid position 225 on the top ruler."],
+ term:["Terminal","A numbered screw or clamp on a rail in the cabinet where a wire lands. Cables arrive on rails that carry the cable number."],
+ screen:["Screen","The metal braid or foil around a signal cable. Earthed at one end only to keep noise out."],
+ asbuilt:["As built","Drawings corrected after installation and testing to match what is really in the cabinet."],
+ fatsat:["FAT and SAT","Factory Acceptance Test at the builder's works, Site Acceptance Test after installation."],
+ testable:["Testable module","A HIMA input or output module that can test its own channels, so faults are found without waiting for a demand."],
+ wire:["Wire number","On this contract a wire is numbered by card position and channel, for example 1101/1 is channel 1 of the card in position 1101."],
+};
+const T=(k)=>`<b>${G[k][0]}</b>: ${G[k][1]}`;
+
+// hotspot definitions per sheet. kind, mm box, name, card html (built lazily), related ids
+const H={ '051':[], '075':[] };
+function add(sheet,id,kind,mm,name,html,rel){ H[sheet].push({id,kind,mm,name,html,rel:rel||[],sheet}); }
+
+// --- sheet 051 columns
+const cols=[[14.5,32,'Cable and terminals','Which field cable comes in and the two terminal numbers its pair lands on. Example: 3/C650 1 & 2. The 3 means No.3 plant.'],
+ [32,62,'Field','The instrument tag in an oval, a short description and the loop type.'],
+ [62,90,'Annun/Console','Control room devices: pushbuttons, a keyswitch and the annunciator lamps.'],
+ [90,134,'Input','The PLC input modules. O/R is a spare sub-column, probably for override inputs; nothing uses it. NON-I.S. holds the modules.'],
+ [134,152,'DeltaV Modbus','The software name of each signal, written on a short stub. These names are also what DeltaV sees.'],
+ [152,290,'Logic','AND and OR gates, a timer, DeltaV taps and continuation boxes to other sheets.'],
+ [290,310,'DeltaV Modbus','Same meaning as the left one, for signals created by the logic. Empty on this sheet.'],
+ [310,360,'Output','NON-I.S. and I.S. outputs. On this sheet, all are V to I converters.'],
+ [360,386,'Process device tag','The tag of the device that receives each output.'],
+ [386,404.5,'Cable and terminals','Cable and terminals leaving the cabinet, for example 3/C735 1 & 2.']];
+cols.forEach((c,i)=>add('051','col'+i,'Column',[c[0],255.5,c[1],266.5],'Column: '+c[2],`<p>${c[3]}</p><p class="note">Read an FLD left to right. The plant is on both edges, the PLC is in the middle.</p>`));
+add('051','title','Sheet','[262,0.5,404.5,35.5]'.length?[262,0.5,404.5,35.5]:null,'Title block',`<p>Contract and drawing number <code>C10265H/P3</code>, sheet <code>051</code>, revision <code>H</code>. Title: FLD, No.3 Plant Copper Dissolving Area. Designed and drawn NH, checked CW, approved NGB, first dated 21.02.00.</p><p>${T('asbuilt')}</p>`);
+add('051','revs','Sheet',[114,0.5,262,35.5],'Revision history',`<p>Every change to the sheet, newest at the bottom. Revision C was "AS BUILT" on 06.06.00. Revision E added a new density meter in 2003. Revision F in 2009 redrew the sheet with four instruments added. Revision H, the current one, is "DRAWING CHANGES" dated 12.10.11.</p><p class="note">Always check that the revision in your hand matches the latest on the document schedule, sheet 002.</p>`);
+add('051','notes','Sheet',[219,36,302,48],'Notes',`<p>Note 1: for typical loop types see drawings 070 and 071. Note 2: all annunciator outputs use typical loop type DO3.</p><p>So the lamp wiring is not drawn here. Sheet 071 block DO3 shows it once for all lamps.</p>`);
+add('051','ruler','Sheet',[14.5,266.5,404.5,271.5],'Grid ruler',`<p>Numbers along the top are millimetres across the sheet. A continuation box such as 3A 052.225 points to position 225 on this ruler of sheet 052.</p>`);
+
+// --- rows
+const rows=[
+ ['03HZS03350',[33,245.5,62,253.5],'LOW FLOWS RESET','DI1','3/C654','4 & 11','DIGITAL I/P F3236','Reset pushbutton in the control room, item C on the control plate: green, shielded, momentary. H is for hand, Z marks the safety function, S for switch.','pbC',['cab_HZS03350','mod_HZS03350','sig_HZA03350','pbC','lamp_W12','TIMER']],
+ ['03HZS03354',[33,231.5,62,241.5],'COPPER DISSOLVING STOP','DI1','3/C654','8 & 11','DIGITAL I/P F3236','Stop pushbutton in the control room, item F on the control plate: red, shielded, maintained. Maintained means it stays pressed until released, so a stop cannot be undone by letting go.','pbF',['cab_HZS03354','mod_HZS03354','pbF','AND1']],
+ ['03FZT03002',[33,220.5,62,228.5],'Nitric Acid','AI1','3/C650','1 & 2','ANALOG I/P F6217','Flow transmitter for 69% nitric acid, a 4-20 mA signal. F for flow, Z marks the safety function, T for transmitter. Loop type AI1 means a passive transmitter powered from this cabinet.','',['cab_FZT03002','mod_FZT03002','sig_FZA03002','lamp_W01','x075_tx']],
+ ['03FZT03004',[33,210.5,62,218.5],'Scrubber Liquor','AI1','3/C650','3 & 4','ANALOG I/P F6217','Flow transmitter for scrubber liquor. Same loop type as the nitric acid flow and wired on the next pair of the same cable.','',['cab_FZT03004','mod_FZT03004','sig_FZA03004','lamp_W02']],
+ ['03FZT03006',[33,196.5,62,204.5],'Oxygen','AI1','3/C731','1 & 2','ANALOG I/P F6217','Oxygen flow transmitter. The module gives two software signals from this one input: 03FZA03006A and 03FZA03006B, which carries the LOLO limit to sheet 053.','',['cab_FZT03006','mod_FZT03006','sig_FZA03006A','sig_FZA03006B','lamp_W5152']],
+ ['03QZT03581',[33,186.5,62,195],'Flow Density','AI1','3/C668','13 & 14','ANALOG I/P F6217','Density meter, added at revision E in 2003. Q is used here for a quality measurement. Its 1 to 5 volt input is also repeated to DeltaV through the ISOCON 6 converter as 03ZRT03581.','',['cab_QZT03581','mod_QZT03581','sig_QZA03581','lamp_W57','vtoi_ZRT03581']],
+ ['03LZT03691',[33,174,62,182.5],'LEVEL IN 3F3','AI2','3/C668','3 & 4','ANALOG I/P F6217','Level transmitter in vessel 3F3. L for level. Loop type AI2 normally includes a repeat to DeltaV, but no V to I box is drawn for this row.','',['cab_LZT03691','mod_LZT03691','sig_LZA03691','lamp_W45']],
+ ['03FZT03007',[33,161.5,62,170],'Recirculation Flow','AI2','3/C668','5 & 6','ANALOG I/P F6217','Recirculation flow transmitter. Its measurement is repeated to DeltaV as 03FZRT03007 on cable 3/C661.','',['cab_FZT03007','mod_FZT03007','sig_FZA03007','lamp_W46','vtoi_FZRT03007']],
+ ['03FZT03008',[33,149,62,157.5],'Recirculation Flow','AI2','3/C668','7 & 8','ANALOG I/P F6217','Recirculation flow transmitter, repeated to DeltaV as 03FZRT03008.','',['cab_FZT03008','mod_FZT03008','sig_FZA03008','lamp_W47','vtoi_FZRT03008']],
+ ['03FZT03010',[33,136.5,62,145],'Recirculation Flow','AI2','3/C668','9 & 10','ANALOG I/P F6217','Recirculation flow transmitter, repeated to DeltaV. The output tag is drawn as 03FZRT0310, which looks like a typo for 03FZRT03010.','',['cab_FZT03010','mod_FZT03010','sig_FZA03010','lamp_W48','vtoi_FZRT0310']],
+ ['03FZT03012',[33,123,62,131.5],'Recirculation Flow','AI2','3/C650','17 & 18','ANALOG I/P F6217','Recirculation flow transmitter on cable 3/C650, repeated to DeltaV as 03FZRT03012 on cable 3/C661 pair 1 & 2.','',['cab_FZT03012','mod_FZT03012','sig_FZA03012','lamp_W14','vtoi_FZRT03012']],
+ ['03PDZT03078',[33,113,62,121.5],'Vent Fan D.P.','AI2','3/C650','9 & 10','ANALOG I/P F6217','Differential pressure across the vent fan. PD for pressure differential. Its software signal also leaves to sheet 052 through box 3C.','',['cab_PDZT03078','mod_PDZT03078','sig_PDZA03078','lamp_W11','ref_3C','vtoi_PDZRT03078']],
+ ['03TZT03052',[33,101,62,110],'Recirculation Temp','AI1','3/C731','3 & 4','ANALOG I/P F6217','Temperature transmitter. One input gives four limit signals: A HIGH, B LOW, C HIHI and D LOLO. Two go to lamps, two leave to sheets 052 and 053.','',['cab_TZT03052','mod_TZT03052','sig_TZA03052A','sig_TZA03052B','sig_TZA03052C','sig_TZA03052D','lamp_W05','lamp_W08']],
+ ['03EZS03412',[33,90.5,62,99.5],'3J4A Pump Running','DI1','3/C651','11 & 12','DIGITAL I/P F3236','A contact that closes when pump 3J4A is running. E is used for an electrical status, S for switch.','',['cab_EZS03412','mod_EZS03412','sig_EZS03412','OR3','lamp_W15']],
+ ['03EZS03413',[33,80.5,62,89.5],'3J4B Pump Running','DI1','3/C651','13 & 14','DIGITAL I/P F3236','The standby pump 3J4B running contact. Either pump running satisfies the OR gate.','',['cab_EZS03413','mod_EZS03413','sig_EZS03413','OR3','lamp_W15']],
+ ['03LZT03110',[33,66.5,62,75.5],'3F1 Dissolver Level','AI2','3/C650','11 & 12','ANALOG I/P F6217','Level in dissolver 3F1. Four signals are drawn from it: HIGH, LOW, MID and a second MID. Also repeated to DeltaV as 03LZRT03110.','',['cab_LZT03110','mod_LZT03110','sig_LZA03110A','sig_LZA03110C','ref_3E','ref_3F','lamp_W06','lamp_W16','vtoi_LZRT03110']],
+ ['03HZS03110',[33,42.5,62,55.5],'3F1 MID LEVEL TRIP, LZA-3110C NORMAL OPERATION/OVERRIDE','DI1','none drawn','none drawn','DIGITAL I/P F3236','Keyswitch on the control plate, item B: two positions, stays where you leave it. It selects normal operation or override of the mid level trip. No cable or terminal is drawn, because it reaches the cabinet through the operators console connector listed on sheet 203.','ksB',['ksB','mod_HZS03110','sig_HZA03559','OR4','lamp_W16']],
+];
+rows.forEach(r=>{
+ const [tag,mm,desc,lt,cab,term,mod,text,dev,rel]=r;
+ add('051','row_'+tag.slice(2),'Field device',mm,tag+' '+desc,
+  `<p>${text}</p><dl class="facts"><dt>Tag</dt><dd>${tag}</dd><dt>Loop type</dt><dd>${lt}</dd><dt>Cable</dt><dd>${cab}</dd><dt>Terminals</dt><dd>${term}</dd><dt>Module</dt><dd>${mod}</dd></dl><p class="note">${T('looptype')}</p>`, rel);
+ if(cab!=='none drawn') add('051','cab_'+tag.slice(2),'Cable and terminals',[15,mm[1],32,mm[3]],cab+' '+term,
+  `<p>Field cable <code>${cab}</code> arrives on the terminal rail of the same name. This pair lands on terminals <code>${term}</code>. The first terminal of a pair is the positive wire, by note 1 on the loop drawings.</p><p>For a tester this is where to clip a meter: on an AI loop you should read a current between 4 and 20 mA in series, or 1 to 5 volts across the module input.</p><p class="note">${T('term')}</p>`,['row_'+tag.slice(2)]);
+});
+// modules
+const mods=[['HZS03350',249.9,'F3236'],['HZS03354',235.9,'F3236'],['FZT03002',225.4,'F6217'],['FZT03004',215.6,'F6217'],['FZT03006',201.6,'F6217'],['QZT03581',191.8,'F6217'],['LZT03691',179.2,'F6217'],['FZT03007',166.6,'F6217'],['FZT03008',154.0,'F6217'],['FZT03010',141.4,'F6217'],['FZT03012',128.1,'F6217'],['PDZT03078',118.3,'F6217'],['TZT03052',106.4,'F6217'],['EZS03412',95.9,'F3236'],['EZS03413',86.1,'F3236'],['LZT03110',72.1,'F6217'],['HZS03110',47.6,'F3236']];
+mods.forEach(([t,y,m])=>add('051','mod_'+t,'Input module',[109.3,y-3.7,125.3,y+3.3],(m==='F6217'?'ANALOG I/P ':'DIGITAL I/P ')+m,
+ m==='F6217'?`<p>A HIMA F6217 8-channel analogue input module. It measures the loop current across an internal resistor as 1 to 5 volts, and the PLC compares the value with limits to make signals such as HIGH or LOLO.</p><p>The box does not say which slot or channel. That is on the loop drawing: for 03FZT03002 it is position 1101, channel 1, pins z4 and d4.</p><p class="note">${T('testable')}</p>`
+ :`<p>A HIMA F3236 16-channel digital input module. Each channel reads a dry contact, open or closed, through the 24 V supply of the cabinet.</p><p>Slot and channel are on the loop drawings for digital inputs, sheets 087 and 088 for these pushbuttons.</p><p class="note">${T('testable')}</p>`,
+ ['row_'+t, t==='FZT03002'?'x075_mod':'']));
+// lamps
+const lamps=[['W12',241.85,'03HZA03350, the low flows reset, through the timer'],['W01',229.25,'03FZA03002, nitric acid low flow'],['W02',219.45,'03FZA03004, scrubber liquor low flow'],['W5152',209.65,'03FZA03006A, oxygen low flow, two windows'],['W57',195.65,'03QZA03581, flow density'],['W45',183.05,'03LZA03691, level in 3F3'],['W46',170.45,'03FZA03007'],['W47',157.85,'03FZA03008'],['W48',145.25,'03FZA03010'],['W14',131.95,'03FZA03012'],['W11',122.15,'03PDZA03078, vent fan differential pressure'],['W05',110.25,'03TZA03052A, recirculation temperature HIGH'],['W08',99.75,'03TZA03052B, recirculation temperature LOW'],['W15',80.85,'the OR of both pump running contacts'],['W06',75.95,'03LZA03110A, 3F1 level HIGH'],['W16',61.95,'the OR of 03LZA03110C MID and the override keyswitch 03HZA03559']];
+lamps.forEach(([w,y,s])=>add('051','lamp_'+w,'Annunciator window',[w==='W5152'?62:66,y-2.3,79.5,y+2.7],'Window '+(w==='W5152'?'W51 & W52':w),
+ `<p>An annunciator lamp in the control room. As traced on the sheet, this window shows ${s}.</p><p>Note 2 says every lamp is wired to typical loop DO3 on sheet 071: a 24 V output module F3322 drives the lamp through the annunciator cable. Sheet 200 lists which core of cable 3/C652 carries each window.</p><p class="note">${T('ann')}</p>`));
+// console devices
+add('051','pbC','Control room device',[71,246.5,88,254],'Pushbutton C, Low flows reset',`<p>The box with a contact line and a letter is a control room pushbutton. The letter is the item on the control plate drawing, sheet 028, where C is a green, shielded, momentary pushbutton.</p><p>Momentary means it springs back when released. A reset should be a deliberate press, not something that can be left in.</p>`,['row_HZS03350','TIMER']);
+add('051','pbF','Control room device',[71,232.5,88,240],'Pushbutton F, Copper dissolving stop',`<p>Item F on sheet 028 is a red, shielded, maintained pushbutton. Maintained means it stays in until someone pulls it out, so a stop holds until it is deliberately cleared.</p>`,['row_HZS03354','AND1']);
+add('051','ksB','Control room device',[71,44,90,51.5],'Keyswitch B, Normal / Override',`<p>K/S is a keyswitch. Item B on sheet 028 is a two-position stay-put keyswitch. The key stops anyone casually overriding the 3F1 mid level trip.</p><p>Its signal is named 03HZA03559 inside the PLC.</p>`,['row_HZS03110','OR4']);
+// signals
+const sigs=[['HZA03350',144.51,239.05,'The reset pushbutton after the two-minute timer. Note the name changes from S, switch, to A, action or alarm, once it is a PLC signal.'],['FZA03002',147.29,226.45,'Nitric acid flow low. The first input of the big AND gate below. Also drives window W01.'],['FZA03004',147.29,216.65,'Scrubber liquor flow low, into the big AND gate and window W02.'],['FZA03006A',147.29,202.65,'Oxygen flow low, into the big AND gate and windows W51 and W52.'],['FZA03006B',197.93,201.23,'Oxygen flow LOLO. Leaves the sheet through box 3L to sheet 053 at grid 140.'],['QZA03581',147.29,192.85,'Density signal into the big AND gate and window W57.'],['LZA03691',147.29,180.25,'Level in 3F3 into the big AND gate and window W45.'],['FZA03007',147.29,167.65,'Recirculation flow into the big AND gate and window W46.'],['FZA03008',147.29,155.05,'Recirculation flow into the big AND gate and window W47.'],['FZA03010',147.29,142.45,'Recirculation flow into the big AND gate and window W48.'],['FZA03012',147.29,129.15,'Recirculation flow, drawn straight into the lower 8-input AND gate and window W14.'],['PDZA03078',147.29,119.35,'Vent fan differential pressure. Splits to the lower AND gate and to box 3C, sheet 052 grid 150.'],['TZA03052A',147.29,109.55,'Temperature HIGH, to window W05 and the lower AND gate.'],['TZA03052B',147.29,105.35,'Temperature LOW, to window W08 and box 3D, sheet 052 grid 170.'],['TZA03052C',189.12,108.65,'Temperature HIHI, to box 3M, sheet 053 grid 140.'],['TZA03052D',189.12,102.01,'Temperature LOLO, to box 3N, sheet 053 grid 140.'],['EZS03412',147.29,96.95,'Pump 3J4A running, into the OR gate.'],['EZS03413',147.29,87.15,'Pump 3J4B running, into the OR gate.'],['LZA03110A',147.29,75.25,'3F1 level HIGH, to window W06 and the lower AND gate.'],['LZA03110C',147.29,54.25,'3F1 level MID, into the OR gate with the override keyswitch.'],['HZA03559',147.29,48.65,'The override keyswitch signal, into the OR gate with the MID level.']];
+sigs.forEach(([n,x,y,t])=>add('051','sig_'+n,'Software signal',[x-1.5,y-1.5,x+Math.max(16,n.length*1.15),y+2.7],'03'+n,`<p><code>03${n}</code>. ${t}</p><p>The stub with a name is the legend symbol "reference to DeltaV/Modbus": these names are the PLC variables, and DeltaV reads them under the same names.</p><p class="note">Connections described here were traced from the drawn lines. A second check of every line is in progress.</p>`));
+// logic
+add('051','TIMER','Logic',[156.5,246,172.8,253],'Timer T1, OFF 2 mins',`<p>A timer in the PLC. The label says OFF and 2 minutes, so the output stays on for two minutes after the reset button is released. The legend only calls it a timer, so confirm the exact behaviour in the PLC program.</p><p class="note">${T('offdelay')}</p>`,['pbC','sig_HZA03350','AND1']);
+add('051','AND1','Logic',[182,232.5,192.2,242.6],'AND gate, 2 inputs',`<p>Output is true only when both inputs are true: the timed reset signal 03HZA03350 and the copper dissolving stop button. The output goes to DeltaV tap DV3_2, to box 3P for sheet 053, and into the OR gate below.</p>`,['sig_HZA03350','pbF','DV3_2','ref_3P','OR2']);
+add('051','AND2','Logic',[177,213.6,193.6,229.6],'AND gate, 9 inputs',`<p>The big gate. Nine lines enter it: the stop button and eight low-flow, density and level signals. All must be true for the output to be true. Output goes to DeltaV tap DV3_4 and into the OR gate on its right.</p><p class="note">Counted from the drawn lines. The second check will confirm the count.</p>`,['sig_FZA03002','sig_FZA03004','sig_FZA03006A','sig_QZA03581','sig_LZA03691','sig_FZA03007','sig_FZA03008','sig_FZA03010','DV3_4','OR2']);
+add('051','OR1','Logic',[200.5,242,211.6,250.5],'OR gate, top',`<p>Output true when either input is true. One input is the reset button directly, the other is the line from box 3A. The output goes to DeltaV tap DV3_1 and down to the lower 8-input AND gate.</p>`,['pbC','ref_3A','DV3_1','AND3']);
+add('051','OR2','Logic',[200.5,220,211.6,228.6],'OR gate, middle',`<p>Combines the 2-input AND and the 9-input AND. Output goes to DeltaV tap DV3_3 and down to the lower 8-input AND gate.</p>`,['AND1','AND2','DV3_3','AND3']);
+add('051','AND3','Logic',[225.5,117.5,241,133],'AND gate, 8 inputs',`<p>The lower collecting gate. Its eight inputs are the two OR gates above, recirculation flow 03FZA03012, vent fan pressure, temperature HIGH, either pump running, 3F1 level HIGH, and the MID-or-override OR gate. Output goes to DeltaV tap DV3_5 and leaves through box 3B to sheet 052 at grid 170.</p><p>This is the sheet's main result. What happens with it is on sheet 052.</p>`,['OR1','OR2','sig_FZA03012','sig_PDZA03078','sig_TZA03052A','OR3','sig_LZA03110A','OR4','DV3_5','ref_3B']);
+add('051','OR3','Logic',[168,89,179,97],'OR gate, pumps',`<p>True when pump 3J4A or pump 3J4B is running. Drives window W15, DeltaV tap DV3_6 and one input of the lower AND gate.</p>`,['sig_EZS03412','sig_EZS03413','lamp_W15','DV3_6','AND3']);
+add('051','OR4','Logic',[168,51,179,59.5],'OR gate, mid level or override',`<p>True when the 3F1 level is at MID or the override keyswitch is turned. Drives window W16, DeltaV tap DV3_7 and one input of the lower AND gate.</p>`,['sig_LZA03110C','sig_HZA03559','lamp_W16','DV3_7','AND3']);
+[['DV3_1',211.5,238.6,222,244.6,'the top OR gate'],['DV3_2',190,230,200,236,'the 2-input AND gate'],['DV3_3',209,216.5,219.5,222.5,'the middle OR gate'],['DV3_4',190,214,200,220,'the 9-input AND gate'],['DV3_5',242,118,252,124,'the 8-input AND gate'],['DV3_6',190,86,200,92,'the pumps OR gate'],['DV3_7',190,48,200,54,'the mid level or override OR gate']].forEach(([n,a,b,c,d,s])=>add('051',n,'DeltaV tap',[a,b,c,d],n,`<p>A solid dot with the name ${n}. The state of ${s} is sent to DeltaV over Modbus so operators can see it. DV3 means the No.3 plant list; sheet 057 uses DV7 for No.7 plant.</p><p class="note">${T('modbus')}</p>`));
+const refs=[['3A',[250,250,266.5,254.5],'052.225','The line from this box runs into the top OR gate, so this signal arrives from sheet 052 at grid 225 rather than leaving. Confirm by finding box 3A on sheet 052.'],['3P',[250,235.5,266.5,240],'053.140','Carries the 2-input AND result to sheet 053 at grid 140.'],['3L',[250,197.5,266.5,202],'053.140','Carries oxygen flow LOLO, 03FZA03006B, to sheet 053 at grid 140.'],['3C',[166,115.8,182,120],'052.150','Carries vent fan pressure 03PDZA03078 to sheet 052 at grid 150.'],['3B',[250,123.5,266.5,128],'052.170','Carries the 8-input AND result, the main output of this sheet, to sheet 052 at grid 170.'],['3M',[259.5,105,275.5,109.5],'053.140','Carries temperature HIHI to sheet 053 at grid 140.'],['3D',[250,101.8,266.5,106.3],'052.170','Carries temperature LOW to sheet 052 at grid 170.'],['3N',[259.5,99,275.5,103.5],'053.140','Carries temperature LOLO to sheet 053 at grid 140.'],['3E',[250,70.3,266.5,74.8],'053.165','Carries 3F1 level LOW to sheet 053 at grid 165.'],['3F',[250,64.7,266.5,69.2],'053.165','Carries 3F1 level MID to sheet 053 at grid 165.']];
+refs.forEach(([c,mm,t,s])=>add('051','ref_'+c,'Continuation',mm,c+' to '+t,`<p>${s}</p><p>Format: code <code>${c}</code>, sheet <code>${t.slice(0,3)}</code>, grid <code>${t.slice(4)}</code> on that sheet's top ruler. Sheets 051, 052 and 053 pass signals between each other with these codes.</p><p class="note">${T('cont')}</p>`));
+// outputs
+const outs=[['ZRT03581',197.04,'3/C735','1 & 2','ISOCON 6','03QZT03581 flow density'],['FZRT03007',173.24,'3/C661','15 & 16','','03FZT03007 recirculation flow'],['FZRT03008',160.62,'3/C661','17 & 18','','03FZT03008 recirculation flow'],['FZRT0310',148.04,'3/C661','19 & 20','','03FZT03010 recirculation flow'],['FZRT03012',134.74,'3/C661','1 & 2','','03FZT03012 recirculation flow'],['PDZRT03078',112.34,'3/C661','3 & 4','','03PDZT03078 vent fan pressure'],['LZRT03110',78.74,'3/C651','5 & 6','','03LZT03110 3F1 level']];
+outs.forEach(([t,y,cab,term,typ,src])=>{
+ add('051','vtoi_'+t,'Output converter',[317.5,y-3.5,345.5,y+5],'V to I'+(typ?', '+typ:''),`<p>A voltage to current converter: 1 to 5 volts in from the input module's measuring resistor, 4 to 20 mA out to DeltaV. It repeats the ${src} measurement. ${typ?'This one is named '+typ+'.':'The type is not written here; the loop drawing shows it.'}</p><p>This is hardware, not PLC logic. The PLC does not decide its value.</p><p class="note">${T('vtoi')}</p>`,['tag_'+t,'ocab_'+t]);
+ add('051','tag_'+t,'Process device tag',[365.5,y-1.8,385.5,y+3],'03'+t,`<p>The tag under which DeltaV receives this repeated signal. RT in the middle reads as repeat transmitter. ${t==='FZRT0310'?'Drawn as 03FZRT0310, which looks like a missing digit for 03FZRT03010.':''}</p>`,['vtoi_'+t,'ocab_'+t]);
+ add('051','ocab_'+t,'Cable and terminals',[389.5,y-2.5,404,y+4.2],cab+' '+term,`<p>Outgoing cable <code>${cab}</code>, terminals <code>${term}</code>, to the DeltaV marshalling. The loop drawing shows the wire numbers.</p>`,['vtoi_'+t,'tag_'+t]);
+});
+
+// --- sheet 075 (wiring view)
+add('075','x075_tx','Field device',[28,231.5,56,244],'03FZT03002, 69% nitric acid low flow',`<p>The same transmitter as the FLD row, now seen as wiring. Loop drawing sheet 075 shows four loops; this is the first.</p><dl class="facts"><dt>Tag</dt><dd>03FZT03002</dd><dt>Signal</dt><dd>4-20mA, two wires</dd><dt>Powered from</dt><dd>the cabinet, pins d30 and d26</dd></dl>`,['x075_terms','row_FZT03002']);
+add('075','x075_terms','Cable and terminals',[56,233.5,70,247.5],'3/C650 terminals 1 and 2',`<p>Cable <code>3/C650</code> lands on terminals <code>1</code> (+) and <code>2</code> (-). Note 1 on this sheet: the first terminal of a pair is always the plus wire.</p><p>On the FLD the same pair appears as "3/C650 1 & 2". That is the cross-reference you check first when tracing a loop.</p>`,['x075_wire','cab_FZT03002']);
+add('075','x075_wire','Wire number',[74,236.5,90,241],'Wire 1101/1',`<p>Inside the cabinet every wire has a number. Note 6: the number is card position / channel, so <code>1101/1</code> is channel 1 of the card in position 1101. If you find a wire marked 1101/1 anywhere in the cabinet, it belongs to this loop.</p><p class="note">${T('wire')}</p>`,['x075_terms','x075_pins']);
+add('075','x075_scn','Cable screen',[100,241,122,246.5],'S/CORE SCN',`<p>Single core screened cable from the terminals to the module plug. Note 2: analogue loops use screened cable where possible. The screen keeps electrical noise out of a small 4-20 mA signal.</p><p class="note">${T('screen')}</p>`,['x075_wire']);
+add('075','x075_plug','I/O plug',[120,218.5,136,230],'I/O plug Z7127',`<p>The HIMA plug that carries the field wires onto the module. Z7127 is the plug type for the F6217. Pulling this plug disconnects every channel on the card at once, so never pull it with the plant running.</p>`,['x075_pins']);
+add('075','x075_mod','Input module',[128,242.5,178,256],'HIMA F6217 analogue input module',`<p>The same module box as on the FLD, now with its slot: position <code>1101</code>. Reading the position code: cabinet 1, rack 1, card slot 01. The legend on sheet 018 explains this format.</p>`,['x075_pins','mod_FZT03002']);
+add('075','x075_pins','Module pins',[130,230.5,168,242],'Position 1101, channel 1, pins z4 and d4',`<p>The signal pair goes to pins <code>z4</code> (+) and <code>d4</code> (-) of channel 1. HIMA pins are named by row letter and number. Channel 2 uses z8 and d8, channel 3 uses z12 and d12, and so on in steps of four.</p>`,['x075_supply','x075_wire']);
+add('075','x075_supply','Supply pins',[114,199,180,242],'Supply: d30 = 1L+1, d26 = 1L-1',`<p>Pins <code>d30</code> and <code>d26</code> bring 24 V to the card so it can power the transmitter. The red wire <code>1L+1</code> and black wire <code>1L-1</code> come from fuse F1 on the F7133 distribution card 1118, sheet 043. Loop type AI1 means the transmitter is passive and takes its power from here.</p><p>If this fuse fails, every loop on card 1101 loses its transmitter supply, and the F7133 card's LED L1 goes out.</p>`,['x075_pins']);
+add('075','x075_notes','Sheet',[209.5,52,330,103],'Notes',`<p>Six notes that apply to every loop drawing. The two that matter most for tracing: note 1, the first terminal is always plus, and note 6, wire numbers are card position / channel.</p>`);
+add('075','x075_loop2','Field device',[222,230,260,247],'03FZT03004 scrubber liquor low flow',`<p>Loop 2 of this sheet: cable 3/C650 terminals 3 and 4, wire 1101/2, channel 2, pins z8 and d8 of the same card.</p>`,['row_FZT03004']);
+add('075','x075_loop3','Field device',[28,110,70,127],'03FZT03006 oxygen low flow',`<p>Loop 3: cable 3/C731 terminals 1 and 2, wire 1101/3, channel 3, pins z12 and d12.</p>`,['row_FZT03006']);
+add('075','x075_loop4','Field device',[228,110,300,130],'03PZT03079 copper dissolver 3F1 high pressure trip',`<p>Loop 4: cable 3/C668 terminals 15 and 16, wire 1101/4, channel 4, pins z16 and d16. This loop also has a converter below it. The tag does not appear on FLD 051, so its logic is on another FLD sheet.</p>`,['x075_isocon']);
+add('075','x075_isocon','Output converter',[300,52,372,90],'ISOCON-6-20 signal converter',`<p>The V to I converter drawn in full: 1 to 5 volts in on pins 4 and 5, 24 V supply on pins 1 and 2 from 1L+2 and 1L-2, 4 to 20 mA out on pins 12 and 10 to cable 3/C735 wires 1 and 2.</p><p class="note warn">FLD 051 shows cable 3/C735 1 & 2 feeding the density repeat 03ZRT03581, while this sheet shows 3/C735/1 and /2 on the pressure trip loop. One of the two sheets is out of date. A cross-check is running.</p>`,['x075_loop4','ocab_ZRT03581']);
+add('075','x075_out','Cable and terminals',[358,60,392,75],'3/C735 wires 1 and 2',`<p>Outgoing pair to DeltaV from the converter.</p>`,['x075_isocon']);
+
+// ---------- trace ----------
+const TRACE=[
+ ['075','x075_tx','Start in the field. 03FZT03002 measures the 69% nitric acid flow and sends 4 to 20 mA down a two-wire cable.'],
+ ['075','x075_terms','The cable 3/C650 enters the cabinet and lands on terminals 1 and 2 of the rail named after it. Plus on 1, minus on 2.'],
+ ['075','x075_wire','From the terminals, internal wire 1101/1 goes to the card. The number already tells you the slot and channel.'],
+ ['075','x075_pins','It arrives on plug Z7127 at pins z4 and d4 of card 1101, channel 1.'],
+ ['075','x075_supply','The card powers the transmitter from pins d30 and d26, fed by wires 1L+1 and 1L-1 from distribution card 1118.'],
+ ['051','row_FZT03002','Now the logic view. The same loop appears on FLD 051 with the same cable and terminals, loop type AI1.'],
+ ['051','mod_FZT03002','The module box is the same F6217 at position 1101. The FLD does not repeat the slot; the loop drawing has it.'],
+ ['051','sig_FZA03002','Inside the PLC the value becomes signal 03FZA03002, low flow. It lights window W01 and enters the 9-input AND gate.'],
+ ['051','AND2','All nine inputs must be true. The result goes to DeltaV tap DV3_4 and into the middle OR gate.'],
+ ['051','OR2','The OR gate combines it with the 2-input AND. Its result feeds DeltaV tap DV3_3 and the 8-input AND below.'],
+ ['051','AND3','The 8-input AND gives the sheet result, DeltaV tap DV3_5 and box 3B. The story continues on sheet 052 at grid 170.'],
+];
+
+// ---------- quiz ----------
+const QUIZ=[
+ ['On FLD 051, which column tells you the physical cable and which tells you the software name?','Cable and terminals, column 1, gives the cable. The DeltaV Modbus column, column 5, carries the software name such as 03FZA03002.'],
+ ['Wire 1101/3 is found loose in the cabinet. Which loop does it belong to?','Card position 1101, channel 3: the oxygen flow 03FZT03006 on loop drawing 075, cable 3/C731 terminals 1 and 2.'],
+ ['Pushbutton F is red, shielded and maintained. Why maintained for a stop?','A maintained button stays pressed, so the stop holds until someone deliberately releases it. A momentary stop would clear itself when the hand is lifted.'],
+ ['Box 3B 052.170 appears on sheet 051. Where do you look next?','Sheet 052, at position 170 on the top ruler, for a box also marked 3B.'],
+ ['The transmitter 03FZT03002 shows 0 mA at terminals 1 and 2. Name two things to check.','The 24 V supply on pins d30 and d26, which comes from fuse F1 of card 1118 on sheet 043, and the field cable and transmitter itself.'],
+];
+
+// ---------- viewer ----------
+const vp=document.getElementById('vp'), world=document.getElementById('world'), img=document.getElementById('sheetimg'), panel=document.getElementById('panel');
+let S=1, TX=0, TY=0, fitS=0.2, sheet='051', mode='explore', sel=null, traceStep=0;
+function apply(){ world.style.transform=`translate(${TX}px,${TY}px) scale(${S})`; world.style.setProperty('--bw',(3/S).toFixed(2)+'px'); }
+function fit(){ const r=vp.getBoundingClientRect(); fitS=Math.min(r.width/IMG_W, r.height/IMG_H); S=fitS; TX=(r.width-IMG_W*S)/2; TY=(r.height-IMG_H*S)/2; apply(); }
+function zoomAt(f,cx,cy){ const ns=Math.max(fitS*0.7,Math.min(5,S*f)); TX=cx-(cx-TX)*(ns/S); TY=cy-(cy-TY)*(ns/S); S=ns; apply(); }
+function zoomTo(b){ const r=vp.getBoundingClientRect(); const pad=1.0; const ns=Math.min(2.2, Math.max(fitS, Math.min(r.width/(b.w*(1+pad*2)+1), r.height/(b.h*(1+pad*2)+1))*0.9)); const cx=b.l+b.w/2, cy=b.t+b.h/2; S=ns; TX=r.width/2-cx*S; TY=r.height/2-cy*S; world.classList.add('anim'); apply(); setTimeout(()=>world.classList.remove('anim'),500); }
+vp.addEventListener('wheel',e=>{ e.preventDefault(); const r=vp.getBoundingClientRect(); zoomAt(e.deltaY<0?1.2:1/1.2, e.clientX-r.left, e.clientY-r.top); },{passive:false});
+const ptrs=new Map(); let last=null, pinch=null, moved=false;
+vp.addEventListener('pointerdown',e=>{ vp.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); moved=false; if(ptrs.size===1){ last={x:e.clientX,y:e.clientY}; vp.classList.add('drag'); } if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y), s:S}; } });
+vp.addEventListener('pointermove',e=>{ if(!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(ptrs.size===2&&pinch){ const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); const r=vp.getBoundingClientRect(); const cx=(a.x+b.x)/2-r.left, cy=(a.y+b.y)/2-r.top; zoomAt((pinch.s*d/pinch.d)/S, cx, cy); moved=true; } else if(ptrs.size===1&&last){ const dx=e.clientX-last.x, dy=e.clientY-last.y; if(Math.abs(dx)+Math.abs(dy)>2) moved=true; TX+=dx; TY+=dy; last={x:e.clientX,y:e.clientY}; apply(); } });
+function up(e){ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; if(ptrs.size===0){ last=null; vp.classList.remove('drag'); } }
+vp.addEventListener('pointerup',up); vp.addEventListener('pointercancel',up);
+document.getElementById('zin').onclick=()=>{const r=vp.getBoundingClientRect(); zoomAt(1.4,r.width/2,r.height/2)};
+document.getElementById('zout').onclick=()=>{const r=vp.getBoundingClientRect(); zoomAt(1/1.4,r.width/2,r.height/2)};
+document.getElementById('zfit').onclick=fit;
+window.addEventListener('resize',()=>{ const wasFit=Math.abs(S-fitS)<1e-6; const r=vp.getBoundingClientRect(); fitS=Math.min(r.width/IMG_W, r.height/IMG_H); if(wasFit) fit(); });
+
+function byId(id){ for(const s in H){ const h=H[s].find(x=>x.id===id); if(h) return h; } return null; }
+function buildHotspots(){ world.querySelectorAll('.hs').forEach(e=>e.remove()); H[sheet].forEach(h=>{ const b=box(...h.mm); const d=document.createElement('div'); d.className='hs'; d.dataset.id=h.id; d.title=h.name; d.style.cssText=`left:${b.l}px;top:${b.t}px;width:${b.w}px;height:${b.h}px`; d.addEventListener('click',ev=>{ if(moved) return; select(h.id,true); }); world.appendChild(d); }); }
+function setSheet(s){ if(sheet===s) return; sheet=s; img.src=s+'.png'; document.querySelectorAll('[data-sheet]').forEach(b=>b.classList.toggle('on',b.dataset.sheet===s)); buildHotspots(); fit(); markTrace(); }
+function select(id,zoom){ const h=byId(id); if(!h) return; if(h.sheet!==sheet){ setSheet(h.sheet); } sel=id; world.querySelectorAll('.hs').forEach(e=>e.classList.toggle('sel',e.dataset.id===id)); if(zoom){ zoomTo(box(...h.mm)); } if(mode==='explore') renderCard(h); if(mode==='trace') renderTrace(); }
+function renderCard(h){ const rel=h.rel.filter(Boolean).map(byId).filter(Boolean); panel.innerHTML=`<span class="chip">${h.kind}</span><h2 class="mono">${h.name}</h2>${h.html}${rel.length?`<h3>Where to look next</h3><div class="links">${rel.map(r=>`<button class="small" data-go="${r.id}">${r.sheet!==h.sheet?'Sheet '+r.sheet+': ':''}${r.name}</button>`).join('')}</div>`:''}`; wire(); }
+function wire(){ panel.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>select(b.dataset.go,true)); }
+function intro(){ panel.innerHTML=`<span class="chip">How to use this</span><h2>Study one sheet by touching it</h2><p>Click any box, oval, gate or number on the drawing. The card here explains it in plain words, gives the exact values from the drawing, and offers buttons to the next thing in the chain.</p><p>Two views of the same loop: <b>FLD 051</b> shows the logic, <b>Loop 075</b> shows the wiring. Buttons on a card can switch views for you.</p><p><b>Trace a signal</b> walks the nitric acid flow from the transmitter to the sheet's output in eleven steps. <b>Glossary</b> defines every term. <b>Check yourself</b> has five questions with answers hidden until you click.</p><h3>Good first clicks</h3><div class="links"><button class="small" data-go="row_FZT03002">The nitric acid transmitter</button><button class="small" data-go="col5">The Logic column</button><button class="small" data-go="pbF">The red stop button</button><button class="small" data-go="ref_3B">Box 3B to sheet 052</button></div>`; wire(); }
+function markTrace(){ world.querySelectorAll('.hs').forEach(e=>e.classList.remove('trace','dim')); if(mode!=='trace') return; const ids=TRACE.filter(t=>t[0]===sheet).map(t=>t[1]); world.querySelectorAll('.hs').forEach(e=>{ if(ids.includes(e.dataset.id)) e.classList.add('trace'); else e.classList.add('dim'); }); }
+function renderTrace(){ const t=TRACE[traceStep]; const h=byId(t[1]); panel.innerHTML=`<span class="chip trip">Trace: nitric acid low flow</span><div class="step"><button class="small" id="tprev" ${traceStep===0?'disabled':''}>Back</button><span class="n">Step ${traceStep+1} of ${TRACE.length}, sheet ${t[0]}</span><button class="small" id="tnext" ${traceStep===TRACE.length-1?'disabled':''}>Next</button></div><h2 class="mono">${h.name}</h2><p>${t[2]}</p><h3>From the drawing</h3>${h.html}`; document.getElementById('tprev').onclick=()=>{traceStep--; goTrace();}; document.getElementById('tnext').onclick=()=>{traceStep++; goTrace();}; wire(); }
+function goTrace(){ const t=TRACE[traceStep]; if(t[0]!==sheet) setSheet(t[0]); markTrace(); select(t[1],true); renderTrace(); }
+function renderGloss(){ panel.innerHTML=`<span class="chip">Glossary</span><h2>Words used on these sheets</h2><dl class="gl">${Object.values(G).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`; }
+function renderQuiz(){ panel.innerHTML=`<span class="chip">Check yourself</span><h2>Five questions on sheets 051 and 075</h2><p class="sub">Think first, then click a question to see the answer.</p>${QUIZ.map((q,i)=>`<div class="q" id="q${i}"><b>${i+1}. ${q[0]}</b><div class="a">${q[1]}</div></div>`).join('')}`; panel.querySelectorAll('.q').forEach(q=>q.onclick=()=>q.classList.toggle('open')); }
+function setMode(m){ mode=m; ['mExplore','mTrace','mGloss','mQuiz'].forEach(id=>document.getElementById(id).classList.remove('on')); document.getElementById({explore:'mExplore',trace:'mTrace',gloss:'mGloss',quiz:'mQuiz'}[m]).classList.add('on'); markTrace(); if(m==='explore'){ sel?renderCard(byId(sel)):intro(); } if(m==='trace'){ goTrace(); } if(m==='gloss') renderGloss(); if(m==='quiz') renderQuiz(); }
+document.getElementById('mExplore').onclick=()=>setMode('explore');
+document.getElementById('mTrace').onclick=()=>setMode('trace');
+document.getElementById('mGloss').onclick=()=>setMode('gloss');
+document.getElementById('mQuiz').onclick=()=>setMode('quiz');
+document.querySelectorAll('[data-sheet]').forEach(b=>b.onclick=()=>{ setSheet(b.dataset.sheet); if(mode==='explore') intro(); });
+buildHotspots(); fit(); intro();
+</script>
+</body></html>

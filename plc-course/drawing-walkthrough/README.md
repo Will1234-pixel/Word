@@ -42,3 +42,9 @@ Key facts established so far:
 - A continuation box such as `3A 052.225` means: signal 3A continues on sheet 052 at grid position 225 mm on the top ruler.
 - `DV3_n` with a solid dot is a logic point sent to DeltaV over Modbus for No.3 plant; sheet 057 uses `DV7_n`.
 - `V TO I` boxes in the output column are hardware repeaters (1-5 V in, 4-20 mA out) sending the field measurement to DeltaV; they are not PLC logic outputs.
+
+## Interactive explorer (folder `explorer`)
+
+Open `explorer/index.html` in any browser. It shows FLD sheet 051 and loop drawing 075 with clickable
+hotspots, a plain-language card for every element, an eleven-step trace of the nitric acid low flow signal
+from the transmitter to the sheet output, a glossary and five self-check questions.
