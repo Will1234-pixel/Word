@@ -15,6 +15,7 @@
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.45;display:flex;flex-direction:column;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;box-sizing:border-box}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.01em}
 h2{font-size:16px;margin:0 0 6px;font-weight:600;text-wrap:balance}
 h3{font-size:12px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
@@ -60,6 +61,13 @@ aside{min-width:0;background:var(--panel);border:1px solid var(--line);border-ra
 .q .a{display:none;margin-top:6px;color:var(--ok)}
 .q.open .a{display:block}
 footer{font-size:12px;color:var(--muted);padding-top:8px}
+#bigpic,#gallery{position:absolute;inset:0;overflow:auto;padding:12px;background:var(--panel)}
+#bigpic svg .blk:hover rect{stroke-width:4}
+.fig{margin:0 0 22px;max-width:1500px}
+.fig img{width:100%;height:auto;border:1px solid var(--line);border-radius:4px;display:block;background:#fff}
+.fig h2{margin:0 0 6px}
+.fig p{margin:6px 0 0;max-width:80ch}
+.menu button{display:block;width:100%;text-align:left;margin-bottom:6px}
 @media (max-width:900px){ main{grid-template-columns:1fr;grid-template-rows:58vh auto} aside{max-height:none} }
 </style></head><body>
 
@@ -71,6 +79,8 @@ footer{font-size:12px;color:var(--muted);padding-top:8px}
     <button id="b075" data-sheet="075">Loop 075, wiring</button>
     <span class="sub" style="margin-left:8px">Mode</span>
     <button id="mExplore" class="on">Explore</button>
+    <button id="mBig">Big picture</button>
+    <button id="mFind">Findings</button>
     <button id="mTrace">Trace a signal</button>
     <button id="mGloss">Glossary</button>
     <button id="mQuiz">Check yourself</button>
@@ -81,6 +91,105 @@ footer{font-size:12px;color:var(--muted);padding-top:8px}
     <div id="tools"><button class="small" id="zin" title="Zoom in">+</button><button class="small" id="zout" title="Zoom out">&minus;</button><button class="small" id="zfit">Fit</button></div>
     <div id="vp"><div id="world"><img id="sheetimg" src="051.png" alt="Drawing sheet"></div></div>
     <div id="legend">Blue = selected. Red = the signal being traced.</div>
+    <div id="bigpic" hidden><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 780" width="100%" style="font-family:var(--font-body);max-width:1400px;display:block">
+<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>
+<rect x="0" y="0" width="1400" height="780" fill="white"/>
+<text x="20" y="40" font-size="26" font-weight="600" fill="#1b1f23">One signal, two views: nitric acid low flow 03FZT03002</text>
+<text x="20" y="80" font-size="16" fill="#0b6e8f" font-weight="600">WIRING VIEW, loop drawing 075 with the power path from sheets 043 and 035</text>
+<text x="90" y="455" font-size="16" fill="#b8322a" font-weight="600">LOGIC VIEW, FLD 051</text>
+<g class="blk" data-go="x075_tx" style="cursor:pointer"><rect x="20" y="100" width="215" height="96" rx="8" fill="#e3f0f5" stroke="#0b6e8f" stroke-width="2"/>
+<text x="32" y="126" font-size="16" font-weight="600" fill="#1b1f23">Transmitter 03FZT03002</text>
+<text x="32" y="148" font-size="13.5" fill="#1b1f23">69% nitric acid, low flow</text>
+<text x="32" y="167" font-size="13.5" fill="#1b1f23">4-20 mA on two wires</text>
+<text x="225" y="188" font-size="11.5" text-anchor="end" fill="#0b6e8f" font-weight="600">loop 075</text></g>
+<g class="blk" data-go="x075_terms" style="cursor:pointer"><rect x="255" y="100" width="215" height="96" rx="8" fill="#e3f0f5" stroke="#0b6e8f" stroke-width="2"/>
+<text x="267" y="126" font-size="16" font-weight="600" fill="#1b1f23">Cable 3/C650</text>
+<text x="267" y="148" font-size="13.5" fill="#1b1f23">core 1 = +, core 2 = -</text>
+<text x="267" y="167" font-size="13.5" fill="#1b1f23">rail 3/C650, terminals 1 and 2</text>
+<text x="460" y="188" font-size="11.5" text-anchor="end" fill="#0b6e8f" font-weight="600">loop 075</text></g>
+<g class="blk" data-go="x075_wire" style="cursor:pointer"><rect x="490" y="100" width="180" height="96" rx="8" fill="#e3f0f5" stroke="#0b6e8f" stroke-width="2"/>
+<text x="502" y="126" font-size="16" font-weight="600" fill="#1b1f23">Wire 1101/1</text>
+<text x="502" y="148" font-size="13.5" fill="#1b1f23">screened single core</text>
+<text x="502" y="167" font-size="13.5" fill="#1b1f23">number = card / channel</text>
+<text x="660" y="188" font-size="11.5" text-anchor="end" fill="#0b6e8f" font-weight="600">loop 075</text></g>
+<g class="blk" data-go="x075_pins" style="cursor:pointer"><rect x="690" y="100" width="230" height="96" rx="8" fill="#e3f0f5" stroke="#0b6e8f" stroke-width="2"/>
+<text x="702" y="126" font-size="16" font-weight="600" fill="#1b1f23">Card F6217, position 1101</text>
+<text x="702" y="148" font-size="13.5" fill="#1b1f23">plug Z7127, channel 1</text>
+<text x="702" y="167" font-size="13.5" fill="#1b1f23">pins z4 (+) and d4 (-)</text>
+<text x="910" y="188" font-size="11.5" text-anchor="end" fill="#0b6e8f" font-weight="600">loop 075</text></g>
+<g class="blk" data-go="x075_supply" style="cursor:pointer"><rect x="690" y="230" width="230" height="86" rx="8" fill="#eceeed" stroke="#5a6470" stroke-width="2"/>
+<text x="702" y="256" font-size="16" font-weight="600" fill="#1b1f23">24 V to the card</text>
+<text x="702" y="278" font-size="13.5" fill="#1b1f23">1L+1 on pin d30, 1L-1 on pin d26</text>
+<text x="702" y="297" font-size="13.5" fill="#1b1f23">powers the transmitter</text>
+<text x="910" y="308" font-size="11.5" text-anchor="end" fill="#5a6470" font-weight="600">loop 075</text></g>
+<g class="blk" data-go="fuse1118" style="cursor:pointer"><rect x="440" y="230" width="220" height="86" rx="8" fill="#eceeed" stroke="#5a6470" stroke-width="2"/>
+<text x="452" y="256" font-size="16" font-weight="600" fill="#1b1f23">Distribution card 1118</text>
+<text x="452" y="278" font-size="13.5" fill="#1b1f23">fuse F1, 4 A, LED L1</text>
+<text x="452" y="297" font-size="13.5" fill="#1b1f23">one fuse per input card</text>
+<text x="650" y="308" font-size="11.5" text-anchor="end" fill="#5a6470" font-weight="600">sheet 043</text></g>
+<g class="blk" data-go="fuseA" style="cursor:pointer"><rect x="215" y="230" width="205" height="86" rx="8" fill="#eceeed" stroke="#5a6470" stroke-width="2"/>
+<text x="227" y="256" font-size="16" font-weight="600" fill="#1b1f23">24 V distribution</text>
+<text x="227" y="278" font-size="13.5" fill="#1b1f23">red spot fuse FUSE-1</text>
+<text x="227" y="297" font-size="13.5" fill="#1b1f23">L- safeclip link</text>
+<text x="410" y="308" font-size="11.5" text-anchor="end" fill="#5a6470" font-weight="600">sheet 035</text></g>
+<g class="blk" data-go="psu" style="cursor:pointer"><rect x="20" y="230" width="175" height="86" rx="8" fill="#eceeed" stroke="#5a6470" stroke-width="2"/>
+<text x="32" y="256" font-size="16" font-weight="600" fill="#1b1f23">PSU A and PSU B</text>
+<text x="32" y="278" font-size="13.5" fill="#1b1f23">230 V in, 24 V out</text>
+<text x="32" y="297" font-size="13.5" fill="#1b1f23">redundancy module</text>
+<text x="185" y="308" font-size="11.5" text-anchor="end" fill="#5a6470" font-weight="600">sheet 035</text></g>
+<g class="blk" data-go="sig_FZA03002" style="cursor:pointer"><rect x="20" y="470" width="210" height="96" rx="8" fill="#f7e6e4" stroke="#b8322a" stroke-width="2"/>
+<text x="32" y="496" font-size="16" font-weight="600" fill="#1b1f23">Signal 03FZA03002</text>
+<text x="32" y="518" font-size="13.5" fill="#1b1f23">software name of the channel</text>
+<text x="32" y="537" font-size="13.5" fill="#1b1f23">true when flow is low</text>
+<text x="220" y="558" font-size="11.5" text-anchor="end" fill="#b8322a" font-weight="600">FLD 051</text></g>
+<g class="blk" data-go="lamp_W01" style="cursor:pointer"><rect x="20" y="610" width="210" height="70" rx="8" fill="#f7e6e4" stroke="#b8322a" stroke-width="2"/>
+<text x="32" y="636" font-size="16" font-weight="600" fill="#1b1f23">Window W01</text>
+<text x="32" y="658" font-size="13.5" fill="#1b1f23">annunciator lamp, control room</text>
+<text x="220" y="672" font-size="11.5" text-anchor="end" fill="#b8322a" font-weight="600">FLD 051</text></g>
+<g class="blk" data-go="AND2" style="cursor:pointer"><rect x="270" y="470" width="200" height="96" rx="8" fill="#f7e6e4" stroke="#b8322a" stroke-width="2"/>
+<text x="282" y="496" font-size="16" font-weight="600" fill="#1b1f23">AND, 9 inputs</text>
+<text x="282" y="518" font-size="13.5" fill="#1b1f23">every low flow, density</text>
+<text x="282" y="537" font-size="13.5" fill="#1b1f23">and level signal must be true</text>
+<text x="460" y="558" font-size="11.5" text-anchor="end" fill="#b8322a" font-weight="600">FLD 051</text></g>
+<g class="blk" data-go="OR2" style="cursor:pointer"><rect x="510" y="470" width="160" height="96" rx="8" fill="#f7e6e4" stroke="#b8322a" stroke-width="2"/>
+<text x="522" y="496" font-size="16" font-weight="600" fill="#1b1f23">OR</text>
+<text x="522" y="518" font-size="13.5" fill="#1b1f23">either this AND</text>
+<text x="522" y="537" font-size="13.5" fill="#1b1f23">or the 2-input AND</text>
+<text x="660" y="558" font-size="11.5" text-anchor="end" fill="#b8322a" font-weight="600">FLD 051</text></g>
+<g class="blk" data-go="AND3" style="cursor:pointer"><rect x="710" y="470" width="200" height="96" rx="8" fill="#f7e6e4" stroke="#b8322a" stroke-width="2"/>
+<text x="722" y="496" font-size="16" font-weight="600" fill="#1b1f23">AND, 8 inputs</text>
+<text x="722" y="518" font-size="13.5" fill="#1b1f23">collects the whole sheet</text>
+<text x="900" y="558" font-size="11.5" text-anchor="end" fill="#b8322a" font-weight="600">FLD 051</text></g>
+<g class="blk" data-go="ref_3B" style="cursor:pointer"><rect x="950" y="470" width="210" height="96" rx="8" fill="#f7e6e4" stroke="#b8322a" stroke-width="2"/>
+<text x="962" y="496" font-size="16" font-weight="600" fill="#1b1f23">Box 3B to sheet 052</text>
+<text x="962" y="518" font-size="13.5" fill="#1b1f23">continues at grid 170</text>
+<text x="962" y="537" font-size="13.5" fill="#1b1f23">the trip action is there</text>
+<text x="1150" y="558" font-size="11.5" text-anchor="end" fill="#b8322a" font-weight="600">FLD 051</text></g>
+<g class="blk" data-go="DV3_4" style="cursor:pointer"><rect x="510" y="610" width="420" height="70" rx="8" fill="#f3ece2" stroke="#7a5c2e" stroke-width="2"/>
+<text x="522" y="636" font-size="16" font-weight="600" fill="#1b1f23">DeltaV taps DV3_4, DV3_3, DV3_5</text>
+<text x="522" y="658" font-size="13.5" fill="#1b1f23">sent to the control system over Modbus, sheet 041</text>
+<text x="920" y="672" font-size="11.5" text-anchor="end" fill="#7a5c2e" font-weight="600">FLD 051</text></g>
+<path d="M235,148 L255,148" stroke="#333" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M470,148 L490,148" stroke="#333" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M670,148 L690,148" stroke="#333" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M195,273 L215,273" stroke="#5a6470" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M420,273 L440,273" stroke="#5a6470" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M660,273 L690,273" stroke="#5a6470" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M805,230 L805,197" stroke="#5a6470" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M925,148 L1000,148 L1000,420 L60,420 L60,470" stroke="#333" stroke-width="2.5" fill="none" stroke-dasharray="7,5" marker-end="url(#ah)"/>
+<text x="1010" y="300" font-size="13.5" fill="#333">the PLC reads channel 1</text><text x="1010" y="320" font-size="13.5" fill="#333">and names it 03FZA03002</text>
+<path d="M230,518 L270,518" stroke="#b8322a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M470,518 L510,518" stroke="#b8322a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M670,518 L710,518" stroke="#b8322a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M910,518 L950,518" stroke="#b8322a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M125,566 L125,610" stroke="#b8322a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M370,566 L370,598" stroke="#7a5c2e" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M590,566 L590,598" stroke="#7a5c2e" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M810,566 L810,598" stroke="#7a5c2e" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M370,598 L370,645 L510,645" stroke="#7a5c2e" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<text x="20" y="740" font-size="13.5" fill="#5a6470">Blue: what you can touch with a meter. Grey: where the 24 V comes from. Red: what the PLC program does. Brown: what the operators see. Click a block in the explorer to jump to it on the real drawing.</text>
+</svg></div>
+    <div id="gallery" hidden></div>
   </div>
   <aside id="panel"></aside>
 </main>
@@ -242,6 +351,20 @@ const QUIZ=[
  ['The transmitter 03FZT03002 shows 0 mA at terminals 1 and 2. Name two things to check.','The 24 V supply on pins d30 and d26, which comes from fuse F1 of card 1118 on sheet 043, and the field cable and transmitter itself.'],
 ];
 
+// ---------- findings ----------
+const FIND=[
+ ['ev/ev1_c735.png','Cable 3/C735, cores 1 and 2: three different claims','The FLD and loop 083 agree that the density repeat 03ZRT03581 leaves on this pair, but loop 075 gives the same cores to the pressure trip converter and loop 083 uses them again for 03LZT03122. One pair cannot carry three signals; only the cabinet can settle it.',['vtoi_ZRT03581','x075_isocon']],
+ ['ev/ev2_lzrt03110.png','Repeat 03LZRT03110: 3/C651 on the FLD, 3/C661 on the loop drawing','Every other repeat on sheet 051 leaves on 3/C661, and 3/C651 pair 5 and 6 is already a solenoid valve on sheet 052. The FLD text is the typo.',['ocab_LZRT03110']],
+ ['ev/ev3_keyswitch.png','Keyswitch 03HZS03110: no cable on the FLD, full wiring on loop 088','The FLD cell is blank. Loop 088 gives cable 3/C654, terminal 11 as the shared plus, terminal 3 as the minus, card 1107, channel 5, pin d10.',['row_HZS03110','ksB']],
+ ['ev/ev4_lzt03691.png','Level 03LZT03691: a repeat exists on loop 077 that the FLD never draws','Loop type AI2 promises a repeat and loop 077 wires one through ISOCON-6-6 to 3/C661 cores 13 and 14. The FLD row shows nothing, so a tester working from the FLD alone would miss it.',['row_LZT03691']],
+ ['ev/ev5_revision.png','Sheet 051: revision H in hand, revision J on the document schedule','The schedule is the index of the package and lists the latest issue. A newer sheet 051 exists that we do not have; some of the mismatches above may be corrected in it.',['title','revs']],
+ ['ev/ev6_windows.png','Alarm windows: the FLD keeps the year 2000 numbers','The 2021 ELCO list on sheet 206 moved the temperature HIGH and LOW alarms to windows 58 and 60. Window numbers on an FLD are a convenience; the ELCO schedule and annunciator loops are the record.',['lamp_W05','lamp_W08']],
+];
+const big=document.getElementById('bigpic'), gal=document.getElementById('gallery');
+function showMain(which){ document.getElementById('vp').hidden = which!=='vp'; document.getElementById('tools').hidden = which!=='vp'; document.getElementById('legend').hidden = which!=='vp'; big.hidden = which!=='big'; gal.hidden = which!=='gal'; }
+function renderBig(){ showMain('big'); panel.innerHTML=`<span class="chip">Big picture</span><h2>One signal, two views</h2><p>The top lane is what you can touch: transmitter, cable, terminals, wire, card and the 24 V that feeds it. The bottom lane is what the PLC does with the value. The dashed line is the only link between them: the card reads channel 1 and the program calls it 03FZA03002.</p><p>Click any block to jump to that spot on the real drawing.</p><h3>Read it in this order</h3><ol style="padding-left:18px;margin:0"><li>Transmitter to card, left to right.</li><li>Where the 24 V comes from, right to left along the grey lane.</li><li>Signal to box 3B, left to right.</li><li>What the operators see: window W01 and the DeltaV taps.</li></ol>`; big.querySelectorAll('.blk').forEach(g=>g.onclick=()=>{ setMode('explore'); select(g.dataset.go,true); }); }
+function renderFindings(){ showMain('gal'); gal.innerHTML=FIND.map((f,i)=>`<div class="fig" id="f${i}"><h2>${i+1}. ${f[1]}</h2><img src="${f[0]}" alt="${f[1]}"><p>${f[2]}</p><div class="links" style="margin-top:8px">${f[3].map(id=>{const h=byId(id);return h?`<button class="small" data-go="${id}">Show on sheet ${h.sheet}: ${h.name}</button>`:''}).join('')}</div></div>`).join(''); gal.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ setMode('explore'); select(b.dataset.go,true); }); panel.innerHTML=`<span class="chip trip">Findings</span><h2>Where the package contradicts itself</h2><p>Each panel shows the two or three drawings side by side with the conflicting values boxed. Numbers in the badges match the legend under each crop.</p><div class="menu">${FIND.map((f,i)=>`<button class="small" data-f="${i}">${i+1}. ${f[1]}</button>`).join('')}</div><p class="note">Why this matters: the FLD tells you the intent, the loop drawing tells you the wires. When they disagree, the cabinet is the referee, and the answer goes back to the drawing office.</p>`; panel.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>document.getElementById('f'+b.dataset.f).scrollIntoView({behavior:'smooth'})); }
+
 // ---------- viewer ----------
 const vp=document.getElementById('vp'), world=document.getElementById('world'), img=document.getElementById('sheetimg'), panel=document.getElementById('panel');
 let S=1, TX=0, TY=0, fitS=0.2, sheet='051', mode='explore', sel=null, traceStep=0;
@@ -266,17 +389,19 @@ function setSheet(s){ if(sheet===s) return; sheet=s; img.src=s+'.png'; document.
 function select(id,zoom){ const h=byId(id); if(!h) return; if(h.sheet!==sheet){ setSheet(h.sheet); } sel=id; world.querySelectorAll('.hs').forEach(e=>e.classList.toggle('sel',e.dataset.id===id)); if(zoom){ zoomTo(box(...h.mm)); } if(mode==='explore') renderCard(h); if(mode==='trace') renderTrace(); }
 function renderCard(h){ const rel=h.rel.filter(Boolean).map(byId).filter(Boolean); panel.innerHTML=`<span class="chip">${h.kind}</span><h2 class="mono">${h.name}</h2>${h.html}${rel.length?`<h3>Where to look next</h3><div class="links">${rel.map(r=>`<button class="small" data-go="${r.id}">${r.sheet!==h.sheet?'Sheet '+r.sheet+': ':''}${r.name}</button>`).join('')}</div>`:''}`; wire(); }
 function wire(){ panel.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>select(b.dataset.go,true)); }
-function intro(){ panel.innerHTML=`<span class="chip">How to use this</span><h2>Study one sheet by touching it</h2><p>Every value on these cards comes from the drawing text, and every connection on sheet 051 was traced twice by independent readers. Where the package contradicts itself, the card says so in a red-edged note.</p><p>Click any box, oval, gate or number on the drawing. The card here explains it in plain words, gives the exact values from the drawing, and offers buttons to the next thing in the chain.</p><p>Two views of the same loop: <b>FLD 051</b> shows the logic, <b>Loop 075</b> shows the wiring. Buttons on a card can switch views for you.</p><p><b>Trace a signal</b> walks the nitric acid flow from the transmitter to the sheet's output in eleven steps. <b>Glossary</b> defines every term. <b>Check yourself</b> has five questions with answers hidden until you click.</p><h3>Good first clicks</h3><div class="links"><button class="small" data-go="row_FZT03002">The nitric acid transmitter</button><button class="small" data-go="col5">The Logic column</button><button class="small" data-go="pbF">The red stop button</button><button class="small" data-go="ref_3B">Box 3B to sheet 052</button></div>`; wire(); }
+function intro(){ panel.innerHTML=`<span class="chip">How to use this</span><h2>Study one sheet by touching it</h2><p>Every value on these cards comes from the drawing text, and every connection on sheet 051 was traced twice by independent readers. Where the package contradicts itself, the card says so in a red-edged note.</p><p>Click any box, oval, gate or number on the drawing. The card here explains it in plain words, gives the exact values from the drawing, and offers buttons to the next thing in the chain.</p><p>Two views of the same loop: <b>FLD 051</b> shows the logic, <b>Loop 075</b> shows the wiring. Buttons on a card can switch views for you.</p><p><b>Big picture</b> is a one-page map of the whole chain with clickable blocks. <b>Findings</b> shows, side by side, the places where the drawings contradict each other. <b>Trace a signal</b> walks the nitric acid flow from the transmitter to the sheet's output in eleven steps. <b>Glossary</b> defines every term. <b>Check yourself</b> has five questions with answers hidden until you click.</p><h3>Good first clicks</h3><div class="links"><button class="small" data-go="row_FZT03002">The nitric acid transmitter</button><button class="small" data-go="col5">The Logic column</button><button class="small" data-go="pbF">The red stop button</button><button class="small" data-go="ref_3B">Box 3B to sheet 052</button></div>`; wire(); }
 function markTrace(){ world.querySelectorAll('.hs').forEach(e=>e.classList.remove('trace','dim')); if(mode!=='trace') return; const ids=TRACE.filter(t=>t[0]===sheet).map(t=>t[1]); world.querySelectorAll('.hs').forEach(e=>{ if(ids.includes(e.dataset.id)) e.classList.add('trace'); else e.classList.add('dim'); }); }
 function renderTrace(){ const t=TRACE[traceStep]; const h=byId(t[1]); panel.innerHTML=`<span class="chip trip">Trace: nitric acid low flow</span><div class="step"><button class="small" id="tprev" ${traceStep===0?'disabled':''}>Back</button><span class="n">Step ${traceStep+1} of ${TRACE.length}, sheet ${t[0]}</span><button class="small" id="tnext" ${traceStep===TRACE.length-1?'disabled':''}>Next</button></div><h2 class="mono">${h.name}</h2><p>${t[2]}</p><h3>From the drawing</h3>${h.html}`; document.getElementById('tprev').onclick=()=>{traceStep--; goTrace();}; document.getElementById('tnext').onclick=()=>{traceStep++; goTrace();}; wire(); }
 function goTrace(){ const t=TRACE[traceStep]; if(t[0]!==sheet) setSheet(t[0]); markTrace(); select(t[1],true); renderTrace(); }
 function renderGloss(){ panel.innerHTML=`<span class="chip">Glossary</span><h2>Words used on these sheets</h2><dl class="gl">${Object.values(G).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`; }
 function renderQuiz(){ panel.innerHTML=`<span class="chip">Check yourself</span><h2>Five questions on sheets 051 and 075</h2><p class="sub">Think first, then click a question to see the answer.</p>${QUIZ.map((q,i)=>`<div class="q" id="q${i}"><b>${i+1}. ${q[0]}</b><div class="a">${q[1]}</div></div>`).join('')}`; panel.querySelectorAll('.q').forEach(q=>q.onclick=()=>q.classList.toggle('open')); }
-function setMode(m){ mode=m; ['mExplore','mTrace','mGloss','mQuiz'].forEach(id=>document.getElementById(id).classList.remove('on')); document.getElementById({explore:'mExplore',trace:'mTrace',gloss:'mGloss',quiz:'mQuiz'}[m]).classList.add('on'); markTrace(); if(m==='explore'){ sel?renderCard(byId(sel)):intro(); } if(m==='trace'){ goTrace(); } if(m==='gloss') renderGloss(); if(m==='quiz') renderQuiz(); }
+function setMode(m){ mode=m; ['mExplore','mTrace','mGloss','mQuiz','mBig','mFind'].forEach(id=>document.getElementById(id).classList.remove('on')); document.getElementById({explore:'mExplore',trace:'mTrace',gloss:'mGloss',quiz:'mQuiz',big:'mBig',find:'mFind'}[m]).classList.add('on'); if(m!=='big'&&m!=='find'){ showMain('vp'); } markTrace(); if(m==='explore'){ sel?renderCard(byId(sel)):intro(); } if(m==='trace'){ goTrace(); } if(m==='gloss') renderGloss(); if(m==='quiz') renderQuiz(); if(m==='big') renderBig(); if(m==='find') renderFindings(); }
 document.getElementById('mExplore').onclick=()=>setMode('explore');
 document.getElementById('mTrace').onclick=()=>setMode('trace');
 document.getElementById('mGloss').onclick=()=>setMode('gloss');
 document.getElementById('mQuiz').onclick=()=>setMode('quiz');
+document.getElementById('mBig').onclick=()=>setMode('big');
+document.getElementById('mFind').onclick=()=>setMode('find');
 document.querySelectorAll('[data-sheet]').forEach(b=>b.onclick=()=>{ setSheet(b.dataset.sheet); if(mode==='explore') intro(); });
 buildHotspots(); fit(); intro();
 </script>
