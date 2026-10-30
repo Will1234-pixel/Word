@@ -1294,6 +1294,18 @@ def build_dossier(records: dict, titles: Optional[dict[str, str]] = None, kinds:
                 entries[f"{ident.kind}:{ident.key}"].append(entry)
                 if ident.kind == "tag" and ident.extra.get("base"):
                     entries[f"tagbase:{ident.extra['base']}"].append(entry)
+    # a card position's own drawing names it only in the title ('F7133 24Vdc DISTRIBUTION CARD 1120' on 045,
+    # whose card label is drawn as an underlined text the DXF does not carry): list that sheet too
+    if "connector" in want:
+        for sid, v in views.items():
+            m = re.search(r"\bCARD\s+(\d{4})\b", (v.title or "").upper())
+            if not m:
+                continue
+            key = f"connector:{m.group(1)}"
+            if any(e["sheet"] == sid for e in entries.get(key, [])):
+                continue
+            entries[key].append({"sheet": sid, "text": None, "label": m.group(1), "role": "card drawing (title)",
+                                 "context": [v.title], "x": None, "y": None})
     kinds_of_sheet = {sid: v.kind for sid, v in views.items()}
     out: dict[str, dict] = {}
     for key, es in entries.items():
