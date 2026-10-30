@@ -14,6 +14,8 @@ Two things live in this repository:
   folder `/docs`); it then runs in any browser with nothing to install, at
   `https://will1234-pixel.github.io/Word/`. The GitHub Actions workflow
   *Build schematic viewer site* rebuilds this folder in the cloud when the
-  drawings or the viewer code change.
+  drawings or the viewer code change, and publishes a downloadable copy
+  (`schematic_viewer_offline.zip` on the *offline* release) that works by
+  opening `index.html` from the extracted folder, with no web server.
 * **`plc-course/`** – PLC programming course material and labs.
 * **`Drawing_DXF.zip`** – the DXF source of the drawing set used by the viewer.

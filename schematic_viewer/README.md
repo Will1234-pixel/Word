@@ -40,7 +40,22 @@ Differences from running it locally:
 * The same `docs/` folder can be copied to any other web server or intranet
   site; it has no server-side code.
 
-Everything below is only needed if you prefer to run it on your own PC.
+### Download it and open it from a folder (no web server, nothing to install)
+
+If you want the viewer on your own computer, download the ready-made package:
+
+1. Go to the repository's **Releases** page and download
+   `schematic_viewer_offline.zip` from the release named *offline*
+   (direct link: `https://github.com/Will1234-pixel/Word/releases/download/offline/schematic_viewer_offline.zip`).
+2. Extract the whole zip (right-click -> Extract All). Keep the folder structure.
+3. Open `index.html` inside the extracted folder with Edge, Chrome, Firefox or
+   Safari. The page reads the drawings from the `data` folder next to it.
+
+The package is rebuilt by GitHub whenever the drawings or the viewer change,
+so download it again to get the latest version. It is about 50 MB. Manual
+links made in it stay in that browser (export them from Help to keep a file).
+
+Everything below is only needed if you prefer to run the importer on your own PC.
 
 ## 1. One-time setup (Windows)
 

@@ -74,3 +74,19 @@ jobs:
             git commit -m "Rebuild schematic viewer site"
             git push
           fi
+
+      - name: Package the site for use without a web server (extract, open index.html)
+        run: python schematic_viewer/make_offline_zip.py docs /tmp/schematic_viewer_offline.zip
+
+      - name: Publish the offline package on the "offline" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view offline >/dev/null 2>&1; then
+            gh release upload offline /tmp/schematic_viewer_offline.zip --clobber
+          else
+            gh release create offline /tmp/schematic_viewer_offline.zip \
+              --target "${{ github.sha }}" \
+              --title "Schematic viewer, offline package" \
+              --notes "Download schematic_viewer_offline.zip, extract it, open index.html in Edge, Chrome, Firefox or Safari. No installation. Rebuilt automatically whenever the drawings or the viewer change; the online copy is at https://will1234-pixel.github.io/Word/"
+          fi
