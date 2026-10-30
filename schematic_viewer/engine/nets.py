@@ -4,8 +4,9 @@ Rules (standard schematic conventions):
 * two wire segments are connected when an end point of one coincides with an
   end point of the other (corners, including small overshoots);
 * a wire ending on the middle of another line (T-junction) is a branch only
-  when a junction dot is drawn there; otherwise the host line is treated as
-  symbol line-work (a terminal strip or comb) that must not join conductors;
+  when a junction dot is drawn there or the host line is a short piece of a
+  small symbol (a terminal foot); a long host line without a dot is symbol
+  line-work (a terminal strip or comb) that must not join conductors;
 * lines that merely cross are NOT connected unless a junction dot is drawn;
 * dashed or hidden-line work (enclosures, scope boundaries, mechanical links)
   never conducts;
@@ -13,8 +14,9 @@ Rules (standard schematic conventions):
 * closed outlines (device symbols, continuation boxes, tag ovals, module
   boxes, logic gates) are not wires: a wire ends where it touches them and the
   net records which outline it touches;
-* a hollow circle with exactly two wires ending on it (an in-line terminal)
-  passes the net through, any other circle is treated as a device boundary.
+* a small hollow circle with two or three wires ending on it (an in-line
+  terminal, possibly with a slash) passes the net through; block symbols up to
+  4.5 mm with two wires on them do the same; larger symbols end the net.
 
 Nothing here claims an electrical connection between *different* sheets; it
 only groups the drawn conductors of one sheet.
@@ -30,9 +32,11 @@ from .dxf_reader import SheetData, Segment
 NODE_TOL = 0.05      # mm, end point coincidence
 T_TOL = 0.08         # mm, end point on another segment
 CORNER_TOL = 1.0     # mm, a T landing this close to the host's end is a corner (overshoot), not a tap
+SHORT_HOST = 6.0     # mm, a wire landing on a line this short passes through a small symbol (terminal foot)
 DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
 SHAPE_MAX_DIAG = 90  # mm, closed loops smaller than this are symbols, not ring wiring
+SMALL_SYMBOL = 4.5   # mm, a block symbol up to this size with two wires on it is an in-line part (terminal, link)
 MAX_SEGMENTS = 16000 # skip wire tracing on huge layout drawings
 
 
@@ -217,6 +221,14 @@ def build_nets(sheet: SheetData) -> NetResult:
     # ---- shapes list -------------------------------------------------------------
     shapes: list[dict] = []
     seg_shape: dict[int, int] = {}
+    symbol_shape: dict[str, int] = {}
+    for sym in getattr(sheet, "symbols", []):
+        sid = len(shapes)
+        shapes.append({"id": sid, "handle": sym.handle, "bbox": tuple(round(v, 3) for v in sym.bbox), "texts": [], "nets": [], "symbol": sym.name})
+        symbol_shape[sym.handle] = sid
+        for i in sym.segments:
+            seg_shape[i] = sid
+            shape_edges.add(i)
     for sh in sheet.shapes:
         sid = len(shapes)
         shapes.append({"id": sid, "handle": sh.handle, "bbox": tuple(round(v, 3) for v in sh.bbox), "texts": [], "nets": []})
@@ -263,7 +275,7 @@ def build_nets(sheet: SheetData) -> NetResult:
                     # line-work (terminal strip, comb) and must not join the conductors landing on it.
                     host_len = math.hypot(o.x2 - o.x1, o.y2 - o.y1)
                     near_end = min(t, 1.0 - t) * host_len <= CORNER_TOL
-                    if near_end or dot_near(px, py):
+                    if near_end or host_len <= SHORT_HOST or dot_near(px, py):
                         uf.union(s.id, oid)
             if shape_grid is not None:
                 for oid in shape_grid.near(px, py, T_TOL):
@@ -283,18 +295,35 @@ def build_nets(sheet: SheetData) -> NetResult:
         hits = [oid for oid in grid.near(jx, jy, DOT_TOL) if _point_seg_dist(jx, jy, segs[oid])[0] <= DOT_TOL]
         for a, b in zip(hits, hits[1:]):
             uf.union(a, b)
-    # in-line terminals (hollow circles with exactly two wire ends on them)
+    # in-line terminals: small hollow circles with two or three wire ends on them pass the conductor through
     for cx, cy, r, _h in sheet.circles:
         if r > 1.6:
             continue
-        ends = []
+        ends: set[int] = set()
         for oid in grid.near(cx, cy, r + 0.2):
             o = segs[oid]
             for px, py in ((o.x1, o.y1), (o.x2, o.y2)):
                 if abs(math.hypot(px - cx, py - cy) - r) <= 0.2:
-                    ends.append(oid)
-        if len(set(ends)) == 2:
-            a, b = set(ends)
+                    ends.add(oid)
+        if 2 <= len(ends) <= 3:
+            first = next(iter(ends))
+            for oid in ends:
+                uf.union(first, oid)
+
+    # in-line block symbols (terminals, links): exactly two wires touching a small symbol are one conductor
+    for sym in getattr(sheet, "symbols", []):
+        bx0, by0, bx1, by1 = sym.bbox
+        if max(bx1 - bx0, by1 - by0) > SMALL_SYMBOL:
+            continue
+        touching: set[int] = set()
+        for oid in grid.near_box(bx0 - 0.3, by0 - 0.3, bx1 + 0.3, by1 + 0.3):
+            o = segs[oid]
+            for px, py in ((o.x1, o.y1), (o.x2, o.y2)):
+                if bx0 - 0.3 <= px <= bx1 + 0.3 and by0 - 0.3 <= py <= by1 + 0.3:
+                    touching.add(oid)
+                    break
+        if len(touching) == 2:
+            a, b = touching
             uf.union(a, b)
 
     # ---- assemble nets -----------------------------------------------------------

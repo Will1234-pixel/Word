@@ -575,7 +575,7 @@ def pdf_only_sheets(pdf_path: str, out_dir: str, records: dict, file_of: dict[st
                         if re.fullmatch(r"\d{2,3}", t.text) and int(t.text) % 50 == 0 and 50 <= int(t.text) <= 400 and t.y > 0.9 * h_mm]
         from .dxf_reader import _fit_ruler
         data = SheetData(sheet_id=sid, file=f"{os.path.basename(pdf_path)}#page{p.page}", title=p.name or f"PDF page {p.page}",
-                         drgno="", rev="", texts=texts, segments=[], shapes=[], circles=[], arcs=[], junctions=[],
+                         drgno="", rev="", texts=texts, segments=[], shapes=[], circles=[], arcs=[], symbols=[], junctions=[],
                          frame_rect=None, ruler=_fit_ruler(ruler_labels), extents=(0.0, 0.0, w_mm, h_mm),
                          visible_layers=[], hidden_layers=[],
                          warnings=[] if texts else ["PDF page without a text layer: view only"])

@@ -78,6 +78,7 @@ class Segment:
     y2: float
     kind: str = "line"       # line | pline | arc(chord) | shape
     dashed: bool = False     # non-continuous linetype: enclosure, mechanical link, scope boundary
+    block: Optional[str] = None   # name of the block symbol this line belongs to (None = model space)
 
 
 @dataclass
@@ -88,6 +89,16 @@ class Shape:
     layer: str
     points: list[tuple[float, float]]
     bbox: tuple[float, float, float, float]
+
+
+@dataclass
+class Symbol:
+    """A block reference with graphics (terminal, isolator, module ...)."""
+    handle: str
+    name: str
+    bbox: tuple[float, float, float, float]
+    segments: list[int]
+    circles: list[int]
 
 
 @dataclass
@@ -102,6 +113,7 @@ class SheetData:
     shapes: list[Shape]
     circles: list[tuple[float, float, float, str]]      # cx, cy, r, handle
     arcs: list[tuple[float, float, float, float, float, int]]   # cx, cy, r, start_deg, end_deg, chord segment id
+    symbols: list[Symbol]                                 # block symbols with graphics
     junctions: list[tuple[float, float]]                 # junction dot centres
     frame_rect: Optional[tuple[float, float, float, float]]   # extreme long lines (drawing frame)
     ruler: Optional[tuple[float, float]]                 # x = a*grid + b
@@ -202,6 +214,7 @@ def read_sheet(path: str, sheet_id: Optional[str] = None) -> SheetData:
     shapes: list[Shape] = []
     circles: list[tuple[float, float, float, str]] = []
     arcs: list[tuple[float, float, float, float, float, int]] = []
+    symbols: list[Symbol] = []
     junctions: list[tuple[float, float]] = []
     long_h: list[tuple[float, float]] = []    # (y, length) of long horizontal lines, any layer
     long_v: list[tuple[float, float]] = []
@@ -277,6 +290,7 @@ def read_sheet(path: str, sheet_id: Optional[str] = None) -> SheetData:
                 virtual = list(e.virtual_entities())
             except Exception:
                 virtual = []
+            n_seg0, n_circ0 = len(segments), len(circles)
             for v in virtual:
                 vt = v.dxftype()
                 vlayer = v.dxf.layer
@@ -286,6 +300,14 @@ def read_sheet(path: str, sheet_id: Optional[str] = None) -> SheetData:
                     add_text(v, "BLOCKTEXT", layer, bframe, block=bname, handle=e.dxf.handle)
                 elif not bframe:
                     _collect_geometry(v, layer, e.dxf.handle, segments, shapes, circles, arcs, junctions, _is_dashed(doc, v, e))
+            new_segs = list(range(n_seg0, len(segments)))
+            new_circ = list(range(n_circ0, len(circles)))
+            if new_segs or new_circ:
+                xs = [v for i in new_segs for v in (segments[i].x1, segments[i].x2)] + [circles[i][0] + d * circles[i][2] for i in new_circ for d in (-1, 1)]
+                ys = [v for i in new_segs for v in (segments[i].y1, segments[i].y2)] + [circles[i][1] + d * circles[i][2] for i in new_circ for d in (-1, 1)]
+                for i in new_segs:
+                    segments[i].block = bname
+                symbols.append(Symbol(e.dxf.handle, bname, (round(min(xs), 3), round(min(ys), 3), round(max(xs), 3), round(max(ys), 3)), new_segs, new_circ))
         elif not frame:
             _collect_geometry(e, layer, e.dxf.handle, segments, shapes, circles, arcs, junctions, _is_dashed(doc, e))
         # long straight lines of any layer (used to align PDF backdrops)
@@ -371,7 +393,7 @@ def read_sheet(path: str, sheet_id: Optional[str] = None) -> SheetData:
 
     return SheetData(
         sheet_id=sid, file=os.path.basename(path), title=title, drgno=drgno, rev=rev,
-        texts=texts, segments=segments, shapes=shapes, circles=circles, arcs=arcs, junctions=junctions,
+        texts=texts, segments=segments, shapes=shapes, circles=circles, arcs=arcs, symbols=symbols, junctions=junctions,
         frame_rect=frame_rect,
         ruler=ruler, extents=(round(xmin, 3), round(ymin, 3), round(xmax, 3), round(ymax, 3)),
         visible_layers=visible_layers, hidden_layers=hidden_layers, warnings=warnings, doc=doc,
