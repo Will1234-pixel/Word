@@ -124,6 +124,33 @@ genuinely arrives in two boxes on 053 and is reported as *multiple*. The automat
 Most of these are the 24 V feeds on sheet 035: the destination sheet 040 names its terminals
 `XG.21` without the pin number, so each pointer offers the two `XG.21` terminals to choose from.
 
+## 3b. Explaining function, not just position
+
+Beyond navigation the tool now words what the drawings show. All of it is
+derived from geometry and text; nothing is inferred about plant behaviour.
+
+* Functional logic diagrams: every continuation signal, converter output,
+  DeltaV tap and annunciator window gets a cause-to-effect tree. On sheet 051
+  the engine finds 40 such entries, e.g. `3B -> 052 = AND(OR(3A from 052, P/B
+  03HZS03350), OR(AND(T1 OFF 2 mins(...), 03HZS03354), AND(03HZS03354,
+  03FZA03002, 03FZA03004, ...)), 03FZA03012, 03PDZA03078, HIGH 03TZA03052A,
+  OR(03EZS03412, 03EZS03413), HIGH 03LZA03110A, OR(MID 03LZA03110C,
+  03HZA03559))` with tap DV3_5. Each leaf carries the field tag, its service
+  caption, loop type, cable, terminals and input module.
+* Conductors: potential, fuse of origin and rating, devices touched, pointers
+  leaving the sheet, sheet context (card number).
+* Loop drawings: channel tables (position, channel, pins, wire number, supply
+  wires, plug) read from the drawn tables.
+* Dossier: 1262 identifiers across the set with their role on every sheet
+  (FLD field device, loop drawing channel, ELCO schedule row, annunciator
+  window, power feed, card output ...) and the captions around them.
+* Glossary: 158 terms; each entry names its evidence (a sheet, "ISA 5.1
+  convention" or "standard abbreviation").
+
+Verified by hand against the plotted pages for sheets 051, 052, 053, 035,
+043, 045, 075, 099 and 200 (details in the test suite, 150+ tests), and by an
+independent adversarial review whose findings are listed in section 6.
+
 ## 4. What the PDF alone can do
 
 `python import_drawings.py --pdf Compined.pdf --out project_pdf` imports the 134 pages as

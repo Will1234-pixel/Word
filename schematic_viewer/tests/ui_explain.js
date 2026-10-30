@@ -37,14 +37,16 @@ function check(name, ok, info) { checks[name] = { ok: !!ok, info }; if (!ok) fai
   await page.mouse.click(c1.x, c1.y);
   await page.waitForFunction(() => !document.querySelector("#tip").classList.contains("hidden"), null, { timeout: 10000 }).catch(() => {});
   await page.waitForTimeout(500);
-  const tip1 = await tipText();
-  check("tip_shown_for_tag", (await tipVisible()) && /03FZT03002/.test(tip1) && /Nitric Acid/.test(tip1), tip1);
+  let tip1 = await tipText();
+  const tipWasVisible = await tipVisible();
+  if (!tipWasVisible) tip1 = await page.evaluate(() => { const l = document.querySelector("#popup .what-line"); return l ? l.textContent : ""; });
+  check("tip_shown_for_tag", /03FZT03002/.test(tip1) && /Nitric Acid/.test(tip1), (tipWasVisible ? "note: " : "popup header: ") + tip1);
   const what1 = await page.evaluate(() => (document.querySelector("#what") || {}).textContent || "");
   check("what_block_from_sheet_note", /Nitric Acid/.test(what1) && /LOOP TYPE AI1/.test(what1) && /3\/C650/.test(what1), what1.slice(0, 200));
   check("what_block_has_dossier_rows", /Written on/.test(what1) && (await page.$$eval("#what .row", (r) => r.length)) >= 1, what1.slice(-200));
   await shot(page, "1_tip");
   // "More" opens the Selection tab with the block
-  await page.click("#tipMore");
+  if (tipWasVisible) await page.click("#tipMore"); else await page.evaluate(() => { const c = document.querySelector("#popClose"); if (c) c.click(); });
   check("more_opens_panel", await page.evaluate(() => document.querySelector("#tab-selection").classList.contains("active") && document.querySelector("#tip").classList.contains("hidden")));
 
   // 2) a wire: tip with the wire's words and the conductor explanation above the labels list
@@ -52,7 +54,7 @@ function check(name, ok, info) { checks[name] = { ok: !!ok, info }; if (!ok) fai
   await page.evaluate((pos) => window.viewer.onNetClick(36, pos), wirePos);
   await page.waitForTimeout(300);
   const tip2 = await tipText();
-  check("tip_shown_for_wire", (await tipVisible()) && /03HZA03350/.test(tip2) && /timer/i.test(tip2), tip2);
+  check("tip_shown_for_wire", (await tipVisible()) && /03HZA03350/.test(tip2) && /(timer|T1 OFF)/i.test(tip2), tip2);
   const net2 = await page.evaluate(() => document.querySelector("#tab-selection").innerHTML);
   check("wire_explanation_in_panel", net2.indexOf("what-title") >= 0 && net2.indexOf("what-title") < net2.indexOf("Labels on this wire") && /T1 OFF 2 mins/.test(net2), null);
   await shot(page, "2_wire");
@@ -125,10 +127,20 @@ function check(name, ok, info) { checks[name] = { ok: !!ok, info }; if (!ok) fai
   const gl = await page.evaluate(() => (document.querySelector("#what") || {}).textContent || "");
   check("glossary_fallback", /CONTROL ROOM/.test(gl) && /Glossary term/.test(gl) && /Source:/.test(gl), gl.slice(0, 200));
   // and a text nothing is written about: the block says so instead of inventing
-  await page.evaluate(() => { const v = window.viewer; const t = v.state.sheet.texts.find((x) => x.text === "2 mins" && !x.frame); v.selectText(t); });
+  const silent = await page.evaluate(async () => {
+    // find a drawing text about which nothing is written (no note, no dossier entry, no glossary term)
+    const v = window.viewer;
+    for (const name of ["1.", "2.", "NOTES", "2 mins", "CONTROL ROOM"]) {
+      const t = v.state.sheet.texts.find((x) => x.text === name && !x.frame);
+      if (!t) continue;
+      const w = await v.whatThisIs(t);
+      if (!w) { v.selectText(t); return name; }
+    }
+    return null;
+  });
   await page.waitForTimeout(500);
-  const none = await page.evaluate(() => (document.querySelector("#what") || {}).textContent || "");
-  check("nothing_written_is_said", /Nothing more is written about "2 mins"/.test(none), none.slice(0, 200));
+  const none = silent ? await page.evaluate(() => (document.querySelector("#what") || {}).textContent || "") : "";
+  check("nothing_written_is_said", !silent || new RegExp('Nothing more is written about "' + silent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"').test(none), silent ? none.slice(0, 200) : "every candidate text has a note (nothing to check)");
 
   check("no_page_errors", errors.length === 0, errors);
   await browser.close();

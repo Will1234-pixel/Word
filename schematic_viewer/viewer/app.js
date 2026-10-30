@@ -555,13 +555,13 @@ async function onTextClick(id, ev) {
   const live = out.filter((L) => L.status !== "rejected");
   const direct = live.filter((L) => AUTO_GO.has(L.status) && L.dst_sheet && (L.dst_text || L.dst_point || L.kind === "sheet" || L.kind === "typical"));
   if (live.length === 1 && direct.length === 1) return navigate(linkTarget(direct[0], t.text), { keepSelection: false });
-  if (live.length >= 1) return showChoices(t, live, ev);
+  if (live.length >= 1) return showChoices(t, live, ev, await whatLine(t));
   // no explicit pointer: offer the other appearances of the same identifier
   const app = await appearances(state.sheetId, id);
   renderAppearances(t, app);
   const occ = app.groups.flatMap((g) => g.occurrences.map((o) => ({ ...o, kind: g.kind, key: g.label })));
   if (occ.length === 1) return navigate({ sheet: occ[0].sheet, text: occ[0].text, label: t.text, status: "same label", note: "repeated label – not a verified connection" });
-  if (occ.length > 1) return showAppearancePopup(t, app, ev);
+  if (occ.length > 1) return showAppearancePopup(t, app, ev, await whatLine(t));
   if (t.net != null) {
     // nothing to jump to: show which conductor on this page the label belongs to
     onNetClick(t.net, ev, true, t);
@@ -672,13 +672,17 @@ function renderAppearances(t, app) {
   box.querySelectorAll("[data-app]").forEach((r) => (r.onclick = () => { const [gi, oi] = r.dataset.app.split("|").map(Number); const o = app.groups[gi].occurrences[oi]; navigate({ sheet: o.sheet, text: o.text, label: t.text, status: "same label", note: "repeated label – not a verified connection" }); }));
   showTab("selection");
 }
-function showAppearancePopup(t, app, ev) {
+async function whatLine(t) {   // the one-line explanation shown at the top of a choice list (the cursor note is hidden while a list is open)
+  const w = await whatThisIs(t).catch(() => null);
+  return w ? `<div class="what-line">${esc(tipTitle(w))}</div>` : "";
+}
+function showAppearancePopup(t, app, ev, head) {
   const occ = app.groups.flatMap((g) => g.occurrences.map((o) => ({ ...o, kind: g.kind })));
-  showPopup(ev, `<h4>"${esc(t.text)}" also appears on</h4><div class="note">same label – not verified as a connection</div>` +
+  showPopup(ev, (head || "") + `<h4>"${esc(t.text)}" also appears on</h4><div class="note">same label – not verified as a connection</div>` +
     occ.map((o, i) => `<div class="row" data-i="${i}"><span class="lbl">sheet <b>${esc(o.sheet)}</b> ${esc(o.label)} <small>${esc((state.sheetMeta[o.sheet] || {}).title || "")}</small></span><span class="badge same">${esc(o.kind)}</span></div>`).join(""),
     (p) => p.querySelectorAll("[data-i]").forEach((r) => (r.onclick = () => { const o = occ[+r.dataset.i]; hidePopup(); navigate({ sheet: o.sheet, text: o.text, label: t.text, status: "same label", note: "repeated label – not a verified connection" }); })));
 }
-function showChoices(t, links, ev) {
+function showChoices(t, links, ev, head) {
   // one uncertain link with candidates, or several links
   let items = [];
   for (const L of links) {
@@ -687,7 +691,7 @@ function showChoices(t, links, ev) {
   }
   if (items.length === 1 && AUTO_GO.has(items[0].status)) return navigate({ sheet: items[0].sheet, text: items[0].text, point: items[0].point, label: t.text, status: items[0].status });
   if (!items.length) return setStatus(`"${t.text}": ${links[0].note || links[0].status}`, true);
-  showPopup(ev, `<h4>${esc(t.text)} – ${items.length} possible destination${items.length > 1 ? "s" : ""}</h4>` +
+  showPopup(ev, (head || "") + `<h4>${esc(t.text)} – ${items.length} possible destination${items.length > 1 ? "s" : ""}</h4>` +
     items.map((it, i) => `<div class="row" data-i="${i}"><span class="lbl"><b>${esc(it.label)}</b> → sheet ${esc(it.sheet)} <small>${esc(it.why || "")}${it.grid != null ? ", grid Δ " + it.grid + " mm" : ""}</small></span><span class="badge ${esc(it.status)}">${esc(it.status)}</span></div>`).join(""),
     (p) => p.querySelectorAll("[data-i]").forEach((r) => (r.onclick = () => { const it = items[+r.dataset.i]; hidePopup(); navigate({ sheet: it.sheet, text: it.text, point: it.point, label: t.text, status: it.status, note: it.why }); })));
 }

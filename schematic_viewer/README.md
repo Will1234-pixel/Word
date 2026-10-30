@@ -105,6 +105,34 @@ does not open by itself, go to <http://127.0.0.1:8765/>.
 | Trail | the **Trail** tab lists every place you visited – click to jump back |
 | Review doubtful references | the **Issues** tab lists every reference the import could not resolve with certainty |
 
+### Understanding what the drawing does
+
+The viewer explains the drawings in words, using only what is drawn:
+
+* **What this is.** Click any label: a short note appears next to the cursor and a
+  block at the top of the Selection panel. For a tag it gives the service caption,
+  loop type, cable and terminals, the module that reads it and the logic it takes
+  part in; for a wire the potential it carries, the fuse it comes from and the
+  devices it touches; for other words the meaning from the drawing glossary.
+  "Written on" rows list every other sheet the same identifier appears on.
+* **Explain sheet** (toolbar button, or **E**): a summary of the sheet and, on the
+  functional logic diagrams, one row per output signal with its cause-to-effect
+  logic, for example `3B -> 052  AND(OR(3A (from 052), ...), 03FZA03012, ...)`.
+  Click a row to light up every wire, gate, module and field tag involved and to
+  see the logic as an indented outline; click an outline line to highlight that
+  input. Incoming signals show where they arrive from and what they feed.
+* **Follow to sheet**: walks a signal to the next sheet and lands on its logic
+  there, hop by hop, with each hop recorded in the Trail.
+* **Dossier and glossary**: `project/dossier.json.gz` holds, for every tag, cable,
+  terminal, ELCO pin and signal, its role and captions on each sheet;
+  `glossary.json` holds 158 terms (potentials, module types, ISA tag letters,
+  connectors) with the sheet or convention each meaning comes from. Edit
+  `schematic_viewer/engine/glossary.json` to add site vocabulary.
+
+Everything written comes from text and geometry on the drawings. Where the
+drawing is silent the note says so ("no signal name written", "unlabelled
+wire"); nothing about plant behaviour is inferred.
+
 ### What the status badges mean
 
 | Badge | Meaning |
@@ -157,6 +185,13 @@ judge, and uncertain cases are listed in **Issues**.
   number is only used to rank candidates because the drafters' grid values are
   approximate (often 10-25 mm off). A pointer back to the source sheet upgrades
   the result to *verified*.
+* **Explanations.** `engine/explain.py` classifies closed symbols (gate, timer,
+  module, converter, tag oval, continuation box, device), records which side of
+  a symbol each wire enters, and resolves every output back through gates,
+  timers and modules to the field tags and incoming signals; it also words each
+  conductor and summarises the sheet. `engine/dossier.py` groups multi-line
+  captions, assigns each identifier a role per sheet and builds the cross-sheet
+  dossier and glossary lookups.
 * **Wires.** Conductors are grouped by geometry: segments are joined at
   corners and at junction dots. A wire ending on the middle of another line
   without a dot is not a branch (that is how terminal strips are drawn), crossing
@@ -175,7 +210,9 @@ schematic_viewer/
   import_drawings.py     command-line importer (python import_drawings.py --help)
                          --site <folder> writes a complete static web site (used for docs/)
   viewer_server.py       local web server (standard library only)
-  engine/                DXF reader, renderer, identifier rules, resolver, nets
+  engine/                DXF reader, renderer, identifier rules, resolver, nets,
+                         explain.py (logic trees, conductor notes, sheet summaries),
+                         dossier.py + glossary.json (cross-sheet dossier, vocabulary)
   viewer/                the browser user interface (no internet needed)
   tests/                 automated tests against the supplied drawings
   project/               created by the importer: sheets/*.svg.gz, sheets/*.json.gz,
