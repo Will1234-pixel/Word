@@ -480,8 +480,9 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
 
 def _write_json_gz(path: str, obj) -> None:
     import gzip
-    with gzip.open(path, "wt", encoding="utf-8", compresslevel=6) as fh:
-        json.dump(obj, fh, separators=(",", ":"))
+    data = json.dumps(obj, separators=(",", ":")).encode("utf-8")
+    with open(path, "wb") as raw, gzip.GzipFile(filename="", mode="wb", compresslevel=6, fileobj=raw, mtime=0) as fh:
+        fh.write(data)
 
 
 VIEWER_FILES = ("index.html", "app.js", "app.css")

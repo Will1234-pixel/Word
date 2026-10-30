@@ -241,7 +241,7 @@ def write_svg(result: RenderResult, path: str, compress: bool = True) -> str:
     data = result.svg.encode("utf-8")
     if compress:
         path = path + ".gz" if not path.endswith(".gz") else path
-        with gzip.open(path, "wb", compresslevel=6) as fh:
+        with open(path, "wb") as raw, gzip.GzipFile(filename="", mode="wb", compresslevel=6, fileobj=raw, mtime=0) as fh:
             fh.write(data)
     else:
         with open(path, "wb") as fh:

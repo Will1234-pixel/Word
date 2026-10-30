@@ -66,8 +66,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A docs
-          if git diff --cached --quiet; then
+          # project.json carries the import time; ignore a change to that file alone
+          if git diff --cached --quiet -- docs ':(exclude)docs/data/project.json'; then
             echo "Site unchanged"
+            git restore --staged --worktree docs/data/project.json || true
           else
             git commit -m "Rebuild schematic viewer site"
             git push
