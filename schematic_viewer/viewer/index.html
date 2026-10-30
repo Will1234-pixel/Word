@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Schematic Cross-Reference Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header id="toolbar">
+  <div class="group">
+    <button id="btnBack" title="Back to the previous page and location (Backspace)">&#9664; Back</button>
+    <button id="btnFwd" title="Forward">Fwd &#9654;</button>
+  </div>
+  <div class="group">
+    <label>Sheet <select id="sheetSelect"></select></label>
+    <button id="btnPrev" title="Previous sheet">&#8249;</button>
+    <button id="btnNext" title="Next sheet">&#8250;</button>
+  </div>
+  <div class="group grow">
+    <input id="searchBox" type="search" placeholder="Search wire number, tag, cable, terminal, signal ... (Enter)" autocomplete="off">
+    <button id="btnSearch">Search</button>
+  </div>
+  <div class="group">
+    <button id="btnFit" title="Fit page (F)">Fit</button>
+    <label title="Highlight colour">Colour
+      <select id="hlColor"><option value="#00c853">green</option><option value="#ffd600">yellow</option><option value="#ff1744">red</option></select>
+    </label>
+    <label title="Flash the highlight for about three seconds"><input id="hlPulse" type="checkbox" checked> flash</label>
+    <label title="Show the original PDF page under or instead of the vector drawing">View
+      <select id="viewMode"><option value="vector">vector (DXF)</option><option value="pdf">PDF page</option><option value="overlay">overlay</option></select>
+    </label>
+    <button id="btnLink" title="Create a manual link: click a source text, then the destination text">+ Link</button>
+    <button id="btnSide" title="Show / hide the side panel">Panel</button>
+  </div>
+</header>
+<div id="body">
+  <aside id="side">
+    <nav id="tabs">
+      <button data-tab="selection" class="active">Selection</button>
+      <button data-tab="search">Search</button>
+      <button data-tab="trail">Trail</button>
+      <button data-tab="issues">Issues</button>
+      <button data-tab="sheets">Sheets</button>
+      <button data-tab="help">Help</button>
+    </nav>
+    <section id="tab-selection" class="tab active"><p class="muted">Click a wire number, tag, cable, terminal, signal label or cross-reference on the drawing. Click a wire to highlight the whole conductor.</p></section>
+    <section id="tab-search" class="tab"><p class="muted">Type an identifier in the search box above.</p></section>
+    <section id="tab-trail" class="tab"><p class="muted">Your navigation trail appears here.</p></section>
+    <section id="tab-issues" class="tab"><p class="muted">Loading ...</p></section>
+    <section id="tab-sheets" class="tab"></section>
+    <section id="tab-help" class="tab">
+      <h3>How to use</h3>
+      <ul>
+        <li><b>Click</b> a cross-reference such as <code>052.225</code>, a signal label (<code>3A</code>), a tag, a cable number or a terminal: the viewer opens the destination page, zooms in and flashes the match.</li>
+        <li><b>Click a wire</b> to highlight the whole conductor on this page and list where it goes.</li>
+        <li><b>Back</b> returns to the page and location you came from (also Backspace).</li>
+        <li><b>Several matches</b>: a list appears; choose the right one.</li>
+        <li><b>Status badges</b>: <span class="badge verified">verified</span> label found and the destination points back; <span class="badge matched">matched</span> label found, no back pointer; <span class="badge backref">back pointer</span> destination points back but the label differs; <span class="badge same">same label</span> repeated label, <i>not</i> a verified connection; <span class="badge ambiguous">ambiguous</span>/<span class="badge unresolved">unresolved</span> needs your judgement.</li>
+        <li><b>Mouse</b>: wheel zooms, drag pans, double-click zooms in. Keys: F fit, +/- zoom, arrows pan.</li>
+        <li><b>Manual links</b>: select a text, press <i>+ Link</i>, then click the destination (any page). Use <i>Confirm</i> / <i>Reject</i> on automatic links; decisions are saved in <code>user_links.json</code>.</li>
+      </ul>
+    </section>
+  </aside>
+  <main id="canvas">
+    <svg id="view" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <g id="paper"></g>
+      <g id="backdrop"></g>
+      <g id="content"></g>
+      <g id="hits"></g>
+      <g id="hl"></g>
+    </svg>
+    <div id="popup" class="hidden"></div>
+    <div id="status"><span id="statusSheet"></span><span id="statusMsg"></span><span id="statusPos"></span></div>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
