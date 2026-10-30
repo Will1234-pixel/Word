@@ -41,12 +41,46 @@ async function api(path, opts) {
   if (!r.ok) throw new Error(`${path}: ${r.status}`);
   return r.json();
 }
+// ---- offline package: a page opened from a folder (file://) may not fetch() its own files, but a
+// <script> tag still loads. The offline zip stores every data file as data/<path>.js, which registers
+// the file's bytes (base64) in window.__offline under its path.
+const OFFLINE = location.protocol === "file:";
+function loadViaScript(url) {
+  return new Promise((resolve, reject) => {
+    const key = url.replace(/^\.?\//, "");
+    const take = () => { const v = window.__offline && window.__offline[key]; if (v !== undefined) { delete window.__offline[key]; resolve(v); return true; } return false; };
+    if (take()) return;
+    const s = document.createElement("script");
+    s.src = url + ".js";
+    s.onload = () => { s.remove(); if (!take()) reject(new Error(`${url}: not in the offline package`)); };
+    s.onerror = () => { s.remove(); reject(new Error(`${url}: missing (this folder is not a complete offline package)`)); };
+    document.head.appendChild(s);
+  });
+}
+function bytesFromBase64(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 async function fetchMaybeGz(url) {
   // Data files are stored gzip-compressed. The Python server sends them with
-  // Content-Encoding (browser decodes); a plain static host sends raw gzip bytes.
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`${url}: ${r.status}`);
-  const buf = new Uint8Array(await r.arrayBuffer());
+  // Content-Encoding (browser decodes); a plain static host sends raw gzip bytes;
+  // the offline package carries them inside small script files.
+  let buf;
+  if (OFFLINE) {
+    buf = bytesFromBase64(await loadViaScript(url));
+  } else {
+    let r = null;
+    try { r = await fetch(url); } catch (e) { r = null; }
+    if (r && r.ok) buf = new Uint8Array(await r.arrayBuffer());
+    else {
+      let b64 = null;
+      try { b64 = await loadViaScript(url); } catch (e) { b64 = null; }   // an offline package served by a web server
+      if (b64 === null) throw new Error(`${url}: ${r ? r.status : "cannot be loaded"}`);
+      buf = bytesFromBase64(b64);
+    }
+  }
   if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
     if (typeof DecompressionStream === "undefined") throw new Error("this browser cannot read the compressed drawing data; use a current Edge, Chrome, Firefox or Safari");
     const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
