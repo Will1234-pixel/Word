@@ -76,7 +76,8 @@ class Segment:
     y1: float
     x2: float
     y2: float
-    kind: str = "line"       # line | pline | arc(chord)
+    kind: str = "line"       # line | pline | arc(chord) | shape
+    dashed: bool = False     # non-continuous linetype: enclosure, mechanical link, scope boundary
 
 
 @dataclass
@@ -114,6 +115,25 @@ class SheetData:
         d = asdict(self)
         d.pop("doc", None)
         return d
+
+
+def _is_dashed(doc, entity, parent=None) -> bool:
+    """True when the entity is drawn with a non-continuous linetype."""
+    try:
+        lt = (entity.dxf.linetype or "BYLAYER").upper()
+        if lt == "BYBLOCK":
+            lt = (parent.dxf.linetype or "BYLAYER").upper() if parent is not None else "BYLAYER"
+        if lt == "BYLAYER":
+            layer_name = entity.dxf.layer
+            if parent is not None and layer_name == "0":
+                layer_name = parent.dxf.layer
+            try:
+                lt = (doc.layers.get(layer_name).dxf.linetype or "CONTINUOUS").upper()
+            except Exception:
+                lt = "CONTINUOUS"
+        return lt not in ("CONTINUOUS", "BYLAYER", "BYBLOCK", "")
+    except Exception:
+        return False
 
 
 def _layer_visible(doc, name: str) -> bool:
@@ -265,9 +285,9 @@ def read_sheet(path: str, sheet_id: Optional[str] = None) -> SheetData:
                 if vt in ("TEXT", "MTEXT"):
                     add_text(v, "BLOCKTEXT", layer, bframe, block=bname, handle=e.dxf.handle)
                 elif not bframe:
-                    _collect_geometry(v, layer, e.dxf.handle, segments, shapes, circles, arcs, junctions)
+                    _collect_geometry(v, layer, e.dxf.handle, segments, shapes, circles, arcs, junctions, _is_dashed(doc, v, e))
         elif not frame:
-            _collect_geometry(e, layer, e.dxf.handle, segments, shapes, circles, arcs, junctions)
+            _collect_geometry(e, layer, e.dxf.handle, segments, shapes, circles, arcs, junctions, _is_dashed(doc, e))
         # long straight lines of any layer (used to align PDF backdrops)
         if et == "LINE":
             a, b = e.dxf.start, e.dxf.end
@@ -358,8 +378,18 @@ def read_sheet(path: str, sheet_id: Optional[str] = None) -> SheetData:
     )
 
 
-def _collect_geometry(e, layer, handle, segments, shapes, circles, arcs, junctions) -> None:
+def _collect_geometry(e, layer, handle, segments, shapes, circles, arcs, junctions, dashed=False) -> None:
     et = e.dxftype()
+    n0 = len(segments)
+    try:
+        _collect_geometry_inner(e, et, layer, handle, segments, shapes, circles, arcs, junctions)
+    finally:
+        if dashed:
+            for sg in segments[n0:]:
+                sg.dashed = True
+
+
+def _collect_geometry_inner(e, et, layer, handle, segments, shapes, circles, arcs, junctions) -> None:
     try:
         if et == "LINE":
             s, t = e.dxf.start, e.dxf.end

@@ -2,8 +2,13 @@
 
 Rules (standard schematic conventions):
 * two wire segments are connected when an end point of one coincides with an
-  end point of the other, or lies on the other segment (T-junction);
+  end point of the other (corners, including small overshoots);
+* a wire ending on the middle of another line (T-junction) is a branch only
+  when a junction dot is drawn there; otherwise the host line is treated as
+  symbol line-work (a terminal strip or comb) that must not join conductors;
 * lines that merely cross are NOT connected unless a junction dot is drawn;
+* dashed or hidden-line work (enclosures, scope boundaries, mechanical links)
+  never conducts;
 * a filled dot connects every wire passing through it;
 * closed outlines (device symbols, continuation boxes, tag ovals, module
   boxes, logic gates) are not wires: a wire ends where it touches them and the
@@ -24,6 +29,7 @@ from .dxf_reader import SheetData, Segment
 
 NODE_TOL = 0.05      # mm, end point coincidence
 T_TOL = 0.08         # mm, end point on another segment
+CORNER_TOL = 1.0     # mm, a T landing this close to the host's end is a corner (overshoot), not a tap
 DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
 SHAPE_MAX_DIAG = 90  # mm, closed loops smaller than this are symbols, not ring wiring
@@ -224,7 +230,15 @@ def build_nets(sheet: SheetData) -> NetResult:
             seg_shape[m] = sid
 
     # ---- wire union-find ---------------------------------------------------------
-    wires = [s for s in segs if s.id not in shape_edges]
+    # dashed line work (enclosures, scope boundaries, mechanical links) never conducts
+    wires = [s for s in segs if s.id not in shape_edges and not s.dashed]
+    dot_grid_pts = sheet.junctions
+
+    def dot_near(px, py) -> bool:
+        for jx, jy in dot_grid_pts:
+            if abs(jx - px) <= DOT_TOL and abs(jy - py) <= DOT_TOL and math.hypot(jx - px, jy - py) <= DOT_TOL:
+                return True
+        return False
     uf = _UF(len(segs))
     node_seg: dict[int, int] = {}
     for s in wires:
@@ -244,7 +258,13 @@ def build_nets(sheet: SheetData) -> NetResult:
                 o = segs[oid]
                 d, t = _point_seg_dist(px, py, o)
                 if d <= T_TOL and 0.0 < t < 1.0:
-                    uf.union(s.id, oid)
+                    # A wire ending on the middle of another line is a branch only when the
+                    # drafter marked it with a junction dot; otherwise the host line is symbol
+                    # line-work (terminal strip, comb) and must not join the conductors landing on it.
+                    host_len = math.hypot(o.x2 - o.x1, o.y2 - o.y1)
+                    near_end = min(t, 1.0 - t) * host_len <= CORNER_TOL
+                    if near_end or dot_near(px, py):
+                        uf.union(s.id, oid)
             if shape_grid is not None:
                 for oid in shape_grid.near(px, py, T_TOL):
                     d, _t = _point_seg_dist(px, py, segs[oid])

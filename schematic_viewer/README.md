@@ -157,10 +157,13 @@ judge, and uncertain cases are listed in **Issues**.
   number is only used to rank candidates because the drafters' grid values are
   approximate (often 10-25 mm off). A pointer back to the source sheet upgrades
   the result to *verified*.
-* **Wires.** Conductors are grouped by geometry: segments are joined when an
-  end point touches another segment or a junction dot. Crossing lines are not
-  joined; closed outlines (symbols, boxes) stop the net and are recorded as the
-  symbols the wire reaches.
+* **Wires.** Conductors are grouped by geometry: segments are joined at
+  corners and at junction dots. A wire ending on the middle of another line
+  without a dot is not a branch (that is how terminal strips are drawn), crossing
+  lines are not joined, dashed line-work never conducts, and closed outlines
+  (symbols, boxes) stop the net and are recorded as the symbols the wire reaches.
+  Hovering a wire previews the conductor in blue; clicking highlights it in the
+  chosen colour.
 
 ## 6. Files
 

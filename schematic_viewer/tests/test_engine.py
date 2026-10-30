@@ -196,3 +196,19 @@ def test_static_site_output(dxf_dir, tmp_path):
     assert any(r[0] == "051" and r[2] == "052.225" for r in rows)
     index = json.load(gzip.open(site / "data" / "index.json.gz", "rt"))
     assert "signal:3A" in index and {o["sheet"] for o in index["signal:3A"]} == {"051", "052"}
+
+
+def test_nets_do_not_merge_distinct_conductors_on_power_sheet(dxf_dir):
+    """Sheet 035: E, N and L land on a PSU terminal strip drawn as plain line-work.
+    Without junction dots those landings must not join the conductors."""
+    s = read_sheet(dxf(dxf_dir, "10265-P3-035.dxf"))
+    r = build_nets(s)
+    top = {t.text: r.text_net.get(t.id) for t in s.texts if t.text in ("E", "N", "L") and t.y > 240 and t.x < 60}
+    assert len(top) == 3 and len(set(top.values())) == 3, top
+    assert max(len(n.segments) for n in r.nets) < 60
+    tx = {t.id: t for t in s.texts}
+    for n in r.nets:
+        labels = {tx[i].text for i in n.texts}
+        assert not ({"LA3", "NA3"} <= labels), "live and neutral must stay separate"
+        assert not ({"LA3", "PSU A L-"} <= labels), "230 V input must stay separate from 24 V output"
+    assert any(sg.dashed for sg in s.segments)      # enclosures are recognised as dashed line-work
