@@ -66,22 +66,22 @@ Import of all 135 sheets (135 DXF files; `138` and `138 Rev C` are both kept) wi
 | Visible text items indexed | 30001 |
 | Distinct identifiers | 4743 |
 | PDF pages matched to sheets / aligned | 134 / 134 of 134 |
-| Explicit `sheet.grid` pointers | 62 |
+| Explicit `sheet.grid` pointers (including `035.50 (FUSE-A)` with the label inside the pointer) | 65 |
 | &nbsp;&nbsp; verified (label found + pointer back) | 22 |
-| &nbsp;&nbsp; back pointer (destination points back, label written differently) | 24 |
-| &nbsp;&nbsp; matched (label found, no pointer back) | 4 |
+| &nbsp;&nbsp; back pointer (destination points back at this pointer's position, label written differently) | 28 |
+| &nbsp;&nbsp; matched (label found, no pointer back) | 6 |
 | &nbsp;&nbsp; multiple verified destinations (engineer chooses) | 1 |
-| &nbsp;&nbsp; ambiguous (engineer chooses) | 11 |
+| &nbsp;&nbsp; ambiguous (engineer chooses) | 8 |
 | &nbsp;&nbsp; unresolved | 0 |
 | &nbsp;&nbsp; destination sheet not in the set | 0 |
 | `LOOP TYPE` pointers resolved to a typical heading | 106 of 106 |
 | Whole-sheet pointers (SEE DRG, schedule entries) | 155 (+2 to sheets not in the set, 1 to volume P4) |
-| References listed for review in the viewer | 15 |
+| References listed for review in the viewer | 12 |
 
 Every explicit pointer on the Functional Logic Diagrams 051-053 was checked by hand against the
 drawings: all resolve to the correct continuation box on the destination sheet; signal `3P` on 051
 genuinely arrives in two boxes on 053 and is reported as *multiple*. The automated test suite
-(`tests/`, 28 tests) re-checks these cases on every change.
+(`tests/`, 158 tests) re-checks these cases on every change.
 
 ### Identifiers found (distinct keys)
 
@@ -101,14 +101,11 @@ genuinely arrives in two boxes on 053 and is reported as *multiple*. The automat
 | FLD continuation signal (3A) | 11 | 11 |
 | terminal block (TB3AI) | 6 | 4 |
 
-### References the engineer must judge (15)
+### References the engineer must judge (12)
 
 | Sheet | Pointer | Companion label | To | Status | Note / candidates |
 |---|---|---|---|---|---|
 | 026A | `SEE DWG C10265H/P4-026` |  | 026 | external | drawing volume P4 is not part of this set |
-| 035 | `040.133` | XG.23:2 | 040 | ambiguous | candidates: XG.23, XG.23 |
-| 035 | `040.048` | XG.21:2 | 040 | ambiguous | candidates: XG.21, XG.21 |
-| 035 | `040.090` | XG.22:2 | 040 | ambiguous | candidates: XG.22, XG.22 |
 | 035 | `043.060` | 1118-1121 | 043 | ambiguous | candidates: 1119, 1120, 1121, 035.320, 035.320 |
 | 035 | `047.060` | 1218-1221 | 047 | ambiguous | candidates: 1219, 1220, 1221, 035.335, 035.335 |
 | 035 | `040.053` | XG.21:1 | 040 | ambiguous | candidates: XG.21, XG.21 |
@@ -121,8 +118,10 @@ genuinely arrives in two boxes on 053 and is reported as *multiple*. The automat
 | 055B | `FROM SHT 055A (03PZA03358)` |  | 055A | missing_sheet | sheet 055A is not in the imported set |
 | 055B | `TO SHT 056` |  | 056 | missing_sheet | sheet 056 is not in the imported set |
 
-Most of these are the 24 V feeds on sheet 035: the destination sheet 040 names its terminals
-`XG.21` without the pin number, so each pointer offers the two `XG.21` terminals to choose from.
+Three of these are the 24 V returns on sheet 035 (`XG.21:1`, `XG.22:1`, `XG.23:1`): the destination
+sheet 040 names its terminals `XG.21` without the pin number, so each pointer offers the two `XG.21`
+terminals to choose from. The matching feeds (`XG.21:2` ...) are settled by the back pointers
+`035.50 (FUSE-A)`, `035.70 (FUSE-B)` and `035.90 (FUSE-C)` that 040 writes under AL+, BL+ and CL+.
 
 ## 3b. Explaining function, not just position
 
