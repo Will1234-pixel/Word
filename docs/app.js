@@ -407,15 +407,19 @@ async function onTextClick(id, ev) {
   const occ = app.groups.flatMap((g) => g.occurrences.map((o) => ({ ...o, kind: g.kind, key: g.label })));
   if (occ.length === 1) return navigate({ sheet: occ[0].sheet, text: occ[0].text, label: t.text, status: "same label", note: "repeated label – not a verified connection" });
   if (occ.length > 1) return showAppearancePopup(t, app, ev);
-  if (t.net != null) return onNetClick(t.net, ev, true);
-  setStatus(`no cross-reference found for "${t.text}"`, true);
+  if (t.net != null) {
+    // nothing to jump to: show which conductor on this page the label belongs to
+    onNetClick(t.net, ev, true, t);
+    return setStatus(`"${t.text}" has no cross-reference and appears on no other sheet – showing the conductor it is written on`, true);
+  }
+  setStatus(`"${t.text}" has no cross-reference and appears on no other sheet`, true);
 }
-function onNetClick(netId, ev, fromText) {
+function onNetClick(netId, ev, fromText, fromLabel) {
   hidePopup();
   const net = state.sheet._nets[netId]; if (!net) return;
   clearHighlights(true); highlightNet(net);
   const exits = netExits(net);
-  renderNetPanel(net, exits);
+  renderNetPanel(net, exits, fromLabel);
   const direct = exits.filter((x) => AUTO_GO.has(x.link.status));
   if (!fromText && direct.length === 1 && exits.length === 1) {
     setStatus(`wire → ${direct[0].text.text} → sheet ${direct[0].link.dst_sheet}`);
@@ -537,11 +541,13 @@ function showPopup(ev, html, wire) {
   $("#popClose").onclick = hidePopup; if (wire) wire(p);
 }
 function hidePopup() { $("#popup").classList.add("hidden"); }
-function renderNetPanel(net, exits) {
+function renderNetPanel(net, exits, fromLabel) {
   const box = $("#tab-selection");
   const labels = (net.texts || []).map((id) => textById(id)).filter(Boolean);
   const shapes = (net.shapes || []).map((id) => state.sheet._shapes[id]).filter(Boolean);
-  let h = `<div class="sel-title">Wire on sheet ${esc(state.sheetId)}</div><div class="muted">${net.segs.length} drawn segment${net.segs.length > 1 ? "s" : ""}, connected by touching end points and junction dots. Crossing lines are not joined.</div>`;
+  let h = `<div class="sel-title">${fromLabel ? "Conductor of “" + esc(fromLabel.text) + "”" : "Conductor"} on sheet ${esc(state.sheetId)}</div>`;
+  if (fromLabel) h += `<div class="note">“${esc(fromLabel.text)}” has no cross-reference and is not written on any other sheet, so there is nowhere to jump. The green highlight shows the piece of wiring this label belongs to on this page, as drawn.</div>`;
+  h += `<div class="muted">${net.segs.length} drawn segment${net.segs.length > 1 ? "s" : ""}. Wires are joined at corners and junction dots and stop at device symbols; crossing lines are not joined.</div>`;
   if (labels.length) h += `<h4>Labels on this wire</h4><div>${labels.map((t) => `<span class="chip" data-t="${esc(t.id)}">${esc(t.text)}</span>`).join("")}</div>`;
   if (shapes.length) h += `<h4>Symbols it touches</h4><div>${shapes.map((s) => `<span class="chip">${esc(s.texts.map((x) => (textById(x) || {}).text).filter(Boolean).join(" ") || "symbol")}</span>`).join("")}</div>`;
   h += `<h4>Where it goes</h4>`;
