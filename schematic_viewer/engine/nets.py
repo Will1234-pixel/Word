@@ -37,6 +37,7 @@ SHORT_HOST = 6.0     # mm, a wire landing on a line this short passes through a 
 DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
 LOOSE_TEXT_TOL = 3.0 # mm, DeltaV taps (DV3_5) and limit words (HIGH, LOLO) are written further from their wire
+END_TEXT_TOL = 2.5   # mm, a short label in line with the free end of a wire ('1L-6' under its wire end on 085)
 LOOSE_LABEL_RE = re.compile(r"^(?:DV\d_\d+|HIGH|LOW|LOLO|HIHI|MID|HI|LO)$")
 PORT_TOL = 0.3       # mm, a wire end this close to a closed symbol is a port of that symbol
 GATE_PORT_TOL = 1.0  # mm, a logic gate's output leaves from its arc, up to this far from the bbox edge
@@ -462,18 +463,57 @@ def build_nets(sheet: SheetData) -> NetResult:
             text_shape[t.id] = best_sh
             shapes[best_sh]["texts"].append(t.id)
             continue
-        # nearest wire (DeltaV taps and limit words are written further from their wire)
+        # nearest wire (DeltaV taps and limit words are written further from their wire).  A wire whose
+        # free end stops right above, below or beside the text owns it even when another wire passes
+        # the text a little closer: '1L-6' under the end of its wire with the '1L+6' wire running past (085).
         tol = LOOSE_TEXT_TOL if LOOSE_LABEL_RE.match(t.text) else TEXT_TOL
-        best_d, best_net = tol + 0.05, None          # inclusive: DV3_12 on 053 sits exactly 3.0 mm from its wire end
-        for oid in grid.near_box(x0 - tol, y0 - tol, x1 + tol, y1 + tol):
-            d = _seg_box_dist(segs[oid], (x0, y0, x1, y1))
-            if d < best_d:
-                best_d, best_net = d, seg_net.get(oid)
+        # A wire whose free end stops in line with a short label owns it: the label flag of a signal name on
+        # the FLD sheets ends just left of the name, '1L-6' on 085 sits under the end of its wire.  That wins
+        # over a wire merely passing the text a little closer, and such an end may stand END_TEXT_TOL away.
+        # one-word labels only: pin numbers stay beside their pins, captions such as 'CONTROL ROOM' are not wire labels
+        short = len(t.text.strip()) <= 12 and " " not in t.text.strip() and not re.fullmatch(r"\d{1,2}|[A-Za-z]", t.text.strip())
+        end_tol = max(tol, END_TEXT_TOL) if short else tol
+        box = (x0, y0, x1, y1)
+        best, best_net = None, None
+        for oid in grid.near_box(x0 - end_tol, y0 - end_tol, x1 + end_tol, y1 + end_tol):
+            d = _seg_box_dist(segs[oid], box)
+            if d > end_tol + 0.05:
+                continue
+            ends = _ends_at_text(segs[oid], box, end_tol, grid, segs)
+            if d <= tol + 0.05:                      # inclusive: DV3_12 on 053 sits exactly 3.0 mm from its wire end
+                rank = 0 if ends else 1
+            elif ends:
+                rank = 0
+            else:
+                continue
+            if best is None or (rank, d) < best:
+                best, best_net = (rank, d), seg_net.get(oid)
         if best_net is not None:
             text_net[t.id] = best_net
             nets[best_net].texts.append(t.id)
     shape_ports(segs, nets, shapes, {t.id: t.text for t in sheet.texts})
     return NetResult(nets, shapes, seg_net, text_net, text_shape)
+
+
+def _ends_at_text(s: Segment, box, tol: float, grid: "_Grid", segs: list[Segment]) -> bool:
+    """True when a free end of *s* stops within *tol* of the text box, in line with it (above or below the
+    text within its x-span, or left or right of it within its y-span).  A free end touches no other wire."""
+    x0, y0, x1, y1 = box
+    if math.hypot(s.x2 - s.x1, s.y2 - s.y1) < 3.0 and abs(s.x2 - s.x1) > 0.1 and abs(s.y2 - s.y1) > 0.1:
+        return False                                  # the diagonal strokes of a lamp cross are not a wire ending at its label
+    for px, py in ((s.x1, s.y1), (s.x2, s.y2)):
+        in_x = x0 - 0.3 <= px <= x1 + 0.3 and (0.0 <= y0 - py <= tol or 0.0 <= py - y1 <= tol)
+        in_y = y0 - 0.3 <= py <= y1 + 0.3 and (0.0 <= x0 - px <= tol or 0.0 <= px - x1 <= tol)
+        if not (in_x or in_y):
+            continue
+        free = True
+        for oid in grid.near_box(px - 0.15, py - 0.15, px + 0.15, py + 0.15):
+            if oid != s.id and _seg_box_dist(segs[oid], (px - 0.1, py - 0.1, px + 0.1, py + 0.1)) <= 0.0:
+                free = False
+                break
+        if free:
+            return True
+    return False
 
 
 def _port_side(px: float, py: float, ox: float, oy: float) -> str:

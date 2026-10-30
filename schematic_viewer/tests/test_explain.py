@@ -136,8 +136,9 @@ def test_loose_labels_dv_and_limits(s051):
     assert dv == {f"DV3_{n}" for n in range(1, 8)}, "DeltaV taps are 1.4 mm from their wire and must attach with the 3 mm rule"
     limits = sorted(tx[i].text for i in nets.text_net if tx[i].text in ("HIGH", "LOW", "LOLO", "HIHI", "MID"))
     assert limits == ["HIGH", "HIGH", "HIHI", "LOLO", "LOLO", "LOW", "LOW", "MID", "MID"]
-    # the 1.2 mm rule still applies to ordinary texts: the timer output label sits 1.4 mm from its stub
-    assert all(tx[i].text != "03HZA03350" for i in nets.text_net)
+    # a short label in line with the free end of its wire attaches up to 2.5 mm away: the timer output label
+    # sits 1.4 mm from the end of its stub and belongs to it
+    assert any(tx[i].text == "03HZA03350" for i in nets.text_net)
 
 
 # ----------------------------------------------------------------------------- FLD logic
@@ -189,7 +190,10 @@ def test_fld_logic_other_outputs_on_051(s051):
     # neighbouring pointers are not mixed up: 3D -> 052, 3M -> 053, 3N -> 053
     assert by[("continuation", "3D")]["dest_sheet"] == "052"
     assert by[("continuation", "3M")]["dest_sheet"] == "053" and by[("continuation", "3N")]["dest_sheet"] == "053"
-    assert by[("continuation", "3D")]["expr"] == "LOW 03TZA03052D"
+    # the signal names are read from the label flags (tick marks) on the module output wires, not from the nearest line
+    assert by[("continuation", "3D")]["expr"] == "LOW 03TZA03052B"
+    assert by[("continuation", "3M")]["expr"] == "HIHI 03TZA03052C"
+    assert by[("continuation", "3N")]["expr"] == "LOLO 03TZA03052D"
     # converter: 1-5V from the flow density transmitter, 4-20mA to the process device tag
     c = by[("converter", "03ZRT03581")]
     assert c["device"]["tag"] == "03ZRT03581" and c["device"]["cable"] == "3/C735" and c["device"]["terminals"] == "1 & 2"
@@ -226,7 +230,7 @@ def test_incoming_entries_on_052(s052):
     dev = {e["output"]: e for e in logic if e["kind"] == "other"}
     assert "03ZO03001" in dev and "T11 ON 30 SECS" in dev["03ZO03001"]["expr"] and "F3330" in dev["03ZO03001"]["via"]
     # a feedback loop is cut, not followed for ever
-    assert any("loops back" in e["expr"] for e in logic)
+    assert any("feedback from" in e["expr"] for e in logic)
 
 
 # ----------------------------------------------------------------------------- net words, summaries, notes
@@ -329,3 +333,77 @@ def test_explain_in_sheet_json(dxf_dir, tmp_path):
     assert inc2["from_sheet"] == "051" and inc2.get("link_in")
     # net words are keyed by the net id as a string, matching the net list
     assert set(s["explain"]["nets"]) <= {str(n["id"]) for n in s["nets"]}
+
+
+# ----------------------------------------------------------------------------- converters drawn with numbered pins
+def test_converter_note_on_loop_drawing_075(s075):
+    """The ISOCON-6-20 on 075 is described from its pin captions, pins and wires, and tied to channel 4."""
+    sheet, nets = s075
+    r = explain_sheet(sheet, nets, [], {"id": "075", "title": sheet.title, "file": "", "links_in": []})
+    conv = [k for k, v in r["shapes"].items() if v["kind"] == "converter"]
+    assert len(conv) == 1 and r["shapes"][conv[0]]["label"] == "ISOCON-6-20"
+    model = next(t for t in sheet.texts if t.text == "ISOCON-6-20")
+    note = r["texts"][model.id]
+    assert note["title"] == "Signal converter ISOCON-6-20"
+    body = note["lines"]
+    assert body[0] == ("Signal converter ISOCON-6-20: takes 1-5V in at pins 4, 5; gives 4-20mA out at pins 12, 10 "
+                       "to cable 3/C735 terminals 1, 2; supply 24Vdc at pins 1, 2.")
+    assert body[1].startswith("Serves channel 4 of position 1101: 03PZT03079")
+    assert "Pin 5 (1-5V IN, +ve): wire 1101/4 to cable 3/C668 terminal 16." in body
+    assert "Pin 12 (4-20mA OUT, +ve): 3/C735/1 to cable 3/C735 terminal 1." in body
+    assert "Pin 1 (24Vdc IN, -ve): 1L-2 (same wire as pin 4)." in body
+    # the label soup and the FLD-style logic line are gone
+    assert not any("Logic:" in ln or "<unlabelled wire>" in ln for ln in body)
+    # the channel fact carries the converter and separates channel pins from supply pins
+    ch4 = next(f for f in r["facts"] if f.startswith("Channel 4"))
+    assert "channel pins z16/d16, supply pins d26/d30" in ch4 and "Signal converter ISOCON-6-20" in ch4
+    # a wire ending at a pin says so
+    pin5 = next(w for w in r["nets"].values() if w["title"] == "1101/4")
+    assert any(ln.startswith("Ends at converter ISOCON-6-20 pin 5 (1-5V IN, +ve)") for ln in pin5["lines"])
+    # the isolation diagonals and pin stubs inside the box are not explained as wires
+    assert not any(w["title"] == "CONVERTER" for w in r["nets"].values())
+
+
+def test_converter_variants(dxf_dir):
+    """Model in a revision cloud (085), misspelt model (082), thermocouple converter with a bottom supply (082)."""
+    s, n = _load(dxf_dir, "10265-P3-085.dxf")
+    r = explain_sheet(s, n, [], {"id": "085", "title": s.title, "file": "", "links_in": []})
+    labels = sorted(v["label"] for v in r["shapes"].values() if v["kind"] == "converter")
+    assert labels == ["ISOCON-6-6", "ISOCON-6-7", "ISOCON-6-8", "ISOCON-6-9"]
+    assert any("Signal converter ISOCON-6-6: takes 1-5V in at pins 4, 5" in f for f in r["facts"])
+    s, n = _load(dxf_dir, "10265-P3-082.dxf")
+    r = explain_sheet(s, n, [], {"id": "082", "title": s.title, "file": "", "links_in": []})
+    tc = next(t for t in s.texts if t.text == "VCON-TC-5")
+    lines = r["texts"][tc.id]["lines"]
+    assert lines[0] == "Converter VCON-TC-5: takes T/C 0-800°C in at pins 5, 4, 6; gives 4-20mA out at pins 12, 10; supply 24Vdc at pins 2, 1."
+    assert "Pin 2 (24Vdc IN, +ve): L+4." in lines and "Pin 12 (4-20mA OUT, +ve): wire 1104/5." in lines
+    assert "ISCON-6" in {v["label"] for v in r["shapes"].values() if v["kind"] == "converter"}
+
+
+def test_fld_converter_prose_on_051(s051):
+    sheet, nets = s051
+    r = explain_sheet(sheet, nets, [], {"id": "051", "title": sheet.title, "file": "", "links_in": []})
+    assert ("Output 03PDZRT03078: V TO I converter fed by 03PDZT03078 (1-5V) drives 03PDZRT03078 with 4-20mA, "
+            "cable 3/C661 terminals 3 & 4.") in r["facts"]
+    out = next(w for w in r["nets"].values() if "Output of the V TO I converter fed by 03PDZT03078 (1-5V)." in w["lines"])
+    assert out["title"] == "4-20mA"
+    tag = next(t for t in sheet.texts if t.text == "03PDZRT03078")
+    assert r["texts"][tag.id]["lines"][0].startswith("V TO I converter fed by 03PDZT03078 (1-5V) drives 03PDZRT03078")
+    # the lamp crosses are not reported as wires, and a two-gate destination is counted
+    assert not any(w["title"] == "CONTROL ROOM" for w in r["nets"].values())
+    assert any("AND gate (x2)" in ln for w in r["nets"].values() for ln in w["lines"])
+
+
+def test_verification_fixes_052_053(s052, dxf_dir):
+    """Tags typed with zeros for O are outputs too, keyswitch contacts are both read, feedback is named."""
+    sheet, nets = s052
+    r = explain_sheet(sheet, nets, [], {"id": "052", "title": sheet.title, "file": "", "links_in": []})
+    assert any(f.startswith("Output 03Z003578 (MIXED ACID S0V 24VDC)") for f in r["facts"])
+    ks = next(f for f in r["facts"] if f.startswith("Input 03HZS03351 "))
+    assert "03HZS03351A START" in ks and "03HZS03351B STOP" in ks
+    assert "6 process device outputs (1 through converters, 5 through output modules)" in r["summary"]
+    s, n = _load(dxf_dir, "10265-P3-053.dxf")
+    r = explain_sheet(s, n, [], {"id": "053", "title": s.title, "file": "", "links_in": []})
+    inc = {e["output"]: e for e in r["logic"] if e["kind"] == "incoming" and e.get("signal")}
+    assert inc["3M"]["signal"] == "03TZT03052C" and inc["3N"]["signal"] == "03TZT03052D" and inc["3L"]["signal"] == "03FZA03066B"
+    assert any(f.startswith("Output 03Z003599 (24V DC)") and "<feedback from its own output>" in f for f in r["facts"])

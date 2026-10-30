@@ -81,6 +81,15 @@ WINDOW_LABEL_RE = re.compile(r"^W\d{1,2}(?:\s*&\s*\d{1,2})?$", re.I)
 TAG_LIKE_RE = re.compile(r"^\d{2}[A-Z]{2,5}\d{3,5}[A-Z]?(?:-[A-Z0-9]{1,4})?$")   # 03PDZRT03078 (five letters) is a tag too
 LAMP_LABEL_RE = re.compile(r"^L\d{1,2}$")
 OUTPUT_SIDES = {"R", "T", "B"}
+POLARITY_RE = re.compile(r"^[+-](?:VE)?$", re.I)            # +ve, -ve, +, - written beside a pin
+PIN_NO_RE = re.compile(r"^\d{1,2}$")
+MODEL_RE = re.compile(r"^(?:ISOCON|ISCON|VCON)[-\w/]*$|^[A-Z]{2,}\d*(?:-[A-Z0-9]+)+$", re.I)   # ISOCON-6-20, VCON-TC-5, VCON-HL, KFD2-UT2-2
+BRAND_RE = re.compile(r"^[A-Z]\s*&\s*[A-Z]$", re.I)         # P & F written over a model number
+SUPPLY_RE = re.compile(r"^\d+(?:\.\d+)?\s*V(?:DC|AC)?$", re.I)   # 24Vdc
+DIRECTION_WORDS = {"IN", "OUT"}
+WIRE_NO_RE = re.compile(r"^1[12]\d{2}/\d{1,2}[+-]?$")        # loop drawing wire number: card position / channel (1101/4, 1106/3+)
+ZERO_TAG_RE = re.compile(r"^\d{2}[A-Z][A-Z0]{0,4}\d{4,5}[A-Z]?$")   # a tag typed with zeros for the letter O (03Z003578 on 052)
+CAPTION_WORDS = {"P/B", "K/S", "L/S", "P/S", "H/S"}         # device-type captions beside console symbols, not wire labels
 
 __all__ = ["ports", "classify_shape", "fld_logic", "net_explanations", "sheet_summary", "explain_sheet",
            "sheet_kind", "expr_of", "loop_channels"]
@@ -162,6 +171,8 @@ def classify_shape(texts, size, symbol: Optional[str] = None) -> str:
         return "timer"
     if CONVERTER_RE.search(joined):
         return "converter"
+    if up.count("IN") + up.count("OUT") >= 2 and any(SUPPLY_RE.match(u) for u in up):
+        return "converter"                 # numbered-pin converter box whose model name is drawn inside a cloud (085)
     if any(MODULE_RE.match(u) for u in up) or MODULE_WORDS_RE.search(joined):
         return "module"
     if len(words) == 1:
@@ -170,7 +181,7 @@ def classify_shape(texts, size, symbol: Optional[str] = None) -> str:
         kinds = {i.kind for i in idents}
         if SIGNAL_RE.match(wd.upper()) and mx <= 6.0 and abs(w - h) <= 1.5:
             return "continuation"
-        if ("tag" in kinds or TAG_LIKE_RE.match(wd.upper())) and mn <= 4.5 and w / max(h, 0.1) >= 3.0:
+        if ("tag" in kinds or TAG_LIKE_RE.match(wd.upper()) or ZERO_TAG_RE.match(wd.upper())) and mn <= 4.5 and w / max(h, 0.1) >= 3.0:
             return "tag_oval"
         if kinds & {"elco", "terminal", "potential", "connector", "cable"} and h <= 7.0 and w / max(h, 0.1) >= 2.0:
             return "label_box"
@@ -190,7 +201,7 @@ def expr_of(node) -> str:
     if not node:
         return "<nothing drawn>"
     if node.get("cycle"):
-        return f"<loops back to shape {node.get('shape')}>"
+        return f"<feedback from {node['signal']}>" if node.get("signal") else "<feedback from its own output>"
     if node.get("incoming"):
         s = node.get("signal") or "?"
         return f"{s} (from {node['from_sheet']})" if node.get("from_sheet") else f"{s} (from another sheet)"
@@ -208,8 +219,8 @@ def expr_of(node) -> str:
         parts.append(node["limit"])
     if node.get("signal"):
         parts.append(node["signal"])
-        if node.get("label") and not node.get("module"):
-            parts.append(f"({node['label']})")
+        if node.get("label"):
+            parts.append(f"({node['label']})")          # the word written on the wire: START, STOP, 1-5V
     elif node.get("unlabelled_input"):
         parts.append(f"<{node.get('module') or 'module'}: no input drawn>")
     elif node.get("module"):
@@ -264,6 +275,9 @@ class _Ctx:
         self.info: dict[int, dict] = {}
         for sh in self.shapes:
             self.info[sh["id"]] = self._shape_info(sh)
+        self._nest_converters()
+        self._conv_cache: dict[int, Optional[dict]] = {}
+        self.conv_channel: dict[int, dict] = {}        # converter shape id -> loop channel record (filled by _loop_channels)
         self.net_ports: dict[int, list[tuple[int, str]]] = defaultdict(list)
         for sh in self.shapes:
             for p in sh.get("ports", []):
@@ -316,7 +330,7 @@ class _Ctx:
     def net_labels(self, nid: int) -> dict:
         out = {"signals": [], "limits": [], "dvs": [], "pointers": [], "potentials": [], "cables": [], "elco": [],
                "words": [], "text_ids": [], "by_kind": {}}
-        for tid in self.net_texts.get(nid, []):
+        def put(tid: str) -> None:
             t = self.texts[tid]
             out["text_ids"].append(tid)
             kinds = {i.kind for i in self.idents.get(tid, [])}
@@ -327,7 +341,7 @@ class _Ctx:
                 out["dvs"].append(tid)
             elif up in LIMIT_WORDS:
                 out["limits"].append(tid)
-            elif "tag" in kinds:
+            elif "tag" in kinds or (not kinds and ZERO_TAG_RE.match(up)):
                 out["signals"].append(tid)
             elif kinds & {"potential", "terminal"}:
                 out["potentials"].append(tid)
@@ -337,6 +351,23 @@ class _Ctx:
                 out["elco"].append(tid)
             else:
                 out["words"].append(tid)
+
+        for tid in self.net_texts.get(nid, []):
+            if len(self.texts[tid].text.strip()) > 40:
+                continue                                  # a notes paragraph the wire happens to pass is not a label
+            put(tid)
+        # short texts stacked right over or under an attached label are lines of the same caption
+        # ('L+' / 'FROM' over 'XG.3' at a wire end on 045, '(1L-)' / '043.280' over 'XG.11')
+        queue = [tid for tid in out["text_ids"] if len(self.texts[tid].text.strip()) <= 12]
+        while queue:
+            bt = self.texts[queue.pop()]
+            for t in self.sheet.texts:
+                if t.frame or t.id in self.text_net or t.id in self.text_shape or t.id in out["text_ids"] or len(t.text.strip()) > 12:
+                    continue
+                gap = min(abs(t.bbox[1] - bt.bbox[3]), abs(bt.bbox[1] - t.bbox[3]))
+                if gap <= 1.2 and _overlap_x(t.bbox, bt.bbox) >= 0.5 * min(t.bbox[2] - t.bbox[0], bt.bbox[2] - bt.bbox[0]):
+                    put(t.id)
+                    queue.append(t.id)
         return out
 
     def txt(self, tid: Optional[str]) -> str:
@@ -363,6 +394,17 @@ class _Ctx:
         label = " ".join(words)
         if kind == "gate":
             label = next(t.text.upper() for t in items if t.text.strip().upper() in GATE_WORDS)
+        elif kind == "converter" and len(words) > 2:
+            # a converter drawn with numbered pins and captions: name it by its model text (ISOCON-6-20, P & F KFD2-UT2-2)
+            model = [wd.strip() for wd in words if MODEL_RE.match(wd.strip())]
+            brand = [wd.strip() for wd in words if BRAND_RE.match(wd.strip())]
+            if model:
+                label = " ".join(_uniq([wd for wd in words if CONVERTER_RE.search(wd) and not MODEL_RE.match(wd.strip())][:1] + brand[:1] + model[:1]))
+        elif kind == "module" and len(words) > 3:
+            # a module drawn with its pin table (loop drawings): name it by the module words only
+            mod = [wd for wd in words if MODULE_RE.match(wd.strip()) or MODULE_WORDS_RE.search(wd)]
+            if mod:
+                label = " ".join(_uniq(mod))
         elif not words and sh.get("symbol"):
             label = sh["symbol"]
         by_side: dict[str, list[int]] = {"L": [], "R": [], "T": [], "B": []}
@@ -388,6 +430,78 @@ class _Ctx:
                 rating = s
         return {"id": sh["id"], "kind": kind, "label": label, "words": words, "text_ids": tids, "bbox": b,
                 "ports": by_side, "near": near, "fuse": fuse_name, "rating": rating, "symbol": sh.get("symbol")}
+
+    def _nest_converters(self) -> None:
+        """A converter model name drawn inside a revision cloud inside the converter box (sheet 085):
+        the box takes the model name, the cloud outline is ignored from then on."""
+        for c in list(self.info.values()):
+            if c["kind"] != "converter" or self.shape_by_id.get(c["id"], {}).get("ports"):
+                continue
+            cb = c["bbox"]
+            ccx, ccy = _center(cb)
+            outer = None
+            for o in self.info.values():
+                if o["id"] == c["id"] or o["kind"] not in ("device", "converter", "unknown", "module"):
+                    continue
+                ob = o["bbox"]
+                if max(_size(ob)) > 60 or not (ob[0] <= ccx <= ob[2] and ob[1] <= ccy <= ob[3]):
+                    continue                                       # the cloud may cross the box edge: its centre must be inside
+                if _size(ob)[0] * _size(ob)[1] <= _size(cb)[0] * _size(cb)[1]:
+                    continue
+                if outer is None or _size(ob)[0] * _size(ob)[1] < _size(outer["bbox"])[0] * _size(outer["bbox"])[1]:
+                    outer = o
+            if outer is None:
+                continue
+            model = [w for w in c["words"] if MODEL_RE.match(w.strip())]
+            outer["kind"] = "converter"
+            outer["label"] = model[0] if model else (c["label"] or outer["label"])
+            outer["words"] = list(outer["words"]) + list(c["words"])
+            outer["text_ids"] = _uniq(list(outer["text_ids"]) + list(c["text_ids"]))
+            c["kind"] = "unknown"
+
+    def converter(self, shape_id: int) -> Optional[dict]:
+        """Numbered pins of a converter symbol (see ``_converter_pins``), cached."""
+        if shape_id not in self._conv_cache:
+            try:
+                self._conv_cache[shape_id] = _converter_pins(self, shape_id)
+            except Exception as exc:                  # pragma: no cover - defensive
+                self.warnings.append(f"converter pins failed for shape {shape_id}: {exc}")
+                self._conv_cache[shape_id] = None
+        return self._conv_cache[shape_id]
+
+    def cable_of_box(self, shape_id: int) -> Optional[str]:
+        """The cable number written beside a terminal box (3/C735 above the box with terminals 1, 2)."""
+        info = self.info[shape_id]
+        for i in info["near"]:
+            if any(x.kind == "cable" and not x.extra.get("core") for x in self.idents.get(i, [])):
+                return self.txt(i).strip()
+        b = info["bbox"]
+        best = None
+        for t in self.sheet.texts:
+            if t.frame or not any(x.kind == "cable" and not x.extra.get("core") for x in self.idents.get(t.id, [])):
+                continue
+            gx, gy = _gap(b, t.bbox)
+            if gx <= 2.0 and gy <= 3.5:
+                d = math.hypot(gx, gy)
+                if best is None or d < best[0]:
+                    best = (d, t)
+        return best[1].text.strip() if best else None
+
+    def terminal_at(self, shape_id: int, nid: int) -> Optional[str]:
+        """The terminal number written nearest to where wire *nid* meets a terminal box."""
+        info = self.info[shape_id]
+        nums = [i for i in info["text_ids"] if re.fullmatch(r"\d{1,2}|[A-Za-z]|[a-z]\d{1,2}", self.txt(i).strip())]
+        ports_ = [p for p in self.shape_by_id.get(shape_id, {}).get("ports", []) if p["net"] == nid]
+        if not nums or not ports_:
+            return None
+        best = None
+        for p in ports_:
+            for i in nums:
+                bb = self.texts[i].bbox
+                d = math.hypot(max(bb[0] - p["x"], 0.0, p["x"] - bb[2]), max(bb[1] - p["y"], 0.0, p["y"] - bb[3]))
+                if best is None or d < best[0]:
+                    best = (d, i)
+        return self.txt(best[1]).strip() if best and best[0] <= 3.0 else None
 
     def shapes_on_net(self, nid: int) -> list[tuple[int, str]]:
         return list(self.net_ports.get(nid, []))
@@ -585,9 +699,9 @@ class _Ctx:
             best = None
             cb = (cx - r, cy - r, cx + r, cy + r)
             for t in self._free_texts():
-                if t.id in self.text_net and t.id not in self.loose:
-                    continue
                 s = t.text.strip()
+                if t.id in self.text_net and t.id not in self.loose and not (WINDOW_LABEL_RE.match(s) or LAMP_LABEL_RE.match(s)):
+                    continue                          # a window or lamp name is never a wire label
                 if len(s) > 10:
                     continue
                 gx, gy = _gap(cb, t.bbox)
@@ -662,7 +776,8 @@ class _Ctx:
         cyc = [s for s, _side in drv_all if s in path]
         nodes = [self.node_for(s, nid, path + (s,)) for s, _side in drv]
         for s in cyc:
-            nodes.append({"cycle": True, "shape": s, "net": nid, "text_ids": []})
+            nodes.append({"cycle": True, "shape": s, "net": nid, "text_ids": [],
+                          "signal": self.txt(labels["signals"][0]) if labels["signals"] else None})
         if not nodes:
             boxes = [s for s, _side in self.shapes_on_net(nid) if self.info[s]["kind"] == "continuation"]
             if boxes:
@@ -715,6 +830,7 @@ class _Ctx:
                              "field_shape": inputs[0].get("shape"), "text_ids": _uniq(list(info["text_ids"]) + inputs[0].get("text_ids", []))})
                 leaf.pop("shape", None)
                 leaf.pop("signal", None)
+                leaf.pop("label", None)                   # the words of the field wire (1-5V) are not those of the module output
                 return leaf
             if not inputs:
                 return {"module": info["label"], "module_shape": shape_id, "net": out_net, "unlabelled_input": True,
@@ -776,8 +892,16 @@ class _Ctx:
             if info["fuse"]:
                 word = "link" if info["fuse"].upper().startswith("LINK") else "fuse"
                 return f"{word} {info['fuse']}" + (f" ({info['rating']})" if info["rating"] else "")
+            if _is_terminal_box(info):
+                # a terminal box: numbers inside, the cable number written beside it
+                nums = info["label"].split()
+                cab = self.cable_of_box(shape_id)
+                words = f"terminal{'s' if len(nums) > 1 else ''} {', '.join(nums)}"
+                return f"cable {cab} {words}" if cab else words
             near = " ".join(self.txt(i) for i in info["near"][:3])
-            base = info["label"] or (info["symbol"] or "symbol")
+            base = info["label"] or info["symbol"]
+            if not base:
+                return f"symbol ({near})" if near else "unnamed symbol"
             return f"symbol {base}" + (f" ({near})" if near and near != base else "")
         return "outline"
 
@@ -821,6 +945,364 @@ def _leaves(tree) -> list[dict]:
 
 def _short(s: str, n: int = 160) -> str:
     return s if len(s) <= n else s[: n - 3] + "..."
+
+
+# ----------------------------------------------------------------------------- converters drawn with numbered pins
+def _caption_groups(ctx: _Ctx, b, exclude: set) -> list[dict]:
+    """Stacked caption words inside box *b* ('24Vdc' over 'IN' -> '24Vdc IN'), top to bottom.
+
+    Pin numbers, polarity signs and the model name are left out; a caption is at most
+    three stacked texts that overlap in x and sit within 2.2 mm of each other.
+    """
+    items = []
+    for t in ctx.sheet.texts:
+        if t.frame or t.id in exclude or len(t.text.strip()) > 14:
+            continue
+        s = t.text.strip()
+        if PIN_NO_RE.match(s) or POLARITY_RE.match(s) or MODEL_RE.match(s) or BRAND_RE.match(s) or CONVERTER_RE.search(s):
+            continue
+        host = ctx.text_shape.get(t.id)
+        if host is not None and host in ctx.info and max(_size(ctx.info[host]["bbox"])) <= 6.5:
+            continue                                      # a pin name inside a pin box (SCN) is not a caption
+        cx, cy = _center(t.bbox)
+        if b[0] <= cx <= b[2] and b[1] <= cy <= b[3]:
+            items.append(t)
+    items.sort(key=lambda t: (-t.bbox[3], t.bbox[0]))
+    groups: list[dict] = []
+    for t in items:
+        placed = False
+        for g in groups:
+            gb = g["bbox"]
+            gap = gb[1] - t.bbox[3]
+            if len(g["texts"]) < 3 and -0.5 <= gap <= 2.2 and (_overlap_x(t.bbox, gb) > 0 or abs(_center(t.bbox)[0] - _center(gb)[0]) <= 4.0):
+                g["texts"].append(t)
+                g["bbox"] = (min(gb[0], t.bbox[0]), min(gb[1], t.bbox[1]), max(gb[2], t.bbox[2]), max(gb[3], t.bbox[3]))
+                placed = True
+                break
+        if not placed:
+            groups.append({"texts": [t], "bbox": tuple(t.bbox)})
+    for g in groups:
+        words = [t.text.strip() for t in g["texts"]]
+        rng = [w for w in words if w.upper() not in DIRECTION_WORDS]
+        dirn = [w.upper() for w in words if w.upper() in DIRECTION_WORDS]
+        g["caption"] = " ".join(rng + dirn[:1])
+        g["direction"] = dirn[0] if dirn else None
+        g["supply"] = any(SUPPLY_RE.match(w) for w in rng)
+        g["text_ids"] = [t.id for t in g["texts"]]
+    return groups
+
+
+def _converter_pins(ctx: _Ctx, sid: int) -> Optional[dict]:
+    """Pins of a converter symbol drawn with numbered pin boxes (loop drawings, typical loops).
+
+    Returns ``{shape, model, groups: [{side, caption, direction, supply, pins: [{pin, text, net,
+    side, polarity, polarity_text}]}], text_ids}`` or None when no numbered pin meets a wire.
+    Everything is read from the drawing: the pin numbers and the captions inside the box
+    (24Vdc IN, 1-5V IN, 4-20mA OUT), the polarity words beside the pins, and the wire that
+    ends at each pin.  A caption belongs to the side of the box whose pins it is written
+    next to; a side whose caption cannot be told apart gets none.
+    """
+    info = ctx.info.get(sid)
+    if not info or info["kind"] != "converter":
+        return None
+    b = info["bbox"]
+    sh = ctx.shape_by_id.get(sid) or {}
+    # pin boxes drawn as small squares on the outline (their wires end on the square, not on the outline)
+    pin_boxes = []
+    for o in ctx.info.values():
+        if o["id"] == sid or o["kind"] not in ("device", "label_box", "unknown"):
+            continue
+        if max(_size(o["bbox"])) > 6.5:
+            continue
+        gx, gy = _gap(b, o["bbox"])
+        if gx <= 1.0 and gy <= 1.0:
+            pin_boxes.append(o)
+    region = list(b)
+    for o in pin_boxes:
+        region = [min(region[0], o["bbox"][0]), min(region[1], o["bbox"][1]), max(region[2], o["bbox"][2]), max(region[3], o["bbox"][3])]
+    # wire ends on the box (or its pin boxes) whose wire leaves the region (the diagonal 'isolation' lines inside are not wires)
+    ports_ext = []
+    seen_ports: set[tuple] = set()
+    for p in list(sh.get("ports", [])) + [q for o in pin_boxes for q in ctx.shape_by_id.get(o["id"], {}).get("ports", [])]:
+        n = ctx.net_by_id.get(p["net"])
+        if n is None:
+            continue
+        nb = n.bbox
+        key = (p["net"], round(p["x"], 1), round(p["y"], 1))
+        if key in seen_ports:
+            continue
+        seen_ports.add(key)
+        if nb[0] < region[0] - 0.3 or nb[1] < region[1] - 0.3 or nb[2] > region[2] + 0.3 or nb[3] > region[3] + 0.3:
+            ports_ext.append(p)
+    if not ports_ext:
+        return None
+    # numbered pins: integer texts inside or just outside the box, matched to wire ends, nearest pairs first
+    cands = []
+    pin_box_ids = {o["id"] for o in pin_boxes}
+    for t in ctx.sheet.texts:
+        if t.frame:
+            continue
+        s = t.text.strip()
+        in_pin_box = ctx.text_shape.get(t.id) in pin_box_ids and len(s) <= 3 and not POLARITY_RE.match(s)
+        if not (PIN_NO_RE.match(s) or in_pin_box):
+            continue
+        cx, cy = _center(t.bbox)
+        if b[0] - 4.0 <= cx <= b[2] + 4.0 and b[1] - 4.0 <= cy <= b[3] + 4.0:
+            cands.append(t)
+    pairs = []
+    for t in cands:
+        for p in ports_ext:
+            gx = max(t.bbox[0] - p["x"], 0.0, p["x"] - t.bbox[2])
+            gy = max(t.bbox[1] - p["y"], 0.0, p["y"] - t.bbox[3])
+            d = math.hypot(gx, gy)
+            if d <= 3.5:
+                pairs.append((d, t, p))
+    pairs.sort(key=lambda x: x[0])
+    pins: list[dict] = []
+    used_texts: set[str] = set()
+    used_ports: set[tuple] = set()
+    for d, t, p in pairs:
+        pkey = (p["net"], round(p["x"], 1), round(p["y"], 1))
+        if t.id in used_texts or pkey in used_ports:
+            continue
+        used_texts.add(t.id)
+        used_ports.add(pkey)
+        cx, cy = _center(t.bbox)
+        edges = {"L": abs(cx - b[0]), "R": abs(cx - b[2]), "B": abs(cy - b[1]), "T": abs(cy - b[3])}
+        side = min(edges, key=edges.get)
+        pins.append({"pin": t.text.strip(), "text": t.id, "net": p["net"], "side": side, "bbox": tuple(t.bbox), "d": d,
+                     "polarity": None, "polarity_text": None})
+    if not pins:
+        return None
+    # polarity written beside each pin (-ve / +ve inside or outside the box), each word used once
+    pol_texts = [t for t in ctx.sheet.texts if not t.frame and POLARITY_RE.match(t.text.strip())]
+    ppairs = []
+    for r in pins:
+        for t in pol_texts:
+            gx, gy = _gap(r["bbox"], t.bbox)
+            d = math.hypot(gx, gy)
+            if d <= 6.0:
+                ppairs.append((d, r["text"], t))
+    ppairs.sort(key=lambda x: x[0])
+    taken: set[str] = set()
+    done: set[str] = set()
+    by_text = {r["text"]: r for r in pins}
+    for d, rid, t in ppairs:
+        if rid in done or t.id in taken:
+            continue
+        done.add(rid)
+        taken.add(t.id)
+        by_text[rid]["polarity"] = t.text.strip()
+        by_text[rid]["polarity_text"] = t.id
+    # captions per side of the box
+    exclude = {r["text"] for r in pins} | {r["polarity_text"] for r in pins if r["polarity_text"]}
+    groups = _caption_groups(ctx, b, exclude)
+    by_side: dict[str, list[dict]] = defaultdict(list)
+    for r in pins:
+        by_side[r["side"]].append(r)
+    for side, lst in by_side.items():
+        if side in ("L", "R"):
+            lst.sort(key=lambda r: (-r["bbox"][3], r["bbox"][0]))        # top to bottom
+        else:
+            lst.sort(key=lambda r: (r["bbox"][0], -r["bbox"][3]))        # left to right
+    cpairs = []
+    for side, lst in by_side.items():
+        ub = (min(r["bbox"][0] for r in lst), min(r["bbox"][1] for r in lst), max(r["bbox"][2] for r in lst), max(r["bbox"][3] for r in lst))
+        for gi, g in enumerate(groups):
+            gx, gy = _gap(ub, g["bbox"])
+            cpairs.append((math.hypot(gx, gy), side, gi))
+    cpairs.sort(key=lambda x: x[0])
+    side_caption: dict[str, int] = {}
+    used_groups: set[int] = set()
+    cap = max(12.0, 0.45 * max(_size(b)))                 # a caption may sit mid-box on a wide converter (P & F, 47 mm)
+    for d, side, gi in cpairs:
+        if side in side_caption or gi in used_groups or d > cap:
+            continue
+        side_caption[side] = gi
+        used_groups.add(gi)
+    model_words = [w.strip() for w in info["words"] if MODEL_RE.match(w.strip())]
+    brand = [w.strip() for w in info["words"] if BRAND_RE.match(w.strip())]
+    model = " ".join(brand[:1] + model_words[:1]) if model_words else None
+    order = {"T": 0, "L": 1, "R": 2, "B": 3}
+    out_groups = []
+    text_ids = [r["text"] for r in pins] + [r["polarity_text"] for r in pins if r["polarity_text"]]
+    for side in sorted(by_side, key=lambda s: order.get(s, 9)):
+        g = groups[side_caption[side]] if side in side_caption else None
+        out_groups.append({"side": side, "caption": g["caption"] if g else None, "direction": g["direction"] if g else None,
+                           "supply": bool(g["supply"]) if g else False, "caption_texts": list(g["text_ids"]) if g else [],
+                           "pins": [{k: r[k] for k in ("pin", "text", "net", "side", "polarity", "polarity_text")} for r in by_side[side]]})
+        if g:
+            text_ids += g["text_ids"]
+    return {"shape": sid, "model": model, "groups": out_groups, "text_ids": _uniq(text_ids + list(info["text_ids"]))}
+
+
+def _is_terminal_box(info: dict) -> bool:
+    """A small narrow box holding one to four terminal numbers (cable terminals on loop drawings)."""
+    if not info.get("label") or info.get("fuse") or not re.fullmatch(r"\d{1,2}(?: \d{1,2}){0,3}", info["label"]):
+        return False
+    w, h = _size(info["bbox"])
+    return max(w, h) <= 20.0 and min(w, h) <= 6.5
+
+
+def _name_beside(ctx: _Ctx, box, ptr_text: Optional[str]) -> Optional[str]:
+    """A signal name written in the row of a continuation box, just left or right of the box or its pointer
+    ('03TZT03052C' beside '051.255 3M' on 053), when none is written on the wire."""
+    anchors = [box] + ([ctx.texts[ptr_text].bbox] if ptr_text and ptr_text in ctx.texts else [])
+    best = None
+    for t in ctx.sheet.texts:
+        if t.frame or t.id in ctx.text_shape:
+            continue
+        s = t.text.strip().upper()
+        kinds = {i.kind for i in ctx.idents.get(t.id, [])}
+        if "tag" not in kinds and not TAG_LIKE_RE.match(s) and not ZERO_TAG_RE.match(s):
+            continue
+        for a in anchors:
+            gx, gy = _gap(a, t.bbox)
+            if gy == 0.0 and gx <= 4.0 and (best is None or gx < best[0]):
+                best = (gx, t.text.strip())
+    return best[1] if best else None
+
+
+def _counted(items: list[str]) -> list[str]:
+    """Unique words, repeated ones marked with their count ('AND gate (x2)' when a wire feeds two AND gates)."""
+    counts: dict[str, int] = {}
+    for it in items:
+        counts[it] = counts.get(it, 0) + 1
+    return [it if counts[it] == 1 else f"{it} (x{counts[it]})" for it in _uniq(items)]
+
+
+def _decorative_net(ctx: _Ctx, n: Net, shapes_here) -> bool:
+    """Strokes that are drawn as lines but are part of a symbol: the cross inside a lamp circle, the
+    isolation diagonals and pin stubs inside a converter box."""
+    bb = n.bbox
+    if bb[2] - bb[0] <= 3.0 and bb[3] - bb[1] <= 3.0:
+        for cx, cy, r, _h in ctx.sheet.circles:
+            if r <= 3.0 and cx - r - 0.1 <= bb[0] and bb[2] <= cx + r + 0.1 and cy - r - 0.1 <= bb[1] and bb[3] <= cy + r + 0.1:
+                return True
+    sids = _uniq([s for s, _side in shapes_here])
+    if len(sids) == 1 and ctx.info[sids[0]]["kind"] in ("converter", "device", "module", "unknown"):
+        sb = ctx.info[sids[0]]["bbox"]
+        if sb[0] - 0.3 <= bb[0] and bb[2] <= sb[2] + 0.3 and sb[1] - 0.3 <= bb[1] and bb[3] <= sb[3] + 0.3:
+            return True
+    return False
+
+
+def _strip_dir(caption: str) -> str:
+    words = caption.split()
+    if words and words[-1].upper() in DIRECTION_WORDS:
+        words = words[:-1]
+    return " ".join(words) or caption
+
+
+def _merge_terminals(dests: list[str]) -> list[str]:
+    """['cable 3/C735 terminal 1', 'cable 3/C735 terminal 2'] -> ['cable 3/C735 terminals 1, 2']."""
+    by_cable: dict[str, list[str]] = {}
+    rest: list[str] = []
+    for d in dests:
+        m = re.match(r"^(cable \S+ )?terminals? (.+)$", d)
+        if m:
+            by_cable.setdefault(m.group(1) or "", []).extend(x.strip() for x in m.group(2).split(","))
+        elif d not in rest:
+            rest.append(d)
+    out = [f"{c}terminal{'s' if len(_uniq(n)) > 1 else ''} {', '.join(_uniq(n))}" for c, n in by_cable.items()]
+    return out + rest
+
+
+def _pin_dests(ctx: _Ctx, sid: int, nid: int) -> list[str]:
+    """Symbols reached by the wire at a converter pin, terminal boxes named by the terminal the wire meets."""
+    dest = []
+    cb = ctx.info[sid]["bbox"]
+    for s, _side in ctx.shapes_on_net(nid):
+        if s == sid or ctx.info[s]["kind"] == "unknown":
+            continue
+        info = ctx.info[s]
+        gx, gy = _gap(cb, info["bbox"])
+        if max(_size(info["bbox"])) <= 6.0 and gx <= 1.0 and gy <= 1.0:
+            continue                                      # the converter's own pin box drawn on its outline
+        if info["kind"] == "device" and _is_terminal_box(info):
+            term = ctx.terminal_at(s, nid)
+            cab = ctx.cable_of_box(s)
+            if term:
+                dest.append((f"cable {cab} " if cab else "") + f"terminal {term}")
+                continue
+        dest.append(ctx.shape_words(s))
+    for c in ctx.net_circles.get(nid, []):
+        if c["label"] and c["kind"] != "circle":
+            dest.append(f"{c['kind']} {c['label']}")
+    dest = _uniq(dest)
+    named = [d for d in dest if d != "unnamed symbol"]
+    return named or dest
+
+
+def _pin_words(ctx: _Ctx, sid: int, r: dict, all_pins: list[dict]) -> str:
+    """What the wire at one converter pin carries and where it goes: labels on the wire and the symbols it reaches."""
+    lab = ctx.net_labels(r["net"])
+    pots = _uniq(ctx.txt(i).strip() for i in lab["potentials"])
+    cables = _uniq(ctx.txt(i).strip() for i in lab["cables"])
+    wires = _uniq(ctx.txt(i).strip() for i in lab["elco"] + lab["words"] if WIRE_NO_RE.match(ctx.txt(i).strip()))
+    others = _uniq(ctx.txt(i).strip() for i in lab["words"] + lab["signals"] if not POLARITY_RE.match(ctx.txt(i).strip()))
+    others = [w for w in others if w not in pots + wires + cables]
+    words = []
+    if pots:
+        words.append(", ".join(pots))
+    if wires:
+        words.append("wire " + ", ".join(wires))
+    if cables:
+        words.append(", ".join(cables))
+    if others:
+        words.append(", ".join(others[:3]))
+    s = ", ".join(words) if words else "unlabelled wire"
+    dest = _merge_terminals(_pin_dests(ctx, sid, r["net"]))
+    if dest:
+        s += " to " + "; ".join(dest)
+    shared = [p["pin"] for p in all_pins if p["net"] == r["net"] and p["text"] != r["text"]]
+    if shared:
+        s += f" (same wire as pin {', '.join(shared)})"
+    return s
+
+
+def _converter_note(ctx: _Ctx, sid: int, cp: dict, channel: Optional[dict] = None) -> tuple[str, list[str]]:
+    """Title and lines describing a numbered-pin converter from its captions, pins and wires."""
+    info = ctx.info[sid]
+    model = cp.get("model") or info["label"] or "converter"
+    sig = any("SIGNAL" in ctx.txt(i).upper() for i in list(info["near"]) + list(info["text_ids"]))
+    title = ("Signal converter " if sig else "Converter ") + model
+    groups = cp["groups"]
+    all_pins = [p for g in groups for p in g["pins"]]
+
+    def pins_of(g):
+        ps = [p["pin"] for p in g["pins"]]
+        return ("pin " if len(ps) == 1 else "pins ") + ", ".join(ps)
+
+    ins = [g for g in groups if g["caption"] and g["direction"] == "IN" and not g["supply"]]
+    outs = [g for g in groups if g["caption"] and g["direction"] == "OUT"]
+    sup = [g for g in groups if g["caption"] and g["supply"]]
+    plain = [g for g in groups if g["caption"] and not g["direction"] and not g["supply"]]
+    parts = []
+    if ins or plain:
+        parts.append("takes " + " and ".join(f"{_strip_dir(g['caption'])} in at {pins_of(g)}" for g in (ins or plain)))
+    for g in outs:
+        dests = _merge_terminals([d for p in g["pins"] for d in _pin_dests(ctx, sid, p["net"])])
+        parts.append(f"gives {_strip_dir(g['caption'])} out at {pins_of(g)}" + (" to " + "; ".join(dests) if dests else ""))
+    if sup:
+        parts.append("supply " + " and ".join(f"{_strip_dir(g['caption'])} at {pins_of(g)}" for g in sup))
+    lines = []
+    if parts:
+        lines.append(f"{title}: " + "; ".join(parts) + ".")
+    else:
+        lines.append(f"{title} with pins " + ", ".join(p["pin"] for p in all_pins) + ".")
+    if channel:
+        lines.append(f"Serves channel {channel.get('channel') or '?'} of position {channel['position']}"
+                     + (f": {channel['tag']}" if channel.get("tag") else "") + (f" {channel['desc']}" if channel.get("desc") else "")
+                     + (f", wire {channel['wire']}" if channel.get("wire") else "") + ".")
+    for g in groups:
+        for p in g["pins"]:
+            head = f"Pin {p['pin']}"
+            tags = [x for x in (g["caption"], p["polarity"]) if x]
+            if tags:
+                head += " (" + ", ".join(tags) + ")"
+            lines.append(f"{head}: {_pin_words(ctx, sid, p, all_pins)}.")
+    return title, lines
 
 
 # ----------------------------------------------------------------------------- FLD logic
@@ -872,7 +1354,7 @@ def _fld_logic(ctx: _Ctx) -> list[dict]:
                 feeds.append({"shape": None, "kind": c["kind"], "label": f"{c['kind']} {c['label']}".strip(), "side": None})
             labels = ctx.net_labels(nid)
             e = dict(base, kind="incoming", from_sheet=ptr["sheet"] if ptr else None, feeds=feeds,
-                     signal=ctx.txt(labels["signals"][0]) if labels["signals"] else None,
+                     signal=ctx.txt(labels["signals"][0]) if labels["signals"] else _name_beside(ctx, info["bbox"], ptr["text"] if ptr else None),
                      link_in=(ctx.links_in_by_text.get(info["text_ids"][0]) or {}).get("id") if info["text_ids"] else None)
             if not feeds:
                 e["note"] = "the wire from this box reaches no symbol on this sheet"
@@ -905,6 +1387,14 @@ def _fld_logic(ctx: _Ctx) -> list[dict]:
             entries.append(finish(e, tree))
             if dev:
                 e["expr"] = f"{e['expr']} -> {dev['tag']}" + (f" ({dev['desc']})" if dev.get("desc") else "")
+            in_exprs = [expr_of(i) for i in tree["inputs"]]
+            prose = f"{info['label'] or 'The'} converter" + (f" fed by {', '.join(in_exprs)}" if in_exprs else " with no input wire drawn")
+            if dev:
+                prose += f" drives {dev['tag']}" + (f" ({dev['desc']})" if dev.get("desc") else "") + (f" with {' '.join(out_words)}" if out_words else "") \
+                    + (f", cable {dev['cable']}" if dev.get("cable") else "") + (f" terminals {dev['terminals']}" if dev.get("terminals") else "")
+            elif out_words:
+                prose += f"; its output wire is labelled {' '.join(out_words)}"
+            e["prose"] = prose + "."
 
     # process device tags fed by logic (through output modules and relay amplifiers)
     for sid, info in ctx.info.items():
@@ -917,6 +1407,7 @@ def _fld_logic(ctx: _Ctx) -> list[dict]:
         tree = ctx.source(nid)
         via = []
         _walk(tree, lambda n: via.append(n["op"]) if n.get("kind") in ("module", "device") and n.get("op") else None)
+        via.reverse()                                     # drawing order: logic -> output module -> relay amplifier -> device
         e = {"output": dev["tag"], "kind": "other", "output_kind": "process_device", "shape": sid, "net": nid, "device": dev,
              "dest_sheet": None, "link": None, "via": via, "text_ids": list(dev["text_ids"]), "shape_ids": [sid], "net_ids": [nid]}
         entries.append(finish(e, tree))
@@ -995,15 +1486,18 @@ def _fld_inputs(ctx: _Ctx, logic: list[dict]) -> list[dict]:
                    "location": leaf["location"], "shape": sid, "net": leaf["net"], "text_ids": leaf["text_ids"]}
         else:
             continue
-        # the module reading this device and its software signals
+        # the module reading this device and its software signals (a keyswitch has one wire per contact)
         modules, signals, feeds = [], [], []
-        if rec["net"] is not None:
-            for s, side in ctx.sinks(rec["net"]):
+        contact_nets = _uniq([n for n in ([rec["net"]] if rec["net"] is not None else []) + list(info["ports"]["R"]) if n is not None])
+        for cn in contact_nets:
+            for s, side in ctx.sinks(cn):
                 if ctx.info[s]["kind"] == "module":
+                    if any(m["shape"] == s for m in modules):
+                        continue
                     modules.append({"shape": s, "label": ctx.info[s]["label"]})
                     for on in ctx.output_nets(s):
                         lab = ctx.net_labels(on)
-                        sig = " ".join(ctx.txt(i) for i in lab["limits"] + lab["signals"])
+                        sig = " ".join(ctx.txt(i) for i in lab["limits"] + lab["signals"] + [w for w in lab["words"] if len(ctx.txt(w)) <= 12][:1])
                         signals.append(sig if sig else "(no signal name written)")
                 elif ctx.info[s]["kind"] in ("gate", "timer", "converter"):
                     feeds.append(ctx.shape_words(s))
@@ -1058,8 +1552,13 @@ def _loop_channels(ctx: _Ctx) -> list[dict]:
         ch = _below_header(ctx, ch_hdr[0], re.compile(r"^\d{1,2}$")) if ch_hdr else []
         pin_hdrs = [t for t in texts if re.fullmatch(r"PINS?", t.text.strip().upper()) and abs(t.bbox[1] - hp.bbox[1]) <= 1.5 and abs(t.bbox[0] - hp.bbox[0]) <= 45]
         pins = []
+        pin_ids = []
+        pins_ch, pins_sup = [], []                       # PIN column: the channel's own pins; PINS column: the card supply pins
         for ph in pin_hdrs:
-            pins.extend(x.text.strip() for x in _below_header(ctx, ph, PIN_RE))
+            for x in _below_header(ctx, ph, PIN_RE):
+                pins.append(x.text.strip())
+                pin_ids.append(x.id)
+                (pins_ch if ph.text.strip().upper() == "PIN" else pins_sup).append(x.text.strip())
         # the module heading above the table
         mods = [t for t in texts if MODULE_RE.match(t.text.strip()) and t.bbox[1] >= hp.bbox[3] - 0.5 and t.bbox[1] - hp.bbox[3] <= 12 and abs(_center(t.bbox)[0] - _center(hp.bbox)[0]) <= 40]
         mod = mods[0].text.strip() if mods else None
@@ -1075,8 +1574,10 @@ def _loop_channels(ctx: _Ctx) -> list[dict]:
         tags.sort(key=lambda t: (t.bbox[0], -t.bbox[3]))
         tag = tags[0] if tags else None
         rec = {"position": pos[0].text.strip(), "channel": ch[0].text.strip() if ch else None, "module": mod,
-               "pins": pins, "tag": tag.text.strip() if tag else None, "desc": "", "cable": None, "wire": None,
-               "potentials": [], "plug": None, "text_ids": [hp.id, pos[0].id] + ([ch[0].id] if ch else []) + ([tag.id] if tag else []) + ([mods[0].id] if mods else [])}
+               "pins": _uniq(pins), "pins_ch": _uniq(pins_ch), "pins_sup": _uniq(pins_sup),
+               "tag": tag.text.strip() if tag else None, "desc": "", "cable": None, "wire": None,
+               "potentials": [], "plug": None, "module_shape": ctx.text_shape.get(hp.id), "converter": None,
+               "text_ids": [hp.id, pos[0].id] + ([ch[0].id] if ch else []) + ([tag.id] if tag else []) + ([mods[0].id] if mods else []) + pin_ids}
         if tag:
             desc = [t for t in texts if t.bbox[3] <= tag.bbox[1] + 0.3 and tag.bbox[1] - t.bbox[3] <= 9 and _overlap_x(t.bbox, tag.bbox) > -5
                     and not ctx.idents.get(t.id) and not LOOP_TYPE_RE.search(t.text)]
@@ -1104,8 +1605,30 @@ def _loop_channels(ctx: _Ctx) -> list[dict]:
             if re.fullmatch(r"Z\d{4}", t.text.strip()):
                 rec["plug"] = t.text.strip()
         rec["potentials"] = sorted(_uniq(rec["potentials"]))
+        rec["cell"] = [round(v, 2) for v in cell]
         out.append(rec)
     out.sort(key=lambda r: (r["position"], int(r["channel"]) if r["channel"] and r["channel"].isdigit() else 99))
+    # signal converters wired into a channel (ISOCON / VCON boxes with numbered pins): matched by the
+    # channel wire number written on one of their wires, else by the cell they are drawn in
+    for sid, info in ctx.info.items():
+        if info["kind"] != "converter":
+            continue
+        cp = ctx.converter(sid)
+        if not cp:
+            continue
+        labels = set()
+        for g in cp["groups"]:
+            for p in g["pins"]:
+                labels.update(ctx.txt(i).strip() for i in ctx.net_labels(p["net"])["text_ids"])
+        match = next((r for r in out if r.get("wire") and r["wire"] in labels), None)
+        if match is None:
+            cx, cy = _center(info["bbox"])
+            match = next((r for r in out if r["cell"][0] <= cx <= r["cell"][2] and r["cell"][1] - 15 <= cy <= r["cell"][3]), None)
+        if match is None:
+            continue
+        _title, lines = _converter_note(ctx, sid, cp)
+        match["converter"] = {"shape": sid, "model": cp.get("model") or info["label"], "line": lines[0], "text_ids": list(cp["text_ids"])}
+        ctx.conv_channel[sid] = match
     return out
 
 
@@ -1146,8 +1669,12 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
         length = sum(math.hypot(ctx.segs[i].x2 - ctx.segs[i].x1, ctx.segs[i].y2 - ctx.segs[i].y1) for i in n.segments if i in ctx.segs)
         if not labels["text_ids"] and not shapes_here and not circles and length < 5.0:
             continue
+        if _decorative_net(ctx, n, shapes_here):
+            continue
         lines: list[str] = []
         title = ""
+        caption_ids = {i for i in labels["words"] if ctx.txt(i).strip().upper() in CAPTION_WORDS}
+        labels["words"] = [i for i in labels["words"] if i not in caption_ids]
         sig = " ".join(ctx.txt(i) for i in labels["limits"] + labels["signals"][:1])
         if sig:
             title = sig
@@ -1165,7 +1692,7 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
             title = ctx.txt(labels["words"][0])
         else:
             title = "unlabelled wire"
-        all_labels = [ctx.txt(i) for i in labels["text_ids"]]
+        all_labels = [ctx.txt(i) for i in labels["text_ids"] if i not in caption_ids]
         if all_labels:
             lines.append("Labels on this wire: " + ", ".join(_uniq(all_labels)) + ".")
         else:
@@ -1174,7 +1701,10 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
         drv = ctx.drivers(n.id) if ctx.kind == "fld" else []
         if drv:
             tree = ctx.source(n.id)
-            if "op" in tree:
+            if "op" in tree and tree.get("kind") == "converter":
+                ins = [expr_of(i) for i in tree.get("inputs") or []]
+                lines.append(f"Output of the {tree['op']} converter" + (f" fed by {', '.join(ins)}" if ins else "") + ".")
+            elif "op" in tree:
                 lines.append("Logic: " + _short(expr_of(tree), 220) + ".")
             elif tree.get("incoming"):
                 pass
@@ -1186,15 +1716,22 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
             elif tree.get("tag"):
                 lines.append(f"Field signal from {tree['tag']}" + (f" {tree['desc']}" if tree.get("desc") else "") + (f" ({tree['label']})" if tree.get("label") else "") + ".")
             leaf_words = []
-            for leaf in _leaves(tree)[:8]:
+            for leaf in _leaves(tree):
                 if leaf.get("tag") and leaf.get("module") and "op" in tree:
                     leaf_words.append(f"{leaf['tag']}" + (f" ({leaf['desc']})" if leaf.get("desc") else "") + f" via {leaf['module']}")
                 elif leaf.get("incoming") and "op" in tree:
                     leaf_words.append(f"{leaf['signal']} arriving from sheet {leaf.get('from_sheet')}")
+            leaf_words = _uniq(leaf_words)
             if leaf_words:
-                lines.append("Field origin: " + "; ".join(_uniq(leaf_words)) + ".")
+                shown = leaf_words[:8]
+                more = f"; and {len(leaf_words) - 8} more" if len(leaf_words) > 8 else ""
+                lines.append("Field origin: " + "; ".join(shown) + more + ".")
         goes = []
+        seen_sinks: set[int] = set()
         for s, side in ctx.sinks(n.id):
+            if s in seen_sinks:
+                continue                                                 # one symbol, several wire ends
+            seen_sinks.add(s)
             k = ctx.info[s]["kind"]
             if k == "continuation":
                 ptr = ctx.pointer_of(s)
@@ -1204,6 +1741,8 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
                     lines.append(f"Arrives from sheet {ptr['sheet']} as signal {ctx.info[s]['label']} (pointer {ptr['pointer']})." if ptr else f"Starts at continuation box {ctx.info[s]['label']}.")
             elif k == "device" and ctx.info[s]["fuse"]:
                 continue
+            elif k == "converter" and ctx.converter(s):
+                continue                                                 # named below, by pin
             else:
                 goes.append(ctx.shape_words(s) + (f" ({side} side)" if k in ("module", "device", "label_box") else ""))
         for c in circles:
@@ -1211,7 +1750,16 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
                 continue
             goes.append(f"{c['kind']} {c['label']}" if c["kind"] != "circle" else f"symbol {c['label']} (circle)")
         if goes:
-            lines.append(("Goes to: " if ctx.kind == "fld" else "Connected to: ") + "; ".join(_uniq(goes)) + ".")
+            lines.append(("Goes to: " if ctx.kind == "fld" else "Connected to: ") + "; ".join(_counted(goes)) + ".")
+        # converter pins this wire ends at (numbered-pin converters)
+        for s in _uniq([s for s, _side in shapes_here]):
+            cp = ctx.converter(s) if ctx.info[s]["kind"] == "converter" else None
+            if not cp:
+                continue
+            here = [(g, p) for g in cp["groups"] for p in g["pins"] if p["net"] == n.id]
+            if here:
+                words = [f"{p['pin']} ({', '.join(x for x in (g['caption'], p['polarity']) if x)})" if (g["caption"] or p["polarity"]) else p["pin"] for g, p in here]
+                lines.append(f"Ends at {ctx.shape_words(s)} pin{'s' if len(words) > 1 else ''} " + ", ".join(words) + ".")
         # fuses and links
         for s, side in shapes_here:
             info = ctx.info[s]
@@ -1282,7 +1830,7 @@ def _near_pin_texts(ctx: _Ctx, n: Net, tol: float = 4.5) -> list[str]:
         cap = []
         cy = _center(t.bbox)[1]
         for c in ctx.sheet.texts:
-            if c.frame or c is t or len(c.text) < 4 or c.bbox[2] > t.bbox[0] or t.bbox[0] - c.bbox[2] > 70:
+            if c.frame or c is t or len(c.text.strip()) < 6 or c.text.strip().startswith("(") or c.bbox[2] > t.bbox[0] or t.bbox[0] - c.bbox[2] > 70:
                 continue
             if abs(_center(c.bbox)[1] - cy) <= 10.0 and not ctx.idents.get(c.id):
                 cap.append(c)
@@ -1339,15 +1887,17 @@ def _sheet_summary(ctx: _Ctx, logic: list[dict], inputs: list[dict], channels: l
         ann = [e for e in logic if e["kind"] == "annunciator"]
         dvs = [e for e in logic if e["kind"] == "dv"]
         inc = [e for e in logic if e["kind"] == "incoming"]
+        windows = sum(2 if "&" in str(e["output"]) else 1 for e in ann)      # 'W51 & 52' is one lamp for two windows
         summary = (f"Functional logic diagram {sid} ({title}). It reads {len(inputs)} field inputs and produces "
-                   f"{len(cont)} continuation signals to other sheets, {len(conv)} analogue outputs through converters, "
-                   f"{len(dev)} process device outputs and {len(ann)} annunciator windows; {len(dvs)} DeltaV Modbus points are tapped. "
-                   f"{len(inc)} signals arrive from other sheets.")
+                   f"{len(cont)} continuation signals to other sheets, {len(conv) + len(dev)} process device outputs "
+                   f"({len(conv)} through converters, {len(dev)} through output modules) and {windows} annunciator windows"
+                   f"{f' on {len(ann)} lamp symbols' if windows != len(ann) else ''}; {len(dvs)} DeltaV Modbus points are tapped. "
+                   f"{len(_uniq([e['output'] for e in inc]))} signals arrive from other sheets.")
         for e in cont:
             facts.append(f"Output {e['output']} -> sheet {e.get('dest_sheet') or '?'}: {_short(e['expr'])}" + (f" (link {e['link_status']})" if e.get("link_status") else ""))
         for e in conv + dev:
             d = e.get("device") or {}
-            facts.append(f"Output {e['output']}" + (f" ({d.get('desc')})" if d.get("desc") else "") + f": {_short(e['expr'])}")
+            facts.append(f"Output {e['output']}" + (f" ({d.get('desc')})" if d.get("desc") else "") + f": {_short(e.get('prose') or e['expr'], 220)}")
         for e in ann:
             facts.append(f"Annunciator {e['output']}: {_short(e['expr'])}")
         for e in inc:
@@ -1364,8 +1914,11 @@ def _sheet_summary(ctx: _Ctx, logic: list[dict], inputs: list[dict], channels: l
     elif kind in ("card", "power"):
         fuses = _fuse_facts(ctx)
         card = re.search(r"CARD\s+(\d{3,4})", title.upper())
-        head = f"Distribution card {card.group(1)}" if card else "Power distribution sheet"
-        summary = f"{head} {sid} ({title}): {len(fuses)} fuses or links are drawn."
+        head = f"Distribution card {card.group(1)}, sheet {sid}" if card else f"Power distribution sheet {sid}"
+        n_links = sum(1 for f in fuses if f["name"].upper().startswith("LINK"))
+        n_fuses = len(fuses) - n_links
+        drawn = " and ".join(p for p in ([f"{n_fuses} fuse{'s' if n_fuses != 1 else ''}"] if n_fuses else []) + ([f"{n_links} link{'s' if n_links != 1 else ''}"] if n_links else []))
+        summary = f"{head} ({title}): {drawn or 'no fuses'} drawn."
         for f in fuses:
             s = f"{'Link' if f['name'].upper().startswith('LINK') else 'Fuse'} {f['name']}" + (f" ({f['rating']})" if f["rating"] else "")
             if f["supply"]:
@@ -1392,10 +1945,14 @@ def _sheet_summary(ctx: _Ctx, logic: list[dict], inputs: list[dict], channels: l
                 s += f", wire {c['wire']}"
             if c.get("cable"):
                 s += f", cable {c['cable']}"
-            if c.get("pins"):
+            if c.get("pins_ch") and c.get("pins_sup"):
+                s += f", channel pins {'/'.join(c['pins_ch'])}, supply pins {'/'.join(c['pins_sup'])}"
+            elif c.get("pins"):
                 s += f", pins {'/'.join(c['pins'])}"
             if c.get("potentials"):
                 s += f", supply {', '.join(c['potentials'])}"
+            if c.get("converter"):
+                s += ". " + c["converter"]["line"].rstrip(".")
             facts.append(s + ".")
         if not channels and tags:
             facts.append("Tags: " + ", ".join(tags) + ".")
@@ -1497,8 +2054,8 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
         elif e["kind"] == "converter":
             d = e.get("device") or {}
             title = f"{e['output']} output"
-            lines = [f"Analogue output through {ctx.info[e['shape']]['label']}: {e['expr']}."]
-            if e.get("signal_in") or e.get("signal_out"):
+            lines = [e.get("prose") or f"Analogue output through {ctx.info[e['shape']]['label']}: {e['expr']}."]
+            if (e.get("signal_in") or e.get("signal_out")) and not e.get("prose"):
                 lines.append(f"Converter input {e.get('signal_in') or '?'}, output {e.get('signal_out') or '?'}.")
             if d.get("cable"):
                 lines.append(f"Cable {d['cable']}" + (f", terminals {d['terminals']}" if d.get("terminals") else "") + ".")
@@ -1521,7 +2078,7 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
         if e.get("pointer_text"):
             own.append(e["pointer_text"])
         d = e.get("device") or {}
-        own += d.get("text_ids", [])[:1]
+        own += d.get("text_ids", [])                      # the tag, its caption lines, cable and terminal texts
         for tid in own:
             add(tid, title, lines)
         if e.get("taps") and e["kind"] in ("continuation", "converter", "other", "annunciator"):
@@ -1544,11 +2101,35 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
             for sid in e.get("shape_ids", []):
                 in_entries[sid].append(e["output"])
     for sid, info in ctx.info.items():
-        if info["kind"] not in ("gate", "timer", "converter") or not info["text_ids"]:
+        if info["kind"] == "converter":
+            cp = ctx.converter(sid)
+            if cp:
+                title, lines = _converter_note(ctx, sid, cp, ctx.conv_channel.get(sid))
+                if in_entries.get(sid):
+                    lines.append("Takes part in: " + ", ".join(_uniq(in_entries[sid])) + ".")
+                for tid in _uniq(list(cp["text_ids"]) + list(info["near"])):
+                    add(tid, title, lines)
+                continue
+            if ctx.kind != "fld":
+                # a converter drawn without numbered pins outside a logic diagram (layout sheets): no logic to tell
+                for tid in info["text_ids"]:
+                    add(tid, ctx.shape_words(sid), ["Converter drawn without numbered pins; no wiring can be read for it on this sheet."])
+                continue
+        if info["kind"] not in ("gate", "timer", "converter") or not info["text_ids"] or ctx.kind != "fld":
             continue
         outs = ctx.output_nets(sid)
         node = ctx.node_for(sid, outs[0] if outs else None, (sid,))
-        lines = [f"Logic: {_short(expr_of(node), 300)}."]
+        ins = [_short(expr_of(i), 140) for i in node.get("inputs") or []]
+        if info["kind"] == "converter" and all(t in notes for t in info["text_ids"]):
+            lines = []                                    # the logic entry already described this converter's output
+        elif info["kind"] == "converter":
+            lines = [f"{info['label']} converter" + (f" fed by {', '.join(ins)}" if ins else " with no input wire drawn") + "."]
+        elif info["kind"] == "timer":
+            lines = [f"Timer {info['label']}: input " + (", ".join(ins) if ins else "<no input drawn>") + "."]
+        elif ins:
+            lines = [f"{info['label']} gate of {len(ins)} input{'s' if len(ins) != 1 else ''}: " + "; ".join(ins) + "."]
+        else:
+            lines = [f"{info['label']} gate with no input drawn."]
         goes = []
         for on in outs:
             for s, _side in ctx.sinks(on):
@@ -1595,7 +2176,9 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
         if c.get("desc"):
             lines.append(f"Service: {c['desc']}.")
         if c.get("module"):
-            lines.append(f"Module {c['module']}, position {c['position']}, channel {c.get('channel') or '?'}" + (f", pins {'/'.join(c['pins'])}" if c.get("pins") else "") + ".")
+            pin_words = (f", channel pins {'/'.join(c['pins_ch'])}, supply pins {'/'.join(c['pins_sup'])}" if c.get("pins_ch") and c.get("pins_sup")
+                         else (f", pins {'/'.join(c['pins'])}" if c.get("pins") else ""))
+            lines.append(f"Module {c['module']}, position {c['position']}, channel {c.get('channel') or '?'}{pin_words}.")
         if c.get("wire"):
             lines.append(f"Wire number {c['wire']} (card position / channel).")
         if c.get("cable"):
@@ -1604,6 +2187,8 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
             lines.append("Supply: " + ", ".join(c["potentials"]) + ".")
         if c.get("plug"):
             lines.append(f"I/O plug {c['plug']}.")
+        if c.get("converter"):
+            lines.append(c["converter"]["line"])
         for tid in c["text_ids"]:
             add(tid, title, lines)
     # typical loop pointers

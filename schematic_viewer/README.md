@@ -114,6 +114,10 @@ The viewer explains the drawings in words, using only what is drawn:
   loop type, cable and terminals, the module that reads it and the logic it takes
   part in; for a wire the potential it carries, the fuse it comes from and the
   devices it touches; for other words the meaning from the drawing glossary.
+  On the loop drawings a signal converter is read from its pin captions, for
+  example "Signal converter ISOCON-6-20: takes 1-5V in at pins 4, 5; gives
+  4-20mA out at pins 12, 10 to cable 3/C735 terminals 1, 2; supply 24Vdc at
+  pins 1, 2", followed by one line per pin and the channel it serves.
   "Written on" rows list every other sheet the same identifier appears on.
 * **Explain sheet** (toolbar button, or **E**): a summary of the sheet and, on the
   functional logic diagrams, one row per output signal with its cause-to-effect

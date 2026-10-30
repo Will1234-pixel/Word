@@ -139,11 +139,15 @@ derived from geometry and text; nothing is inferred about plant behaviour.
   caption, loop type, cable, terminals and input module.
 * Conductors: potential, fuse of origin and rating, devices touched, pointers
   leaving the sheet, sheet context (card number).
-* Loop drawings: channel tables (position, channel, pins, wire number, supply
-  wires, plug) read from the drawn tables.
+* Loop drawings: channel tables (position, channel, channel pins, supply pins,
+  wire number, supply wires, plug) read from the drawn tables. A signal
+  converter drawn with numbered pins (ISOCON, VCON, P & F) is described from
+  its own captions: "takes 1-5V in at pins 4, 5; gives 4-20mA out at pins 12,
+  10 to cable 3/C735 terminals 1, 2; supply 24Vdc at pins 1, 2", one line per
+  pin with the wire's labels and destination, and the channel it serves.
 * Dossier: 1262 identifiers across the set with their role on every sheet
   (FLD field device, loop drawing channel, ELCO schedule row, annunciator
-  window, power feed, card output ...) and the captions around them.
+  window, power feed, card output wire ...) and the captions around them.
 * Glossary: 158 terms; each entry names its evidence (a sheet, "ISA 5.1
   convention" or "standard abbreviation").
 
@@ -174,3 +178,42 @@ through the same rules and produces verified pointer links, but offers no wire t
   device, not a wire), so tracing *through* a device is left to the engineer.
 * **ELCO schedules and loop drawings** are tables; their "wires" are short and mostly
   meaningless, so navigation there relies on identifiers and search.
+
+## 6. Adversarial verification of the explanations
+
+Sixteen independent reviews (two per sheet: logic and signal flow; conductors,
+devices and identifiers) were run against the rendered pages of sheets 051,
+052, 053, 035, 045, 075, 099 and 040 with the instruction to refute every
+generated statement. Each finding quotes the generated text and the drawing
+evidence. Root causes found and fixed:
+
+| Finding | Sheets | Fix |
+|---|---|---|
+| Signal names on module output wires were given to the nearest wire, not to the wire whose label flag (tick) points at them: 3D, 3M, 3N and window W08 carried the wrong 03TZA03052x name | 051 | a wire whose free end stops in line with a one-word label owns it (also fixes 1L-1 / 1L+1 and 1L-6 / 1L+6 on 075 and 085) |
+| Tags typed with zeros for the letter O (03Z003578, 03Z003599, 03EZ003415) were not recognised, so the fifth output of 052 and the MIXED ACID SOV block of 053 were missing | 052, 053 | tag-shaped texts with zeros are treated as tags (the text is kept exactly as drawn) |
+| Loop-drawing converters were described as a logic gate with ten unlabelled inputs and a label soup | 075 to 086, 070, 143 | pin captions, pins, polarity words and the wires at each pin are read (section 3b) |
+| Stacked captions at a wire end were cut to their last line: "XG.3" for "L+ FROM XG.3", "XG.11" for "(1L-) 043.280 XG.11", nothing for "PANEL EARTH" | 043 to 050 | lines stacked over an attached label belong to the same wire |
+| A keyswitch with two contacts was reported with one module and one signal | 052, 053 | every contact wire of a console device is followed |
+| "loops back to shape 28" in feedback logic; a wire feeding two AND gates listed one; field origins truncated silently | 052, 053, 051 | "feedback from 03ZO03111", "AND gate (x2)", "and 4 more" |
+| Lamp crosses and converter diagonals listed as unlabelled wires; "CONTROL ROOM", "P/B", "K/S" reported as wire labels | 051, 075 | strokes inside a symbol are not conductors; device captions are not labels |
+| "0 process device outputs" beside a PROCESS DEVICE TAG column of seven; "W51 & 52" counted once; "4 fuses or links" for four fuses | 051, 045 | wording and counts follow the drawing's own terms |
+| Glossary: XG.3 called panel earth (it is "L+ FROM XG.3", the supply of the fuse evaluation logic); Q read as density (pH on 052); dossier roles "card output" for the terminals where the feed enters | 043 to 050, 052 | entries corrected, roles split into supply terminal and output wire |
+
+Confirmed correct by the reviewers: the 3B, 3P, 3A and 03ZO0300x logic trees,
+the incoming signals and their pointers, the loop channel tables of 075, the
+fuse supply sides and ratings of 035 and 045, the converter outputs of 051.
+
+Still open, reported but not changed:
+
+* Card sheets 043 to 050: the fuse evaluation logic block and the backplane
+  z2-pin feed of each fused output are not explained; the explanation stops at
+  the labelled destinations.
+* Loop drawings: the wire from the field terminal and the module pin stub are
+  separated by the I/O plug symbol, so "1101/1 lands on z4" is not stated.
+* Cross-document conflicts are not flagged automatically (3L is written
+  03FZA03066B on 053 and 03FZA03006B on 051; the ELCO schedule lists W09 and
+  W10 as spare while the FLD drives them; 03FZRT0310 is a probable typo for
+  03FZRT03010).
+* A signal consumed twice on one sheet (3P on 053) shows as "link multiple".
+* Dossier wording for tag letters comes from the glossary and can mislabel a
+  device type (a pH switch described through the Q letter).

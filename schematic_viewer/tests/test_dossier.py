@@ -249,7 +249,7 @@ def test_dossier_field_tag_03FZT03002(dossier):
     fld = by_sheet["051"]
     assert fld["role"] == "FLD field device"
     assert {"Nitric Acid", "LOOP TYPE AI1", "column FIELD", "same row: cable 3/C650 cores 1 & 2", "wired to box ANALOG I/P / F6217"} <= set(fld["context"])
-    assert any(c.startswith("box output wire labelled 03FZA03002") and "AND" in c for c in fld["context"])
+    assert any(c.startswith("other wire of that box labelled 03FZA03002") and "AND" in c for c in fld["context"])
     loop = by_sheet["075"]
     assert loop["role"] == "loop drawing channel"
     assert {"69% NITRIC ACID", "LOW FLOW", "position 1101 channel 1", "wire number 1101/1", "cable 3/C650",
@@ -319,7 +319,7 @@ def test_dossier_card_and_loop_supply_wires(dossier):
     t = dossier["terminal:1L+1"]
     assert t["title"].startswith("1L+1: 24 V dc wire 1L+1")
     card = [e for e in t["entries"] if e["sheet"] == "043"]
-    assert card and card[0]["role"] == "card output" and "1101:d30" in card[0]["context"]
+    assert card and card[0]["role"] == "card output wire" and "1101:d30" in card[0]["context"]
     loops = [e for e in t["entries"] if e["sheet"] == "075"]
     assert len(loops) == 3 and {c for e in loops for c in e["context"] if c.startswith("loop of")} == {"loop of 03FZT03002", "loop of 03FZT03004", "loop of 03FZT03006"}
     wire = dossier["elco:1101/1"]
@@ -346,7 +346,7 @@ def test_dossier_uses_only_drawing_texts(dossier, records):
     """Every context item is a drawing text, a group of drawing texts, or a
     labelled statement whose words all come from the sheet."""
     words = {sid: {t.text for t in rec.data.texts} for sid, rec in records.items()}
-    prefixes = ("column ", "same row", "wire from symbol labelled ", "wired to box ", "box output wire", "on wire with ",
+    prefixes = ("column ", "same row", "wire from symbol labelled ", "wired to box ", "other wire of that box", "on wire with ",
                 "on a wire with no other label", "wire reaches ", "pointer ", "module ", "position ", "channel pins ",
                 "supply pins ", "wire number ", "cable ", "supply wires ", "converter ", "loop of ", "other tags",
                 "label of ", "TERM ", "PIN ", "CONTROLS ", "ESD ")

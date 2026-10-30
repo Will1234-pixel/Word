@@ -919,7 +919,10 @@ def _role(view: _SheetView, t: TextItem, ident: Ident) -> str:
         return {"potential": "power feed", "terminal": "power feed terminal", "link": "power distribution fuse / link",
                 "cable": "power supply cable", "connector": "power feed to card"}.get(kind, "power distribution")
     if k == "card":
-        return {"terminal": "card output", "potential": "card feed", "elco": "card output pin", "connector": "card position",
+        if kind == "terminal":
+            # XG terminals are where the feeds and the return enter the card; nL+k / nL-k wires are its outputs
+            return "card supply terminal" if t.text.strip().upper().startswith("XG") else "card output wire"
+        return {"potential": "card feed", "elco": "I/O card pin fed from this card", "connector": "I/O card position fed from this card",
                 "link": "card link"}.get(kind, "card wiring")
     if k == "psu":
         return "PSU wiring"
@@ -978,9 +981,9 @@ def _entry_context(view: _SheetView, t: TextItem, ident: Ident, role: str) -> li
                     add(f"wired to box {_fmt_lines(box['lines'])}")
                 for o in box["out"]:
                     if o["labels"]:
-                        add(f"box output wire labelled {_fmt_lines(o['labels'])}" + (f" reaching {', '.join(o['reaches'])}" if o["reaches"] else ""))
+                        add(f"other wire of that box labelled {_fmt_lines(o['labels'])}" + (f" reaching {', '.join(o['reaches'])}" if o["reaches"] else ""))
                     elif o["reaches"]:
-                        add(f"box output wire (unlabelled) reaching {', '.join(o['reaches'])}")
+                        add(f"other wire of that box (unlabelled) reaching {', '.join(o['reaches'])}")
         if ident.kind in ("dv", "window", "signal", "potential", "terminal") or (ident.kind == "tag" and (not col or col["name"] not in ("FIELD", "PROCESS DEVICE TAG No.", "ANNUN/CONSOLE"))):
             nid, labels = view.net_labels(t.id)
             if nid is not None:
