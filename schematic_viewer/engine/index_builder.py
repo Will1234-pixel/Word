@@ -396,6 +396,7 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
         if L.dst_sheet and L.dst_text:
             links_in[L.dst_sheet].append({"id": L.id, "from_sheet": L.src_sheet, "from_text": L.src_text, "to_text": L.dst_text, "status": L.status})
     sheets_meta = []
+    search_rows: list[list] = []
     for sid in order:
         rec = records[sid]
         d = rec.data
@@ -428,8 +429,10 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
             "links": out_links, "links_in": links_in.get(sid, []),
             "nets_skipped": bool(rec.nets and rec.nets.skipped),
         }
-        with open(os.path.join(out_dir, "sheets", f"{sid}.json"), "w", encoding="utf-8") as fh:
-            json.dump(sheet_json, fh, separators=(",", ":"))
+        _write_json_gz(os.path.join(out_dir, "sheets", f"{sid}.json.gz"), sheet_json)
+        for t in texts_json:
+            if not t["frame"]:
+                search_rows.append([sid, t["id"], t["text"], [i["key"] for i in t["idents"]]])
         is_pdf = sid in pdf_pages_used
         sheets_meta.append({"id": sid, "file": file_of[sid], "title": d.title, "rev": d.rev, "extents": d.extents, "frame": d.frame_rect,
                             "svg": None if is_pdf else f"sheets/{sid}.svg.gz", "texts": len(d.texts), "nets": len(nets_json),
@@ -464,8 +467,8 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
     }
     with open(os.path.join(out_dir, "project.json"), "w", encoding="utf-8") as fh:
         json.dump(project, fh, indent=1)
-    with open(os.path.join(out_dir, "index.json"), "w", encoding="utf-8") as fh:
-        json.dump(index, fh, separators=(",", ":"))
+    _write_json_gz(os.path.join(out_dir, "index.json.gz"), index)
+    _write_json_gz(os.path.join(out_dir, "search.json.gz"), search_rows)
     with open(os.path.join(out_dir, "issues.json"), "w", encoding="utf-8") as fh:
         json.dump(issues, fh, indent=1)
     ul = os.path.join(out_dir, "user_links.json")
@@ -473,6 +476,29 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
         with open(ul, "w", encoding="utf-8") as fh:
             json.dump([], fh)
     return project
+
+
+def _write_json_gz(path: str, obj) -> None:
+    import gzip
+    with gzip.open(path, "wt", encoding="utf-8", compresslevel=6) as fh:
+        json.dump(obj, fh, separators=(",", ":"))
+
+
+VIEWER_FILES = ("index.html", "app.js", "app.css")
+
+
+def write_site(site_dir: str, data_dir: str) -> None:
+    """Copy the viewer files next to the data folder so any static web host (GitHub Pages,
+    a plain file server) can serve the viewer without Python."""
+    import shutil
+    viewer_src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "viewer")
+    os.makedirs(site_dir, exist_ok=True)
+    for name in VIEWER_FILES:
+        shutil.copyfile(os.path.join(viewer_src, name), os.path.join(site_dir, name))
+    with open(os.path.join(site_dir, ".nojekyll"), "w") as fh:   # GitHub Pages: serve files as they are
+        fh.write("")
+    if os.path.abspath(os.path.join(site_dir, "data")) != os.path.abspath(data_dir):
+        raise ValueError("the project data must be in <site>/data for the static site to find it")
 
 
 def attach_pdf(pdf_path: str, out_dir: str, sheets_meta: list[dict], file_of: dict[str, str], backdrops: bool,
@@ -490,7 +516,7 @@ def attach_pdf(pdf_path: str, out_dir: str, sheets_meta: list[dict], file_of: di
     for meta in sheets_meta:
         if meta.get("source") == "pdf":
             p = meta["pdf_page"]
-            bd = pdf_reader.render_backdrop(pdf_path, p, os.path.join(out_dir, "backdrops", f"{meta['id']}.png"), None)
+            bd = pdf_reader.render_backdrop(pdf_path, p, os.path.join(out_dir, "backdrops", f"{meta['id']}.jpg"), None)
             meta["backdrop"] = asdict(bd)
             mapping[p] = meta["id"]
             continue
@@ -499,7 +525,7 @@ def attach_pdf(pdf_path: str, out_dir: str, sheets_meta: list[dict], file_of: di
             continue
         meta["pdf_page"] = p
         if backdrops:
-            bd = pdf_reader.render_backdrop(pdf_path, p, os.path.join(out_dir, "backdrops", f"{meta['id']}.png"), tuple(meta["extents"]),
+            bd = pdf_reader.render_backdrop(pdf_path, p, os.path.join(out_dir, "backdrops", f"{meta['id']}.jpg"), tuple(meta["extents"]),
                                             dxf_frame=tuple(meta["frame"]) if meta.get("frame") else None)
             meta["backdrop"] = asdict(bd)
             aligned += bd.quality == "aligned"

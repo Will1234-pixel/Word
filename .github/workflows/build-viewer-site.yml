@@ -1,0 +1,74 @@
+# Rebuilds the schematic viewer web site (docs/) in GitHub's cloud, so no
+# Python installation is needed on your own computer.
+#
+# Runs when Drawing_DXF.zip or the viewer code changes, or by hand:
+#   GitHub -> Actions -> "Build schematic viewer site" -> Run workflow
+# The rebuilt docs/ folder is committed back to the same branch; GitHub Pages
+# (Settings -> Pages -> Deploy from a branch -> /docs) then publishes it.
+name: Build schematic viewer site
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Drawing_DXF.zip"
+      - "Compined.pdf"
+      - "schematic_viewer/**"
+      - "!schematic_viewer/docs/**"
+      - ".github/workflows/build-viewer-site.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-viewer-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history: the plotted PDF is recovered from an earlier commit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install importer dependencies
+        run: python -m pip install -r schematic_viewer/requirements.txt
+
+      - name: Locate the plotted PDF (optional page backdrops)
+        run: |
+          if [ -f Compined.pdf ]; then
+            cp Compined.pdf /tmp/Compined.pdf
+          else
+            c=$(git log --all --diff-filter=A --format=%H -- Compined.pdf | head -1)
+            if [ -n "$c" ]; then git show "$c:Compined.pdf" > /tmp/Compined.pdf; fi
+          fi
+          ls -la /tmp/Compined.pdf 2>/dev/null || echo "No PDF found - the site will have no PDF backdrops"
+
+      - name: Build the static site into docs/
+        run: |
+          [ -f docs/data/user_links.json ] && cp docs/data/user_links.json /tmp/user_links.json || true
+          rm -rf docs/data
+          if [ -f /tmp/Compined.pdf ]; then
+            python schematic_viewer/import_drawings.py --dxf Drawing_DXF.zip --pdf /tmp/Compined.pdf --site docs
+          else
+            python schematic_viewer/import_drawings.py --dxf Drawing_DXF.zip --site docs
+          fi
+          [ -f /tmp/user_links.json ] && cp /tmp/user_links.json docs/data/user_links.json || true
+          du -sh docs
+
+      - name: Commit the rebuilt site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs
+          if git diff --cached --quiet; then
+            echo "Site unchanged"
+          else
+            git commit -m "Rebuild schematic viewer site"
+            git push
+          fi

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Schematic Cross-Reference Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header id="toolbar">
@@ -58,8 +58,11 @@
         <li><b>Several matches</b>: a list appears; choose the right one.</li>
         <li><b>Status badges</b>: <span class="badge verified">verified</span> label found and the destination points back; <span class="badge matched">matched</span> label found, no back pointer; <span class="badge backref">back pointer</span> destination points back but the label differs; <span class="badge same">same label</span> repeated label, <i>not</i> a verified connection; <span class="badge ambiguous">ambiguous</span>/<span class="badge unresolved">unresolved</span> needs your judgement.</li>
         <li><b>Mouse</b>: wheel zooms, drag pans, double-click zooms in. Keys: F fit, +/- zoom, arrows pan.</li>
-        <li><b>Manual links</b>: select a text, press <i>+ Link</i>, then click the destination (any page). Use <i>Confirm</i> / <i>Reject</i> on automatic links; decisions are saved in <code>user_links.json</code>.</li>
+        <li><b>Manual links</b>: select a text, press <i>+ Link</i>, then click the destination (any page). Use <i>Confirm</i> / <i>Reject</i> on automatic links.</li>
       </ul>
+      <h3>Manual link decisions</h3>
+      <p id="modeNote" class="muted"></p>
+      <p><button id="btnExport" class="small">Export manual links (JSON file)</button> <button id="btnImport" class="small">Import manual links</button><input type="file" id="importFile" accept=".json,application/json" hidden></p>
     </section>
   </aside>
   <main id="canvas">
@@ -74,6 +77,6 @@
     <div id="status"><span id="statusSheet"></span><span id="statusMsg"></span><span id="statusPos"></span></div>
   </main>
 </div>
-<script src="/static/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

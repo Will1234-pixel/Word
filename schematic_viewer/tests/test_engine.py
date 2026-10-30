@@ -9,7 +9,7 @@ from engine.identifiers import classify
 from engine.nets import build_nets
 from engine.svg_render import render_modelspace
 from engine.index_builder import build_project
-from tests.conftest import dxf
+from tests.conftest import dxf, sheet_json
 
 
 def test_sheet_id_from_filename():
@@ -107,14 +107,14 @@ def test_project_links_fld(dxf_dir, tmp_path):
     out = tmp_path / "proj"
     project = build_project(files, str(out), progress=lambda *_: None)
     assert project["counts"]["sheets"] == 5
-    sheet = json.load(open(out / "sheets" / "051.json"))
+    sheet = sheet_json(out, "051")
     texts = {t["id"]: t for t in sheet["texts"]}
     xrefs = [L for L in sheet["links"] if L["kind"] == "xref"]
     assert len(xrefs) == 10
     by_label = {L["label"]: L for L in xrefs}
     # 3A 052.225 -> sheet 052, label 3A with a pointer back to 051: verified
     assert by_label["3A"]["status"] == "verified" and by_label["3A"]["dst_sheet"] == "052"
-    s052 = json.load(open(out / "sheets" / "052.json"))
+    s052 = sheet_json(out, "052")
     t052 = {t["id"]: t for t in s052["texts"]}
     assert t052[by_label["3A"]["dst_text"]]["text"] == "3A"
     # every FLD pointer on 051 is verified except 3P, which genuinely has two boxes on 053
@@ -134,11 +134,11 @@ def test_project_links_power(dxf_dir, tmp_path):
     files = [dxf(dxf_dir, f) for f in ("10265-P3-035.dxf", "10265-P3-040.dxf", "10265-P3-043.dxf", "10265-P3-044.dxf")]
     out = tmp_path / "proj"
     build_project(files, str(out), progress=lambda *_: None)
-    s043 = json.load(open(out / "sheets" / "043.json"))
+    s043 = sheet_json(out, "043")
     by = {(L["label"], L["dst_sheet"]): L for L in s043["links"] if L["kind"] == "xref"}
     # 044.260 / 1119 on card 1118 -> card 1119 sheet points back with 043.270
     assert by[("1119", "044")]["status"] == "backref"
-    s035 = json.load(open(out / "sheets" / "035.json"))
+    s035 = sheet_json(out, "035")
     amb = [L for L in s035["links"] if L["kind"] == "xref" and L["label"] == "XG.21:2"]
     assert amb and amb[0]["status"] == "ambiguous" and len(amb[0]["candidates"]) == 2
     assert all(c["label"] == "XG.21" for c in amb[0]["candidates"])
@@ -170,9 +170,29 @@ def test_pdf_only_import_with_text_layer(tmp_path):
     ids = [s["id"] for s in project["sheets"]]
     assert ids == ["051", "052"]
     assert all(s["svg"] is None and s["source"] == "pdf" and s.get("backdrop") for s in project["sheets"])
-    s051 = json.load(open(out / "sheets" / "051.json"))
+    s051 = sheet_json(out, "051")
     xr = [L for L in s051["links"] if L["kind"] == "xref"]
     assert len(xr) == 1 and xr[0]["status"] == "verified" and xr[0]["dst_sheet"] == "052" and xr[0]["label"] == "3A"
     # word boxes are in page millimetres (y up), inside the page
     t = next(t for t in s051["texts"] if t["text"] == "052.225")
     assert 0 < t["bbox"][0] < 842 * 25.4 / 72 and 0 < t["bbox"][1] < 595 * 25.4 / 72
+
+
+def test_static_site_output(dxf_dir, tmp_path):
+    import gzip
+    from engine.index_builder import write_site
+    site = tmp_path / "site"
+    files = [dxf(dxf_dir, f) for f in ("10265-P3-051.dxf", "10265-P3-052.dxf")]
+    build_project(files, str(site / "data"), progress=lambda *_: None)
+    write_site(str(site), str(site / "data"))
+    for name in ("index.html", "app.js", "app.css", ".nojekyll"):
+        assert (site / name).exists()
+    html = (site / "index.html").read_text()
+    assert 'src="app.js"' in html and 'href="app.css"' in html and "/static/" not in html
+    # the data files a static host must serve
+    for name in ("project.json", "issues.json", "index.json.gz", "search.json.gz", "user_links.json"):
+        assert (site / "data" / name).exists(), name
+    rows = json.load(gzip.open(site / "data" / "search.json.gz", "rt"))
+    assert any(r[0] == "051" and r[2] == "052.225" for r in rows)
+    index = json.load(gzip.open(site / "data" / "index.json.gz", "rt"))
+    assert "signal:3A" in index and {o["sheet"] for o in index["signal:3A"]} == {"051", "052"}

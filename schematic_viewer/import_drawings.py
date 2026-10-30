@@ -25,7 +25,7 @@ def collect_dxf(source: str, workdir: str) -> list[str]:
         files += glob.glob(os.path.join(source, "**", "*.DXF"), recursive=True)
         return sorted(set(files))
     if zipfile.is_zipfile(source):
-        target = os.path.join(workdir, "dxf_source")
+        target = os.path.join(tempfile.mkdtemp(prefix="dxf_"), "dxf_source")
         os.makedirs(target, exist_ok=True)
         with zipfile.ZipFile(source) as zf:
             for member in zf.namelist():
@@ -42,12 +42,16 @@ def main(argv=None) -> int:
     ap.add_argument("--dxf", help="folder with DXF files, or a .zip containing them (preferred source)")
     ap.add_argument("--pdf", help="the plotted multi-page PDF: page backdrops, and view-only sheets for pages without a DXF")
     ap.add_argument("--out", default="project", help="output project folder (default: project)")
+    ap.add_argument("--site", help="also write a self-contained static web site to this folder "
+                                   "(the project data goes to <site>/data); host it on GitHub Pages or any web server")
     ap.add_argument("--sheets", help="comma separated sheet numbers to import (default: all)")
     ap.add_argument("--no-backdrop", action="store_true", help="do not rasterise PDF pages")
     args = ap.parse_args(argv)
 
     if not args.dxf and not args.pdf:
         ap.error("give --dxf and/or --pdf")
+    if args.site:
+        args.out = os.path.join(args.site, "data")
     os.makedirs(args.out, exist_ok=True)
     files = collect_dxf(args.dxf, args.out) if args.dxf else []
     if args.dxf and not files:
@@ -64,6 +68,10 @@ def main(argv=None) -> int:
           f"{c['links']} links, {c['issues']} issues to review")
     for k, v in sorted(project["stats"].items()):
         print(f"   {k:22} {v}")
+    if args.site:
+        from engine.index_builder import write_site
+        write_site(args.site, args.out)
+        print(f"static site written to {args.site}  (open index.html through any web server, e.g. GitHub Pages)")
     print(f"start the viewer with:  python viewer_server.py --project {args.out}")
     return 0
 

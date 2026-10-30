@@ -1,0 +1,205 @@
+[
+ {
+  "link": "026A:t34AF:026",
+  "sheet": "026A",
+  "text": "SEE DWG C10265H/P4-026",
+  "label": "",
+  "dst_sheet": "026",
+  "status": "external",
+  "note": "drawing volume P4 is not part of this set",
+  "candidates": []
+ },
+ {
+  "link": "035:t1811C",
+  "sheet": "035",
+  "text": "040.133",
+  "label": "XG.23:2",
+  "dst_sheet": "040",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "XG.23",
+   "XG.23"
+  ]
+ },
+ {
+  "link": "035:t18129",
+  "sheet": "035",
+  "text": "040.048",
+  "label": "XG.21:2",
+  "dst_sheet": "040",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "XG.21",
+   "XG.21"
+  ]
+ },
+ {
+  "link": "035:t1812B",
+  "sheet": "035",
+  "text": "040.090",
+  "label": "XG.22:2",
+  "dst_sheet": "040",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "XG.22",
+   "XG.22"
+  ]
+ },
+ {
+  "link": "035:t1815D",
+  "sheet": "035",
+  "text": "043.060",
+  "label": "1118-1121",
+  "dst_sheet": "043",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "1119",
+   "1120",
+   "1121",
+   "035.320",
+   "035.320"
+  ]
+ },
+ {
+  "link": "035:t18161",
+  "sheet": "035",
+  "text": "047.060",
+  "label": "1218-1221",
+  "dst_sheet": "047",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "1219",
+   "1220",
+   "1221",
+   "035.335",
+   "035.335"
+  ]
+ },
+ {
+  "link": "035:t18261",
+  "sheet": "035",
+  "text": "040.053",
+  "label": "XG.21:1",
+  "dst_sheet": "040",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "XG.21",
+   "XG.21"
+  ]
+ },
+ {
+  "link": "035:t18264",
+  "sheet": "035",
+  "text": "040.095",
+  "label": "XG.22:1",
+  "dst_sheet": "040",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "XG.22",
+   "XG.22"
+  ]
+ },
+ {
+  "link": "035:t1827A",
+  "sheet": "035",
+  "text": "040.138",
+  "label": "XG.23:1",
+  "dst_sheet": "040",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "XG.23",
+   "XG.23"
+  ]
+ },
+ {
+  "link": "039:t27374",
+  "sheet": "039",
+  "text": "035.145",
+  "label": "AL-/BL-",
+  "dst_sheet": "035",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "BL-",
+   "AL-",
+   "AL-",
+   "BL-",
+   "BL-"
+  ]
+ },
+ {
+  "link": "039:t273C1",
+  "sheet": "039",
+  "text": "035.120",
+  "label": "AL+/BL+",
+  "dst_sheet": "035",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "BL+",
+   "AL+",
+   "AL+",
+   "BL+"
+  ]
+ },
+ {
+  "link": "050:t4C88",
+  "sheet": "050",
+  "text": "098.070",
+  "label": "1109:d30",
+  "dst_sheet": "098",
+  "status": "ambiguous",
+  "note": "",
+  "candidates": [
+   "1109",
+   "1109",
+   "1109",
+   "1109"
+  ]
+ },
+ {
+  "link": "051:t6AE5",
+  "sheet": "051",
+  "text": "053.140",
+  "label": "3P",
+  "dst_sheet": "053",
+  "status": "multiple",
+  "note": "",
+  "candidates": [
+   "3P",
+   "3P",
+   "051.255",
+   "051.255",
+   "051.255",
+   "051.255"
+  ]
+ },
+ {
+  "link": "055B:t6AAC:055A",
+  "sheet": "055B",
+  "text": "FROM SHT 055A (03PZA03358)",
+  "label": "",
+  "dst_sheet": "055A",
+  "status": "missing_sheet",
+  "note": "sheet 055A is not in the imported set",
+  "candidates": []
+ },
+ {
+  "link": "055B:t6EC3:056",
+  "sheet": "055B",
+  "text": "TO SHT 056",
+  "label": "",
+  "dst_sheet": "056",
+  "status": "missing_sheet",
+  "note": "sheet 056 is not in the imported set",
+  "candidates": []
+ }
+]

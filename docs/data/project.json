@@ -1,0 +1,4612 @@
+{
+ "name": "data",
+ "created": "2026-10-30 13:00:29",
+ "volume": "P3",
+ "sheets": [
+  {
+   "id": "002",
+   "file": "10265-P3-002Rev AC.dxf",
+   "title": "DOCUMENT SCHEDULE - No.s 001 TO 100",
+   "rev": "AC",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/002.svg.gz",
+   "texts": 403,
+   "nets": 58,
+   "links": 69,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 1,
+   "backdrop": {
+    "file": "002.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "003",
+   "file": "10265-P3-003 Rev U.dxf",
+   "title": "DOCUMENT SCHEDULE - No.s 101 TO 200",
+   "rev": "U",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/003.svg.gz",
+   "texts": 343,
+   "nets": 58,
+   "links": 55,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 2,
+   "backdrop": {
+    "file": "003.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "004",
+   "file": "10265-P3-004.dxf",
+   "title": "DOCUMENT SCHEDULE - No.s 201 TO 300",
+   "rev": "J",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/004.svg.gz",
+   "texts": 212,
+   "nets": 58,
+   "links": 10,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 3,
+   "backdrop": {
+    "file": "004.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "018",
+   "file": "10265-P3-018.dxf",
+   "title": "PLC CABINET - EXTERNAL G.A.",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/018.svg.gz",
+   "texts": 218,
+   "nets": 133,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 4,
+   "backdrop": {
+    "file": "018.jpg",
+    "x": -2.057,
+    "y": -2819.762,
+    "w": 4083.869,
+    "h": 2887.168,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "020",
+   "file": "10265-P3-020.dxf",
+   "title": "PLC CABINET - EXTERNAL G.A.",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/020.svg.gz",
+   "texts": 100,
+   "nets": 454,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 5,
+   "backdrop": {
+    "file": "020.jpg",
+    "x": -1.852,
+    "y": -2819.758,
+    "w": 4083.663,
+    "h": 2887.023,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "021",
+   "file": "10265-P3-021.dxf",
+   "title": "PLC CABINET - SWINGFRAME LAYOUT",
+   "rev": "M",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/021.svg.gz",
+   "texts": 252,
+   "nets": 0,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 6,
+   "backdrop": {
+    "file": "021.jpg",
+    "x": -1.852,
+    "y": -2819.758,
+    "w": 4083.663,
+    "h": 2887.023,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "022",
+   "file": "10265-P3-022.dxf",
+   "title": "PLC CABINET - BACKPLATE LAYOUT",
+   "rev": "F",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/022.svg.gz",
+   "texts": 268,
+   "nets": 73,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 7,
+   "backdrop": {
+    "file": "022.jpg",
+    "x": -2.057,
+    "y": -2819.762,
+    "w": 4083.869,
+    "h": 2887.168,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "023",
+   "file": "10265-P3-023.dxf",
+   "title": "PLAN VIEW / PLINTH FIXING DETAILS",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/023.svg.gz",
+   "texts": 99,
+   "nets": 114,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 8,
+   "backdrop": {
+    "file": "023.jpg",
+    "x": -681.499,
+    "y": -4644.448,
+    "w": 6550.329,
+    "h": 5061.618,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "024",
+   "file": "10265-P3-024.dxf",
+   "title": "EMC CONTACT CLIP & EARTHING STRAP DETAILS",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    8163.6,
+    5503.6
+   ],
+   "frame": [
+    290.0,
+    10.0,
+    8090.0,
+    5430.0
+   ],
+   "svg": "sheets/024.svg.gz",
+   "texts": 251,
+   "nets": 17,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 9,
+   "backdrop": {
+    "file": "024.jpg",
+    "x": -1361.84,
+    "y": -9288.436,
+    "w": 13099.066,
+    "h": 10122.005,
+    "quality": "aligned",
+    "residual": 0.0004
+   }
+  },
+  {
+   "id": "025",
+   "file": "10265-P3-025.dxf",
+   "title": "24V DISTRIBUTION BOARD LAYOUT",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/025.svg.gz",
+   "texts": 116,
+   "nets": 7,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 10,
+   "backdrop": {
+    "file": "025.jpg",
+    "x": -135.511,
+    "y": -927.739,
+    "w": 1307.894,
+    "h": 1010.645,
+    "quality": "aligned",
+    "residual": 0.0003
+   }
+  },
+  {
+   "id": "026",
+   "file": "10265-P3-026.dxf",
+   "title": "ANNUNCIATOR LAYOUT - No.3 PLANT",
+   "rev": "C",
+   "extents": [
+    142.5,
+    2.5,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/026.svg.gz",
+   "texts": 358,
+   "nets": 11,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 11,
+   "backdrop": {
+    "file": "026.jpg",
+    "x": 140.514,
+    "y": -2770.729,
+    "w": 3941.378,
+    "h": 2786.432,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "026A",
+   "file": "10265-P3-026A.dxf",
+   "title": "ANNUNCIATOR LAYOUT - No.3 PLANT",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/026A.svg.gz",
+   "texts": 210,
+   "nets": 66,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 12,
+   "backdrop": {
+    "file": "026A.jpg",
+    "x": -1.852,
+    "y": -2819.758,
+    "w": 4083.663,
+    "h": 2887.023,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "027",
+   "file": "10265-P3-027.dxf",
+   "title": "ANNUNCIATOR LAYOUT - No.7 PLANT",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    4081.8,
+    2751.8
+   ],
+   "frame": [
+    145.0,
+    5.0,
+    4045.0,
+    2715.0
+   ],
+   "svg": "sheets/027.svg.gz",
+   "texts": 201,
+   "nets": 43,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 13,
+   "backdrop": {
+    "file": "027.jpg",
+    "x": -621.922,
+    "y": -5439.262,
+    "w": 8975.973,
+    "h": 6342.879,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "028",
+   "file": "10265-P3-028.dxf",
+   "title": "CONTROL PLATE LAYOUT - No.3 PLANT",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/028.svg.gz",
+   "texts": 173,
+   "nets": 21,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 14,
+   "backdrop": {
+    "file": "028.jpg",
+    "x": -0.37,
+    "y": -563.952,
+    "w": 816.733,
+    "h": 577.405,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "029",
+   "file": "10265-P3-029.dxf",
+   "title": "CONTROL PLATE LAYOUT - No.7 PLANT",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/029.svg.gz",
+   "texts": 176,
+   "nets": 11,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 15,
+   "backdrop": {
+    "file": "029.jpg",
+    "x": -136.3,
+    "y": -928.89,
+    "w": 1310.066,
+    "h": 1012.324,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "030",
+   "file": "10265-P3-030.dxf",
+   "title": "SYSTEM STATUS PLATE LAYOUT",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/030.svg.gz",
+   "texts": 105,
+   "nets": 11,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 16,
+   "backdrop": {
+    "file": "030.jpg",
+    "x": -135.511,
+    "y": -927.739,
+    "w": 1307.894,
+    "h": 1010.645,
+    "quality": "aligned",
+    "residual": 0.0003
+   }
+  },
+  {
+   "id": "031",
+   "file": "10265-P3-031.dxf",
+   "title": "HIMA PES AND HSD PSU 1U LABEL STRIPS",
+   "rev": "G",
+   "extents": [
+    0.0,
+    0.0,
+    404.75,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/031.svg.gz",
+   "texts": 274,
+   "nets": 10,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 17,
+   "backdrop": {
+    "file": "031.jpg",
+    "x": -0.184,
+    "y": -280.756,
+    "w": 404.94,
+    "h": 286.28,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "032",
+   "file": "10265-P3-032 REV E.dxf",
+   "title": "LABEL DETAILS",
+   "rev": "E",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/032.svg.gz",
+   "texts": 146,
+   "nets": 3,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 18,
+   "backdrop": {
+    "file": "032.jpg",
+    "x": -154.028,
+    "y": -1618.491,
+    "w": 1251.859,
+    "h": 1620.053,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "032A",
+   "file": "10265-P3-032A.dxf",
+   "title": "LABEL DETAILS",
+   "rev": "",
+   "extents": [
+    28.5,
+    0.5,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/032A.svg.gz",
+   "texts": 161,
+   "nets": 10,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 19,
+   "backdrop": {
+    "file": "032A.jpg",
+    "x": -139.514,
+    "y": -882.734,
+    "w": 1250.599,
+    "h": 883.737,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "033",
+   "file": "10265-P3-033.dxf",
+   "title": "KEYSWITCH PLATE LAYOUT DETAILS",
+   "rev": "0",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/033.svg.gz",
+   "texts": 73,
+   "nets": 4,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 20,
+   "backdrop": {
+    "file": "033.jpg",
+    "x": -0.37,
+    "y": -563.993,
+    "w": 816.763,
+    "h": 577.426,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "034",
+   "file": "10265-P3-034.dxf",
+   "title": "KEYSWITCH PLATE LAYOUT DETAILS",
+   "rev": "0",
+   "extents": [
+    0.0,
+    0.0,
+    816.36,
+    550.36
+   ],
+   "frame": [
+    29.0,
+    1.0,
+    809.0,
+    543.0
+   ],
+   "svg": "sheets/034.svg.gz",
+   "texts": 71,
+   "nets": 4,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 21,
+   "backdrop": {
+    "file": "034.jpg",
+    "x": 0.159,
+    "y": -563.021,
+    "w": 815.505,
+    "h": 576.537,
+    "quality": "aligned",
+    "residual": 0.0005
+   }
+  },
+  {
+   "id": "035",
+   "file": "10265-P3-035.dxf",
+   "title": "POWER DISTRIBUTION - 230Vac/24Vdc",
+   "rev": "F",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/035.svg.gz",
+   "texts": 296,
+   "nets": 140,
+   "links": 12,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 22,
+   "backdrop": {
+    "file": "035.jpg",
+    "x": -0.206,
+    "y": -281.997,
+    "w": 408.402,
+    "h": 288.728,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "039",
+   "file": "10265-P3-039.dxf",
+   "title": "PSU ALARM & JUMPER SETTINGS",
+   "rev": "F",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/039.svg.gz",
+   "texts": 211,
+   "nets": 138,
+   "links": 7,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 23,
+   "backdrop": {
+    "file": "039.jpg",
+    "x": -0.206,
+    "y": -281.997,
+    "w": 408.402,
+    "h": 288.728,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "040",
+   "file": "10265-P3-040.dxf",
+   "title": "MAIN SCHEMATIC FOR POWER AND WATCHDOG",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    28.936,
+    57.777,
+    368.31,
+    278.087
+   ],
+   "svg": "sheets/040.svg.gz",
+   "texts": 392,
+   "nets": 192,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 24,
+   "backdrop": {
+    "file": "040.jpg",
+    "x": -0.188,
+    "y": -289.054,
+    "w": 414.112,
+    "h": 292.765,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "041",
+   "file": "10265-P3-041.dxf",
+   "title": "H51q-HS COMMUNICATION CONNECTION DETAILS",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    31.0,
+    186.0,
+    327.0,
+    196.0
+   ],
+   "svg": "sheets/041.svg.gz",
+   "texts": 223,
+   "nets": 1384,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 25,
+   "backdrop": {
+    "file": "041.jpg",
+    "x": -0.188,
+    "y": -292.767,
+    "w": 414.112,
+    "h": 292.765,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "042",
+   "file": "10265-P3-042.dxf",
+   "title": "4U PLATE AND 1U PLATE LAYOUT DETAILS",
+   "rev": "",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": null,
+   "svg": "sheets/042.svg.gz",
+   "texts": 204,
+   "nets": 70,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 26,
+   "backdrop": {
+    "file": "042.jpg",
+    "x": 0.0,
+    "y": -292.767,
+    "w": 414.112,
+    "h": 292.765,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "043",
+   "file": "10265-P3-043.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1118",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/043.svg.gz",
+   "texts": 174,
+   "nets": 60,
+   "links": 5,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 27,
+   "backdrop": {
+    "file": "043.jpg",
+    "x": -0.021,
+    "y": -292.768,
+    "w": 414.138,
+    "h": 292.783,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "044",
+   "file": "10265-P3-044.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1119",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/044.svg.gz",
+   "texts": 162,
+   "nets": 59,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 28,
+   "backdrop": {
+    "file": "044.jpg",
+    "x": -0.021,
+    "y": -292.768,
+    "w": 414.138,
+    "h": 292.783,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "045",
+   "file": "10265-P3-045.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1120",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/045.svg.gz",
+   "texts": 162,
+   "nets": 59,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 29,
+   "backdrop": {
+    "file": "045.jpg",
+    "x": -0.021,
+    "y": -292.768,
+    "w": 414.138,
+    "h": 292.783,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "046",
+   "file": "10265-P3-046.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1121",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/046.svg.gz",
+   "texts": 165,
+   "nets": 55,
+   "links": 2,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 30,
+   "backdrop": {
+    "file": "046.jpg",
+    "x": 0.0,
+    "y": -292.767,
+    "w": 414.112,
+    "h": 292.765,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "047",
+   "file": "10265-P3-047.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1218",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/047.svg.gz",
+   "texts": 175,
+   "nets": 60,
+   "links": 6,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 31,
+   "backdrop": {
+    "file": "047.jpg",
+    "x": 0.0,
+    "y": -292.767,
+    "w": 414.112,
+    "h": 292.765,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "048",
+   "file": "10265-P3-048.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1219",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/048.svg.gz",
+   "texts": 159,
+   "nets": 59,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 32,
+   "backdrop": {
+    "file": "048.jpg",
+    "x": 0.0,
+    "y": -292.767,
+    "w": 414.112,
+    "h": 292.765,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "049",
+   "file": "10265-P3-049.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1220",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/049.svg.gz",
+   "texts": 159,
+   "nets": 59,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 33,
+   "backdrop": {
+    "file": "049.jpg",
+    "x": -0.021,
+    "y": -292.767,
+    "w": 414.123,
+    "h": 292.772,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "050",
+   "file": "10265-P3-050.dxf",
+   "title": "F7133 24Vdc DISTRIBUTION CARD 1221",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    413.9,
+    285.25
+   ],
+   "frame": [
+    59.0,
+    98.0,
+    266.5,
+    222.0
+   ],
+   "svg": "sheets/050.svg.gz",
+   "texts": 157,
+   "nets": 55,
+   "links": 2,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 34,
+   "backdrop": {
+    "file": "050.jpg",
+    "x": -0.021,
+    "y": -292.767,
+    "w": 414.123,
+    "h": 292.772,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "051",
+   "file": "10265-P3-051.dxf",
+   "title": "FLD - No.3 PLANT COPPER DISSOLVING AREA",
+   "rev": "H",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/051.svg.gz",
+   "texts": 392,
+   "nets": 77,
+   "links": 30,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 35,
+   "backdrop": {
+    "file": "051.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "052",
+   "file": "10265-P3-052.dxf",
+   "title": "FLD - No.3 PLANT COPPER DISSOLVING AREA",
+   "rev": "",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/052.svg.gz",
+   "texts": 256,
+   "nets": 52,
+   "links": 23,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 36,
+   "backdrop": {
+    "file": "052.jpg",
+    "x": -0.185,
+    "y": -281.997,
+    "w": 408.392,
+    "h": 288.72,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "053",
+   "file": "10265-P3-053.dxf",
+   "title": "FLD - No.3 PLANT COPPER DISSOLVING AREA",
+   "rev": "E",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/053.svg.gz",
+   "texts": 246,
+   "nets": 46,
+   "links": 19,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 37,
+   "backdrop": {
+    "file": "053.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "054",
+   "file": "10265-P3-054.dxf",
+   "title": "FLD - No.3 PLANT CALCINER AND DRIER",
+   "rev": "E",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/054.svg.gz",
+   "texts": 303,
+   "nets": 73,
+   "links": 22,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 38,
+   "backdrop": {
+    "file": "054.jpg",
+    "x": -0.206,
+    "y": -281.976,
+    "w": 408.392,
+    "h": 288.72,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "055B",
+   "file": "10265-P3-055B.dxf",
+   "title": "FLD - No.3 PLANT ZINC DISSOLVING AREA",
+   "rev": "B",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/055B.svg.gz",
+   "texts": 207,
+   "nets": 56,
+   "links": 19,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 39,
+   "backdrop": {
+    "file": "055B.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "056A",
+   "file": "10265-P3-056A.dxf",
+   "title": "FLD - No.3 PLANT ZINC DISSOLVING AREA",
+   "rev": "A",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/056A.svg.gz",
+   "texts": 218,
+   "nets": 71,
+   "links": 21,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 40,
+   "backdrop": {
+    "file": "056A.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "057",
+   "file": "10265-P3-057.dxf",
+   "title": "FLD - No.7 PLANT",
+   "rev": "E",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/057.svg.gz",
+   "texts": 207,
+   "nets": 37,
+   "links": 12,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 41,
+   "backdrop": {
+    "file": "057.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "070",
+   "file": "10265070.dxf",
+   "title": "TYPICAL LOOPS - INPUTS",
+   "rev": "P2",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/070.svg.gz",
+   "texts": 332,
+   "nets": 186,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf"
+  },
+  {
+   "id": "071",
+   "file": "10265-P3-071.dxf",
+   "title": "TYPICAL LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/071.svg.gz",
+   "texts": 215,
+   "nets": 85,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 42,
+   "backdrop": {
+    "file": "071.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "075",
+   "file": "10265-P3-075.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/075.svg.gz",
+   "texts": 225,
+   "nets": 93,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 43,
+   "backdrop": {
+    "file": "075.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "076",
+   "file": "10265-P3-076 Rev K.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "K",
+   "extents": [
+    -0.25,
+    -0.25,
+    393.68,
+    274.68
+   ],
+   "frame": [
+    0.0,
+    0.0,
+    390.0,
+    271.0
+   ],
+   "svg": "sheets/076.svg.gz",
+   "texts": 354,
+   "nets": 102,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 44,
+   "backdrop": {
+    "file": "076.jpg",
+    "x": -0.429,
+    "y": -276.553,
+    "w": 394.114,
+    "h": 278.626,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "077",
+   "file": "10265-P3-077.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/077.svg.gz",
+   "texts": 297,
+   "nets": 132,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 45,
+   "backdrop": {
+    "file": "077.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "078",
+   "file": "10265-P3-078.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/078.svg.gz",
+   "texts": 309,
+   "nets": 133,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 46,
+   "backdrop": {
+    "file": "078.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "079",
+   "file": "10265-P3-079.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/079.svg.gz",
+   "texts": 317,
+   "nets": 133,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 47,
+   "backdrop": {
+    "file": "079.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "080",
+   "file": "10265-P3-080.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "G",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/080.svg.gz",
+   "texts": 322,
+   "nets": 132,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 48,
+   "backdrop": {
+    "file": "080.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "081",
+   "file": "10265-P3-081 Rev K.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "K",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/081.svg.gz",
+   "texts": 376,
+   "nets": 112,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 49,
+   "backdrop": {
+    "file": "081.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "082",
+   "file": "10265-P3-082.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/082.svg.gz",
+   "texts": 315,
+   "nets": 136,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 50,
+   "backdrop": {
+    "file": "082.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "083",
+   "file": "10265-P3-083.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "B",
+   "extents": [
+    13.199,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/083.svg.gz",
+   "texts": 326,
+   "nets": 147,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 51,
+   "backdrop": {
+    "file": "083.jpg",
+    "x": 13.04,
+    "y": -277.436,
+    "w": 395.157,
+    "h": 279.364,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "084",
+   "file": "10265-P3-084.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/084.svg.gz",
+   "texts": 318,
+   "nets": 140,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 52,
+   "backdrop": {
+    "file": "084.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "085",
+   "file": "10265-P3-085.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/085.svg.gz",
+   "texts": 303,
+   "nets": 136,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 53,
+   "backdrop": {
+    "file": "085.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "086",
+   "file": "10265-P3-086.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "B",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/086.svg.gz",
+   "texts": 358,
+   "nets": 108,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 54,
+   "backdrop": {
+    "file": "086.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "087",
+   "file": "10265-P3-087.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/087.svg.gz",
+   "texts": 196,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 55,
+   "backdrop": {
+    "file": "087.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "088",
+   "file": "10265-P3-088.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/088.svg.gz",
+   "texts": 214,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 56,
+   "backdrop": {
+    "file": "088.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "089",
+   "file": "10265-P3-089.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/089.svg.gz",
+   "texts": 211,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 57,
+   "backdrop": {
+    "file": "089.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "090",
+   "file": "10265-P3-090.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/090.svg.gz",
+   "texts": 195,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 58,
+   "backdrop": {
+    "file": "090.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "091",
+   "file": "10265-P3-091.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/091.svg.gz",
+   "texts": 185,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 59,
+   "backdrop": {
+    "file": "091.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "092",
+   "file": "10265-P3-092.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/092.svg.gz",
+   "texts": 201,
+   "nets": 78,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 60,
+   "backdrop": {
+    "file": "092.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "093",
+   "file": "10265-P3-093.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/093.svg.gz",
+   "texts": 222,
+   "nets": 71,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 61,
+   "backdrop": {
+    "file": "093.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "094",
+   "file": "10265-P3-094.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/094.svg.gz",
+   "texts": 222,
+   "nets": 77,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 62,
+   "backdrop": {
+    "file": "094.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "095",
+   "file": "10265-P3-095.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/095.svg.gz",
+   "texts": 207,
+   "nets": 67,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 63,
+   "backdrop": {
+    "file": "095.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "096",
+   "file": "10265-P3-096.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/096.svg.gz",
+   "texts": 199,
+   "nets": 61,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 64,
+   "backdrop": {
+    "file": "096.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "097",
+   "file": "10265-P3-097.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/097.svg.gz",
+   "texts": 216,
+   "nets": 73,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 65,
+   "backdrop": {
+    "file": "097.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "098",
+   "file": "10265-P3-098.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/098.svg.gz",
+   "texts": 222,
+   "nets": 74,
+   "links": 2,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 66,
+   "backdrop": {
+    "file": "098.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "099",
+   "file": "10265-P3-099.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/099.svg.gz",
+   "texts": 192,
+   "nets": 60,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 67,
+   "backdrop": {
+    "file": "099.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "100",
+   "file": "10265-P3-100.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/100.svg.gz",
+   "texts": 188,
+   "nets": 60,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 68,
+   "backdrop": {
+    "file": "100.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "101",
+   "file": "10265-P3-101.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/101.svg.gz",
+   "texts": 188,
+   "nets": 60,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 69,
+   "backdrop": {
+    "file": "101.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "102",
+   "file": "10265-P3-102.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/102.svg.gz",
+   "texts": 202,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 70,
+   "backdrop": {
+    "file": "102.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "103",
+   "file": "10265-P3-103.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "O",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/103.svg.gz",
+   "texts": 172,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 71,
+   "backdrop": {
+    "file": "103.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "104",
+   "file": "10265-P3-104.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "O",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/104.svg.gz",
+   "texts": 172,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 72,
+   "backdrop": {
+    "file": "104.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "105",
+   "file": "10265-P3-105.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "O",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/105.svg.gz",
+   "texts": 172,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 73,
+   "backdrop": {
+    "file": "105.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "106",
+   "file": "10265-P3-106.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "O",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/106.svg.gz",
+   "texts": 172,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 74,
+   "backdrop": {
+    "file": "106.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "107",
+   "file": "10265-P3-107.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/107.svg.gz",
+   "texts": 205,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 75,
+   "backdrop": {
+    "file": "107.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "108",
+   "file": "10265-P3-108.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/108.svg.gz",
+   "texts": 213,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 76,
+   "backdrop": {
+    "file": "108.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "109",
+   "file": "10265-P3-109.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/109.svg.gz",
+   "texts": 193,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 77,
+   "backdrop": {
+    "file": "109.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "110",
+   "file": "10265-P3-110.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/110.svg.gz",
+   "texts": 199,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 78,
+   "backdrop": {
+    "file": "110.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "111",
+   "file": "10265-P3-111.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/111.svg.gz",
+   "texts": 192,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 79,
+   "backdrop": {
+    "file": "111.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "112",
+   "file": "10265-P3-112 Rev D.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/112.svg.gz",
+   "texts": 198,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 80,
+   "backdrop": {
+    "file": "112.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "113",
+   "file": "10265-P3-113 Rev D.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/113.svg.gz",
+   "texts": 197,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 81,
+   "backdrop": {
+    "file": "113.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "114",
+   "file": "10265-P3-114.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/114.svg.gz",
+   "texts": 193,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 82,
+   "backdrop": {
+    "file": "114.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "115",
+   "file": "10265-P3-115.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/115.svg.gz",
+   "texts": 202,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 83,
+   "backdrop": {
+    "file": "115.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "116",
+   "file": "10265-P3-116.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/116.svg.gz",
+   "texts": 211,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 84,
+   "backdrop": {
+    "file": "116.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "117",
+   "file": "10265-P3-117.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "E",
+   "extents": [
+    0.0,
+    0.0,
+    404.75,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/117.svg.gz",
+   "texts": 216,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 85,
+   "backdrop": {
+    "file": "117.jpg",
+    "x": -0.184,
+    "y": -280.756,
+    "w": 404.94,
+    "h": 286.28,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "118",
+   "file": "10265-P3-118.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/118.svg.gz",
+   "texts": 192,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 86,
+   "backdrop": {
+    "file": "118.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "119",
+   "file": "10265-P3-119.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/119.svg.gz",
+   "texts": 165,
+   "nets": 48,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 87,
+   "backdrop": {
+    "file": "119.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "120",
+   "file": "10265-P3-120.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/120.svg.gz",
+   "texts": 165,
+   "nets": 48,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 88,
+   "backdrop": {
+    "file": "120.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "121",
+   "file": "10265-P3-121.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/121.svg.gz",
+   "texts": 169,
+   "nets": 48,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 89,
+   "backdrop": {
+    "file": "121.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "122",
+   "file": "10265-P3-122.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/122.svg.gz",
+   "texts": 171,
+   "nets": 54,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 90,
+   "backdrop": {
+    "file": "122.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "123",
+   "file": "10265-P3-123 Rev C.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/123.svg.gz",
+   "texts": 210,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 91,
+   "backdrop": {
+    "file": "123.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "124",
+   "file": "10265-P3-124 Rev C.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/124.svg.gz",
+   "texts": 207,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 92,
+   "backdrop": {
+    "file": "124.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "125",
+   "file": "10265-P3-125 Rev C.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/125.svg.gz",
+   "texts": 209,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 93,
+   "backdrop": {
+    "file": "125.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "126",
+   "file": "10265-P3-126 Rev C.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/126.svg.gz",
+   "texts": 207,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 94,
+   "backdrop": {
+    "file": "126.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "127",
+   "file": "10265-P3-127.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/127.svg.gz",
+   "texts": 195,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 95,
+   "backdrop": {
+    "file": "127.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "128",
+   "file": "10265-P3-128.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/128.svg.gz",
+   "texts": 195,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 96,
+   "backdrop": {
+    "file": "128.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "129",
+   "file": "10265-P3-129.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/129.svg.gz",
+   "texts": 195,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 97,
+   "backdrop": {
+    "file": "129.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "130",
+   "file": "10265-P3-130.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/130.svg.gz",
+   "texts": 195,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 98,
+   "backdrop": {
+    "file": "130.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "131",
+   "file": "10265-P3-131.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/131.svg.gz",
+   "texts": 239,
+   "nets": 89,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 99,
+   "backdrop": {
+    "file": "131.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "132",
+   "file": "10265-P3-132.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    405.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/132.svg.gz",
+   "texts": 253,
+   "nets": 100,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 100,
+   "backdrop": {
+    "file": "132.jpg",
+    "x": 14.073,
+    "y": -276.014,
+    "w": 391.116,
+    "h": 276.507,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "133",
+   "file": "10265-P3-133 Rev F.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "F",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/133.svg.gz",
+   "texts": 247,
+   "nets": 84,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 101,
+   "backdrop": {
+    "file": "133.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "134",
+   "file": "10265-P3-134.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/134.svg.gz",
+   "texts": 232,
+   "nets": 84,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 102,
+   "backdrop": {
+    "file": "134.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "135",
+   "file": "10265-P3-135 Rev C.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    404.75,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/135.svg.gz",
+   "texts": 186,
+   "nets": 54,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 103,
+   "backdrop": {
+    "file": "135.jpg",
+    "x": 14.053,
+    "y": -275.856,
+    "w": 390.701,
+    "h": 276.213,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "136",
+   "file": "10265-P3-136REV A.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/136.svg.gz",
+   "texts": 160,
+   "nets": 48,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 104,
+   "backdrop": {
+    "file": "136.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "137",
+   "file": "10265-P3-137.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "B",
+   "extents": [
+    14.25,
+    0.25,
+    404.75,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/137.svg.gz",
+   "texts": 185,
+   "nets": 56,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 105,
+   "backdrop": {
+    "file": "137.jpg",
+    "x": 14.053,
+    "y": -275.875,
+    "w": 390.724,
+    "h": 276.23,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "138",
+   "file": "10265-P3-138.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/138.svg.gz",
+   "texts": 161,
+   "nets": 48,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 106,
+   "backdrop": {
+    "file": "138.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "138-RevC",
+   "file": "10265-P3-138 Rev C.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/138-RevC.svg.gz",
+   "texts": 180,
+   "nets": 48,
+   "links": 0,
+   "warnings": [
+    "title block drawing number '138' differs from file-derived sheet id '138-RevC'",
+    "second file for sheet 138 (imported as 138-RevC)"
+   ],
+   "source": "dxf",
+   "pdf_page": 107,
+   "backdrop": {
+    "file": "138-RevC.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "139",
+   "file": "10265-P3-139.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "B",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/139.svg.gz",
+   "texts": 199,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 108,
+   "backdrop": {
+    "file": "139.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "140",
+   "file": "10265-P3-140.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/140.svg.gz",
+   "texts": 195,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 109,
+   "backdrop": {
+    "file": "140.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "141",
+   "file": "10265-P3-141.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "A",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/141.svg.gz",
+   "texts": 195,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 110,
+   "backdrop": {
+    "file": "141.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "142",
+   "file": "10265-P3-142.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "B",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/142.svg.gz",
+   "texts": 198,
+   "nets": 68,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 111,
+   "backdrop": {
+    "file": "142.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "143",
+   "file": "10265-P3-143 Rev J.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "J",
+   "extents": [
+    -0.25,
+    -0.25,
+    393.68,
+    274.68
+   ],
+   "frame": [
+    0.0,
+    0.0,
+    390.0,
+    271.0
+   ],
+   "svg": "sheets/143.svg.gz",
+   "texts": 336,
+   "nets": 101,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 112,
+   "backdrop": {
+    "file": "143.jpg",
+    "x": -0.429,
+    "y": -276.553,
+    "w": 394.114,
+    "h": 278.626,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "144",
+   "file": "10265-P3-144.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "E",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/144.svg.gz",
+   "texts": 220,
+   "nets": 60,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 113,
+   "backdrop": {
+    "file": "144.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "145",
+   "file": "10265-P3-145.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/145.svg.gz",
+   "texts": 202,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 114,
+   "backdrop": {
+    "file": "145.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "146",
+   "file": "10265-P3-146.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/146.svg.gz",
+   "texts": 196,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 115,
+   "backdrop": {
+    "file": "146.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "147",
+   "file": "10265-P3-147.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/147.svg.gz",
+   "texts": 193,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 116,
+   "backdrop": {
+    "file": "147.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "148",
+   "file": "10265-P3-148.dxf",
+   "title": "LOOP DRAWING - INPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/148.svg.gz",
+   "texts": 195,
+   "nets": 76,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 117,
+   "backdrop": {
+    "file": "148.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "153",
+   "file": "10265-P3-153.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/153.svg.gz",
+   "texts": 193,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 118,
+   "backdrop": {
+    "file": "153.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "154",
+   "file": "10265-P3-154.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/154.svg.gz",
+   "texts": 193,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 119,
+   "backdrop": {
+    "file": "154.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "155",
+   "file": "10265-P3-155.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/155.svg.gz",
+   "texts": 193,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 120,
+   "backdrop": {
+    "file": "155.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.138,
+    "h": 278.643,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "156",
+   "file": "10265-P3-156.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/156.svg.gz",
+   "texts": 193,
+   "nets": 64,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 121,
+   "backdrop": {
+    "file": "156.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "165",
+   "file": "10265-P3-165.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "C",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/165.svg.gz",
+   "texts": 211,
+   "nets": 75,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 122,
+   "backdrop": {
+    "file": "165.jpg",
+    "x": 14.051,
+    "y": -277.073,
+    "w": 394.148,
+    "h": 278.65,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "166",
+   "file": "10265-P3-166.dxf",
+   "title": "LOOP DRAWING - OUTPUTS",
+   "rev": "D",
+   "extents": [
+    14.25,
+    0.25,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/166.svg.gz",
+   "texts": 186,
+   "nets": 57,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 123,
+   "backdrop": {
+    "file": "166.jpg",
+    "x": 14.051,
+    "y": -277.053,
+    "w": 394.124,
+    "h": 278.633,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "200",
+   "file": "10265-P3-200.dxf",
+   "title": "ELCO SCHEDULES - ESD/ANNUNCIATOR",
+   "rev": "E",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/200.svg.gz",
+   "texts": 363,
+   "nets": 10,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 124,
+   "backdrop": {
+    "file": "200.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "201",
+   "file": "10265-P3-201 Rev F.dxf",
+   "title": "ELCO SCHEDULES - ESD/ANNUNCIATOR",
+   "rev": "F",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/201.svg.gz",
+   "texts": 368,
+   "nets": 10,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 125,
+   "backdrop": {
+    "file": "201.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "202",
+   "file": "10265-P3-202.dxf",
+   "title": "ELCO SCHEDULES - ESD/ANNUNCIATOR",
+   "rev": "F",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/202.svg.gz",
+   "texts": 368,
+   "nets": 10,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 126,
+   "backdrop": {
+    "file": "202.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "203",
+   "file": "10265-P3-203 Rev F.dxf",
+   "title": "ELCO SCHEDULES - ESD/OPERATORS CONSOLE",
+   "rev": "F",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/203.svg.gz",
+   "texts": 396,
+   "nets": 10,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 127,
+   "backdrop": {
+    "file": "203.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "204",
+   "file": "10265-P3-204.dxf",
+   "title": "ELCO SCHEDULES - ESD/OPERATORS CONSOLE",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/204.svg.gz",
+   "texts": 213,
+   "nets": 1,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 128,
+   "backdrop": {
+    "file": "204.jpg",
+    "x": -0.206,
+    "y": -281.997,
+    "w": 408.402,
+    "h": 288.728,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "205",
+   "file": "10265-P3-205.dxf",
+   "title": "ELCO SCHEDULES - ESD/OPERATORS CONSOLE",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/205.svg.gz",
+   "texts": 224,
+   "nets": 1,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 129,
+   "backdrop": {
+    "file": "205.jpg",
+    "x": -0.185,
+    "y": -281.976,
+    "w": 408.366,
+    "h": 288.702,
+    "quality": "aligned",
+    "residual": 0.0
+   }
+  },
+  {
+   "id": "206",
+   "file": "10265-P3-206 Rev D.dxf",
+   "title": "ELCO SCHEDULES - ESD/OPERATORS CONSOLE",
+   "rev": "",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    271.75
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/206.svg.gz",
+   "texts": 473,
+   "nets": 11,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 130,
+   "backdrop": {
+    "file": "206.jpg",
+    "x": -0.185,
+    "y": -280.274,
+    "w": 408.386,
+    "h": 288.716,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "208",
+   "file": "10265-P3-208.dxf",
+   "title": "ANNUNCIATOR WIRING DIAGRAM - No.3 PLANT",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/208.svg.gz",
+   "texts": 292,
+   "nets": 79,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 131,
+   "backdrop": {
+    "file": "208.jpg",
+    "x": -4.53,
+    "y": -442.207,
+    "w": 627.282,
+    "h": 443.269,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  },
+  {
+   "id": "209",
+   "file": "10265-P3-209.dxf",
+   "title": "ANNUNCIATOR WIRING DIAGRAM - No.7 PLANT",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/209.svg.gz",
+   "texts": 146,
+   "nets": 29,
+   "links": 0,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 132,
+   "backdrop": {
+    "file": "209.jpg",
+    "x": -4.485,
+    "y": -442.198,
+    "w": 627.248,
+    "h": 443.245,
+    "quality": "aligned",
+    "residual": 0.0002
+   }
+  },
+  {
+   "id": "212",
+   "file": "10265-P3-212.dxf",
+   "title": "CONTROL PLATE WIRING DIAGRAM - No.3 PLANT",
+   "rev": "D",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/212.svg.gz",
+   "texts": 183,
+   "nets": 4,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 133,
+   "backdrop": {
+    "file": "212.jpg",
+    "x": -476.836,
+    "y": -823.098,
+    "w": 1531.493,
+    "h": 1082.231,
+    "quality": "aligned",
+    "residual": 0.0004
+   }
+  },
+  {
+   "id": "213",
+   "file": "10265-P3-213.dxf",
+   "title": "CONTROL PLATE WIRING DIAGRAM - No.7 PLANT",
+   "rev": "C",
+   "extents": [
+    0.0,
+    0.0,
+    408.18,
+    275.18
+   ],
+   "frame": [
+    14.5,
+    0.5,
+    404.5,
+    271.5
+   ],
+   "svg": "sheets/213.svg.gz",
+   "texts": 147,
+   "nets": 3,
+   "links": 1,
+   "warnings": [],
+   "source": "dxf",
+   "pdf_page": 134,
+   "backdrop": {
+    "file": "213.jpg",
+    "x": -4.53,
+    "y": -442.207,
+    "w": 627.282,
+    "h": 443.269,
+    "quality": "aligned",
+    "residual": 0.0001
+   }
+  }
+ ],
+ "stats": {
+  "sheet:sheet": 155,
+  "sheet:external": 1,
+  "xref:ambiguous": 11,
+  "xref:backref": 24,
+  "xref:matched": 4,
+  "typical:typical": 106,
+  "xref:verified": 22,
+  "xref:multiple": 1,
+  "sheet:missing_sheet": 2
+ },
+ "counts": {
+  "sheets": 135,
+  "texts": 30001,
+  "links": 326,
+  "identifiers": 4743,
+  "issues": 15
+ },
+ "pdf": {
+  "file": "Compined.pdf",
+  "pages": 134,
+  "matched": 134,
+  "unmatched_pages": [],
+  "pages_with_text": 1,
+  "aligned_backdrops": 134
+ },
+ "import_seconds": 128.8
+}

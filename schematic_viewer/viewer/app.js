@@ -30,10 +30,113 @@ function showTab(name) {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
 }
+const DATA = "data/";          // all URLs are relative so the page also works under a sub-path (GitHub Pages)
 async function api(path, opts) {
-  const r = await fetch(path, opts);
+  const r = await fetch(path.replace(/^\//, ""), opts);
   if (!r.ok) throw new Error(`${path}: ${r.status}`);
   return r.json();
+}
+async function fetchMaybeGz(url) {
+  // Data files are stored gzip-compressed. The Python server sends them with
+  // Content-Encoding (browser decodes); a plain static host sends raw gzip bytes.
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  const buf = new Uint8Array(await r.arrayBuffer());
+  if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    if (typeof DecompressionStream === "undefined") throw new Error("this browser cannot read the compressed drawing data; use a current Edge, Chrome, Firefox or Safari");
+    const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Response(stream).text();
+  }
+  return new TextDecoder("utf-8").decode(buf);
+}
+async function loadJSON(url) { return JSON.parse(await fetchMaybeGz(url)); }
+async function detectMode() {
+  // the local Python server marks the page; a static host (GitHub Pages) serves it unmarked
+  state.serverMode = !!window.VIEWER_SERVER_MODE;
+}
+// ---- manual links: server file in server mode, browser storage (plus data/user_links.json) otherwise
+const LS_KEY = () => `schematic_user_links:${(state.project && state.project.name) || "project"}`;
+function linksForSheet(sid) {
+  return (state.allUserLinks || []).filter((u) => (u.link_id || "").startsWith(sid + ":") || (u.from && u.from.sheet === sid) || (u.to && u.to.sheet === sid));
+}
+async function loadAllUserLinks() {
+  if (state.serverMode) { try { return await api("api/user_links"); } catch (e) { return []; } }
+  let fileLinks = [];
+  try { fileLinks = await loadJSON(DATA + "user_links.json"); } catch (e) { fileLinks = []; }
+  let local = [];
+  try { local = JSON.parse(localStorage.getItem(LS_KEY()) || "[]"); } catch (e) { local = []; }
+  const byKey = new Map();
+  for (const u of [...fileLinks, ...local]) byKey.set(u.link_id ? "L:" + u.link_id : "I:" + u.id, u);
+  return [...byKey.values()];
+}
+function applyLocally(list, body) {
+  const action = body.action;
+  if (action === "delete") return list.filter((L) => L.id !== body.id);
+  if (action === "replace_all") return (body.links || []).slice();
+  const entry = { ...body };
+  entry.id = entry.id || "u" + Date.now();
+  entry.created = new Date().toISOString().slice(0, 19).replace("T", " ");
+  let out = entry.link_id ? list.filter((L) => L.link_id !== entry.link_id) : list.slice();
+  out.push(entry);
+  return out;
+}
+async function saveUserLink(body) {
+  if (state.serverMode) {
+    const res = await api("api/user_links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    state.allUserLinks = res.user_links;
+  } else {
+    state.allUserLinks = applyLocally(state.allUserLinks || [], body);
+    try { localStorage.setItem(LS_KEY(), JSON.stringify(state.allUserLinks)); } catch (e) { setStatus("could not store the link in this browser: " + e.message, true); }
+  }
+  state.userLinks = linksForSheet(state.sheetId);
+}
+function exportUserLinks() {
+  const blob = new Blob([JSON.stringify(state.allUserLinks || [], null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "user_links.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function importUserLinks(file) {
+  try {
+    const links = JSON.parse(await file.text());
+    if (!Array.isArray(links)) throw new Error("not a list");
+    await saveUserLink({ action: "replace_all", links });
+    setStatus(`${links.length} manual link decisions loaded`);
+    if (state.selected && state.selected.sheet === state.sheetId) selectText(textById(state.selected.text));
+  } catch (e) { setStatus("could not read the file: " + e.message, true); }
+}
+// ---- search and appearances work on the client from two small index files
+let searchRows = null, identIndex = null;
+const normKey = (s) => String(s).replace(/\s+/g, "").toUpperCase();
+async function searchTexts(q) {
+  if (!searchRows) searchRows = await loadJSON(DATA + "search.json.gz");
+  const qn = normKey(q);
+  if (!qn) return [];
+  const exact = [], prefix = [], partial = [];
+  for (const [sheet, text, label, keys] of searchRows) {
+    const tn = normKey(label);
+    if (tn === qn || keys.includes(qn)) exact.push({ sheet, text, label, match: "exact" });
+    else if (tn.startsWith(qn) || keys.some((k) => k.startsWith(qn))) prefix.push({ sheet, text, label, match: "prefix" });
+    else if (tn.includes(qn)) partial.push({ sheet, text, label, match: "contains" });
+  }
+  return [...exact, ...prefix, ...partial].slice(0, 200);
+}
+async function appearances(sid, tid) {
+  const t = textById(tid);
+  if (!t) return { groups: [] };
+  if (!identIndex) identIndex = await loadJSON(DATA + "index.json.gz");
+  const groups = [], seenKeys = new Set(), seenOcc = new Set();
+  for (const ident of t.idents || []) {
+    const keys = [`${ident.kind}:${ident.key}`];
+    if (ident.kind === "tag" && ident.extra && ident.extra.base) keys.push(`tagbase:${ident.extra.base}`);
+    for (const k of keys) {
+      if (seenKeys.has(k)) continue;
+      seenKeys.add(k);
+      const occ = (identIndex[k] || []).filter((o) => !(o.sheet === sid && o.text === tid) && !seenOcc.has(o.sheet + "|" + o.text));
+      occ.forEach((o) => seenOcc.add(o.sheet + "|" + o.text));
+      if (occ.length) groups.push({ key: k, kind: k.split(":")[0], label: ident.key, occurrences: occ });
+    }
+  }
+  return { text: t, groups };
 }
 
 // ------------------------------------------------------------------ view box / pan / zoom
@@ -140,15 +243,15 @@ async function loadSheet(id) {
   if (state.sheetId === id && state.sheet) return state.sheet;
   state.loading = true; setStatus(`loading sheet ${id} ...`);
   const [sheet, svgText] = await Promise.all([
-    api(`/api/sheet/${id}`),
-    state.sheetMeta[id] && state.sheetMeta[id].svg ? fetch(`/api/svg/${id}`).then((r) => (r.ok ? r.text() : "")) : Promise.resolve(""),
+    loadJSON(`${DATA}sheets/${id}.json.gz`),
+    state.sheetMeta[id] && state.sheetMeta[id].svg ? fetchMaybeGz(`${DATA}sheets/${id}.svg.gz`).catch(() => "") : Promise.resolve(""),
   ]);
   sheet._texts = {}; sheet.texts.forEach((t) => (sheet._texts[t.id] = t));
   sheet._nets = {}; sheet.nets.forEach((n) => (sheet._nets[n.id] = n));
   sheet._shapes = {}; (sheet.shapes || []).forEach((s) => (sheet._shapes[s.id] = s));
   sheet._linksOut = {}; sheet.links.forEach((L) => ((sheet._linksOut[L.src_text] = sheet._linksOut[L.src_text] || []).push(L)));
   sheet._linksIn = {}; (sheet.links_in || []).forEach((L) => ((sheet._linksIn[L.to_text] = sheet._linksIn[L.to_text] || []).push(L)));
-  state.sheet = sheet; state.sheetId = id; state.userLinks = sheet.user_links || [];
+  state.sheet = sheet; state.sheetId = id; state.userLinks = linksForSheet(id);
   gContent.innerHTML = ""; gHits.innerHTML = ""; gHl.innerHTML = ""; gBack.innerHTML = ""; gPaper.innerHTML = "";
   const ex = sheet.extents, pm = 3;
   gPaper.appendChild(el("rect", { x: ex[0] - pm, y: -ex[3] - pm, width: ex[2] - ex[0] + 2 * pm, height: ex[3] - ex[1] + 2 * pm, fill: "#fff" }, true));
@@ -171,8 +274,9 @@ function buildBackdrop(id) {
   if (!m || !m.backdrop) { $("#viewMode").disabled = true; return; }
   $("#viewMode").disabled = !m.svg;   // PDF-only sheets can only show the page image
   const b = m.backdrop;
-  const img = el("image", { href: `/api/backdrop/${id}`, x: b.x, y: b.y, width: b.w, height: b.h, preserveAspectRatio: "none" }, true);
-  img.setAttributeNS("http://www.w3.org/1999/xlink", "href", `/api/backdrop/${id}`);
+  const src = `${DATA}backdrops/${b.file}`;
+  const img = el("image", { href: src, x: b.x, y: b.y, width: b.w, height: b.h, preserveAspectRatio: "none" }, true);
+  img.setAttributeNS("http://www.w3.org/1999/xlink", "href", src);
   gBack.appendChild(img);
 }
 function applyViewMode() {
@@ -298,7 +402,7 @@ async function onTextClick(id, ev) {
   if (live.length === 1 && direct.length === 1) return navigate(linkTarget(direct[0], t.text), { keepSelection: false });
   if (live.length >= 1) return showChoices(t, live, ev);
   // no explicit pointer: offer the other appearances of the same identifier
-  const app = await api(`/api/appearances?sheet=${encodeURIComponent(state.sheetId)}&text=${encodeURIComponent(id)}`);
+  const app = await appearances(state.sheetId, id);
   renderAppearances(t, app);
   const occ = app.groups.flatMap((g) => g.occurrences.map((o) => ({ ...o, kind: g.kind, key: g.label })));
   if (occ.length === 1) return navigate({ sheet: occ[0].sheet, text: occ[0].text, label: t.text, status: "same label", note: "repeated label – not a verified connection" });
@@ -389,7 +493,7 @@ function selectText(t, opts) {
   const sn = box.querySelector("[data-shapenets]"); if (sn) sn.onclick = () => { clearHighlights(true); state.sheet._shapes[t.shape].nets.forEach((n) => highlightNet(state.sheet._nets[n])); };
   $("#selLink").onclick = () => startLinkMode(t);
   $("#selWire").onclick = () => onNetClick(t.net, null, true);
-  $("#selApp").onclick = async () => { renderAppearances(t, await api(`/api/appearances?sheet=${encodeURIComponent(state.sheetId)}&text=${encodeURIComponent(t.id)}`)); };
+  $("#selApp").onclick = async () => { renderAppearances(t, await appearances(state.sheetId, t.id)); };
   if (!(opts && opts.silent)) showTab("selection");
 }
 function renderAppearances(t, app) {
@@ -458,19 +562,16 @@ async function completeManualLink(t) {
   const lm = state.linkMode; state.linkMode = null; $("#btnLink").classList.remove("primary");
   const note = prompt(`Create link\n  from: sheet ${lm.from.sheet}  "${lm.from.label}"\n  to:   sheet ${state.sheetId}  "${t.text}"\n\nOptional note:`, "");
   if (note === null) return setStatus("link cancelled");
-  const res = await api("/api/user_links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", from: lm.from, to: { sheet: state.sheetId, text: t.id, label: t.text }, note }) });
-  state.userLinks = res.user_links.filter((u) => [u.from && u.from.sheet, u.to && u.to.sheet].includes(state.sheetId) || (u.link_id || "").startsWith(state.sheetId + ":"));
-  setStatus(`manual link saved: ${lm.from.label} → sheet ${state.sheetId} ${t.text}`);
+  await saveUserLink({ action: "create", from: lm.from, to: { sheet: state.sheetId, text: t.id, label: t.text }, note });
+  setStatus(`manual link saved: ${lm.from.label} → sheet ${state.sheetId} ${t.text}` + (state.serverMode ? "" : " (stored in this browser; use Help → Export to keep a file)"));
   selectText(t);
 }
 async function decide(L, action, t) {
-  const res = await api("/api/user_links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, link_id: L.id, from: { sheet: state.sheetId, text: t.id, label: t.text }, to: { sheet: L.dst_sheet, text: L.dst_text } }) });
-  state.userLinks = res.user_links.filter((u) => (u.link_id || "").startsWith(state.sheetId + ":") || [u.from && u.from.sheet, u.to && u.to.sheet].includes(state.sheetId));
+  await saveUserLink({ action, link_id: L.id, from: { sheet: state.sheetId, text: t.id, label: t.text }, to: { sheet: L.dst_sheet, text: L.dst_text } });
   setStatus(`${action}ed: ${t.text} → ${L.dst_sheet}`); selectText(t);
 }
 async function deleteUserLink(id, t) {
-  const res = await api("/api/user_links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
-  state.userLinks = res.user_links.filter((u) => [u.from && u.from.sheet, u.to && u.to.sheet].includes(state.sheetId)); selectText(t);
+  await saveUserLink({ action: "delete", id }); selectText(t);
 }
 
 // ------------------------------------------------------------------ search / issues / sheets
@@ -478,8 +579,7 @@ async function doSearch() {
   const q = $("#searchBox").value.trim(); if (!q) return;
   showTab("search");
   const box = $("#tab-search"); box.innerHTML = `<p class="muted">searching "${esc(q)}" ...</p>`;
-  const res = await api(`/api/search?q=${encodeURIComponent(q)}`);
-  const r = res.results;
+  const r = await searchTexts(q);
   if (!r.length) { box.innerHTML = `<h3>"${esc(q)}"</h3><p class="muted">No text matches. Try a shorter part of the identifier.</p>`; return; }
   const bySheet = {}; r.forEach((x) => (bySheet[x.sheet] = bySheet[x.sheet] || []).push(x));
   let h = `<h3>"${esc(q)}" – ${r.length} match${r.length > 1 ? "es" : ""} on ${Object.keys(bySheet).length} sheet${Object.keys(bySheet).length > 1 ? "s" : ""}</h3>`;
@@ -492,7 +592,7 @@ async function doSearch() {
   if (r.length === 1) navigate({ sheet: r[0].sheet, text: r[0].text, label: q, status: "search" });
 }
 async function loadIssues() {
-  const issues = await api("/api/issues"); state.issues = issues;
+  const issues = await loadJSON(DATA + "issues.json"); state.issues = issues;
   const box = $("#tab-issues");
   const statuses = [...new Set(issues.map((i) => i.status))];
   let h = `<h3>${issues.length} references to review</h3><p class="muted">Automatic detection was not certain for these. Click to open the source; use Confirm / Reject or create a manual link.</p><div class="filters">${statuses.map((s) => `<label><input type="checkbox" checked data-f="${esc(s)}"> <span class="badge ${esc(s)}">${esc(s)}</span></label>`).join("")}</div><div id="issueRows"></div>`;
@@ -517,8 +617,16 @@ function renderSheetList() {
 
 // ------------------------------------------------------------------ init
 async function init() {
-  const pj = await api("/api/project");
+  await detectMode();
+  const pj = await loadJSON(DATA + "project.json");
   state.project = pj; state.sheets = pj.sheets; pj.sheets.forEach((s) => (state.sheetMeta[s.id] = s));
+  state.allUserLinks = await loadAllUserLinks();
+  $("#modeNote").textContent = state.serverMode
+    ? "Running with the local Python server: manual links are saved to project/user_links.json."
+    : "Running as a web page: manual links are kept in this browser only. Use Export to save them as a file (and Import to load them on another computer).";
+  $("#btnExport").onclick = exportUserLinks;
+  $("#btnImport").onclick = () => $("#importFile").click();
+  $("#importFile").onchange = (e) => { if (e.target.files[0]) importUserLinks(e.target.files[0]); e.target.value = ""; };
   const sel = $("#sheetSelect");
   pj.sheets.forEach((s) => sel.appendChild(el("option", { value: s.id, text: `${s.id}  ${s.title || ""}` })));
   sel.onchange = () => navigate({ sheet: sel.value, label: sheetTitle(sel.value) });
@@ -542,6 +650,8 @@ async function init() {
     else if (e.key.startsWith("Arrow")) { const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; setVB(state.vb.x + d[0] * state.vb.w * 0.1, state.vb.y + d[1] * state.vb.h * 0.1, state.vb.w, state.vb.h); }
   });
   renderSheetList(); loadIssues();
+  // a shared address such as .../#075 opens that sheet; changing the hash later navigates too
+  window.addEventListener("hashchange", () => { const id = decodeURIComponent(location.hash.slice(1)); if (id && id !== state.sheetId && state.sheetMeta[id]) navigate({ sheet: id, label: sheetTitle(id) }); });
   const first = (location.hash || "").replace("#", "") || (pj.sheets[0] && pj.sheets[0].id);
   if (first) { await loadSheet(first); fitSheet(); addTrail({ sheet: first, label: sheetTitle(first) }); }
   document.title = `${pj.name} – Schematic Viewer`;

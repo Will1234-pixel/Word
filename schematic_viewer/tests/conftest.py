@@ -27,3 +27,11 @@ def dxf_dir(tmp_path_factory):
 
 def dxf(dxf_dir, name):
     return os.path.join(dxf_dir, name)
+
+
+def sheet_json(out_dir, sid):
+    """Load a generated sheet data file (gzip JSON)."""
+    import gzip
+    import json
+    with gzip.open(os.path.join(str(out_dir), "sheets", f"{sid}.json.gz"), "rt", encoding="utf-8") as fh:
+        return json.load(fh)

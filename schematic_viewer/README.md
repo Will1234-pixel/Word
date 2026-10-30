@@ -12,6 +12,36 @@ modified (they are only read).
 
 ---
 
+## 0. Nothing to install: use it in the cloud
+
+The viewer is a plain web page. The complete drawing set has already been
+imported and the result is committed in the repository folder **`docs/`**, so
+GitHub can publish it for you:
+
+1. On GitHub open the repository, then **Settings -> Pages**.
+2. Under *Build and deployment* choose **Source: Deploy from a branch**,
+   pick the branch that contains the `docs` folder (`main` after merging, or
+   `claude/beautiful-ptolemy-w0y5j5` before) and the folder **`/docs`**, then **Save**.
+3. After about a minute the page shows the address, normally
+   `https://will1234-pixel.github.io/Word/`. Open it in Edge, Chrome, Firefox or
+   Safari. Bookmark it; it works on any computer, tablet or phone.
+
+Differences from running it locally:
+
+* Manual links, confirmations and rejections are stored in the browser you use.
+  **Help -> Export manual links** saves them as a file; **Import** loads such a
+  file on another computer. Committing an exported file as
+  `docs/data/user_links.json` makes those decisions part of the published site.
+* To rebuild the site after the drawings change, GitHub can run the importer
+  for you: **Actions -> "Build schematic viewer site" -> Run workflow**
+  (it also runs automatically when `Drawing_DXF.zip` or the viewer code changes).
+  The rebuilt `docs/` folder is committed and published automatically.
+  Nothing needs to be installed on your PC for this.
+* The same `docs/` folder can be copied to any other web server or intranet
+  site; it has no server-side code.
+
+Everything below is only needed if you prefer to run it on your own PC.
+
 ## 1. One-time setup (Windows)
 
 1. Install **Python 3.10 or newer** from <https://www.python.org/downloads/windows/>.
@@ -100,7 +130,8 @@ judge, and uncertain cases are listed in **Issues**.
 * To add a link the importer missed: select the source text, press **+ Link**,
   then click the destination text (you may change sheets first).
   A note can be added. Manual links show the badge **manual**.
-* All decisions are stored in `project\user_links.json`; they survive re-imports.
+* All decisions are stored in `project\user_links.json` (local server) or in
+  the browser (web page, see section 0); they survive re-imports.
 
 ---
 
@@ -139,12 +170,16 @@ schematic_viewer/
   import_drawings.bat    build the project from DXF (+PDF)
   run_viewer.bat         start the local viewer
   import_drawings.py     command-line importer (python import_drawings.py --help)
+                         --site <folder> writes a complete static web site (used for docs/)
   viewer_server.py       local web server (standard library only)
   engine/                DXF reader, renderer, identifier rules, resolver, nets
   viewer/                the browser user interface (no internet needed)
   tests/                 automated tests against the supplied drawings
-  project/               created by the importer: sheets/*.svg.gz, sheets/*.json,
-                         index.json, issues.json, backdrops/*.png, user_links.json
+  project/               created by the importer: sheets/*.svg.gz, sheets/*.json.gz,
+                         index.json.gz, search.json.gz, issues.json, backdrops/*.jpg,
+                         user_links.json
+  ../docs/               the published web site: viewer page + data/ (the imported set)
+  ../.github/workflows/  GitHub Actions job that rebuilds docs/ in the cloud
 ```
 
 See `docs/ASSESSMENT.md` for the format assessment, the architecture and the

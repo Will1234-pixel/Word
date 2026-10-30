@@ -154,7 +154,7 @@ def _frame_rect_rotated(page) -> Optional[tuple[float, float, float, float]]:
 
 
 def render_backdrop(pdf_path: str, page_no: int, out_png: str, dxf_extents: Optional[tuple[float, float, float, float]],
-                    dpi: int = 110, dxf_frame: Optional[tuple[float, float, float, float]] = None) -> Backdrop:
+                    dpi: int = 96, dxf_frame: Optional[tuple[float, float, float, float]] = None) -> Backdrop:
     """Rasterise one page and compute where it sits in the sheet's mm space.
 
     Alignment uses the drawing frame (the extreme long horizontal and vertical
@@ -166,7 +166,13 @@ def render_backdrop(pdf_path: str, page_no: int, out_png: str, dxf_extents: Opti
     page = doc[page_no - 1]
     pix = page.get_pixmap(dpi=dpi)
     os.makedirs(os.path.dirname(out_png) or ".", exist_ok=True)
-    pix.save(out_png)
+    if out_png.lower().endswith((".jpg", ".jpeg")):
+        try:
+            pix.save(out_png, jpg_quality=80)
+        except TypeError:   # older PyMuPDF without the quality argument
+            pix.save(out_png)
+    else:
+        pix.save(out_png)
     W_pt, H_pt = page.rect.width, page.rect.height
     name = os.path.basename(out_png)
     if dxf_extents is None:
