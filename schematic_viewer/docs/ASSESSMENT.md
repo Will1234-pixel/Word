@@ -198,6 +198,9 @@ evidence. Root causes found and fixed:
 | Lamp crosses and converter diagonals listed as unlabelled wires; "CONTROL ROOM", "P/B", "K/S" reported as wire labels | 051, 075 | strokes inside a symbol are not conductors; device captions are not labels |
 | "0 process device outputs" beside a PROCESS DEVICE TAG column of seven; "W51 & 52" counted once; "4 fuses or links" for four fuses | 051, 045 | wording and counts follow the drawing's own terms |
 | Glossary: XG.3 called panel earth (it is "L+ FROM XG.3", the supply of the fuse evaluation logic); Q read as density (pH on 052); dossier roles "card output" for the terminals where the feed enters | 043 to 050, 052 | entries corrected, roles split into supply terminal and output wire |
+| Terminal captions bound to the wire their text box touched: "FUSE-5 feeds 5L+, 7/C305-1" (the No.7 plant cable belongs to 6L+), FUSE-6 without destination; second cooling fan K9203/1 and the word STATUS under FAULT/SYS dropped | 035 | same label rule as above (end of the wire beside the caption wins); stacked caption lines kept together |
+| A conductor drawn into a fuse body and on to its far edge kept both sides of the 6 A AC fuse on one net (LA2 and LA3); the SAFECLIP link LINK-4 merged 4L- with the L- ring because its body lines conducted | 035 | the part of a conductor inside a device body is cut away; link capsules (two small circles joined by two parallel lines) do not conduct |
+| Both contacts of a keyswitch were read, but the module note listed every output of the device for each module; W07 and W17 named only the incoming box, not the tag written on the wire; "3P arrives" printed twice | 053 | per-module outputs; "3E (from 051) = 03LZA03110B"; "arrives at 2 boxes" |
 
 Confirmed correct by the reviewers: the 3B, 3P, 3A and 03ZO0300x logic trees,
 the incoming signals and their pointers, the loop channel tables of 075, the

@@ -37,7 +37,7 @@ SHORT_HOST = 6.0     # mm, a wire landing on a line this short passes through a 
 DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
 LOOSE_TEXT_TOL = 3.0 # mm, DeltaV taps (DV3_5) and limit words (HIGH, LOLO) are written further from their wire
-END_TEXT_TOL = 2.5   # mm, a short label in line with the free end of a wire ('1L-6' under its wire end on 085)
+END_TEXT_TOL = 3.0   # mm, a short label in line with the free end of a wire ('1L-6' under its wire end on 085, '7/C305-1' left of its terminal on 035)
 LOOSE_LABEL_RE = re.compile(r"^(?:DV\d_\d+|HIGH|LOW|LOLO|HIHI|MID|HI|LO)$")
 PORT_TOL = 0.3       # mm, a wire end this close to a closed symbol is a port of that symbol
 GATE_PORT_TOL = 1.0  # mm, a logic gate's output leaves from its arc, up to this far from the bbox edge
@@ -267,9 +267,33 @@ def build_nets(sheet: SheetData) -> NetResult:
             poly_count[s.handle].append(math.hypot(s.x2 - s.x1, s.y2 - s.y1))
     decorative = {h for h, lens in poly_count.items()
                   if len(lens) >= DECOR_POLY_SEGS and sorted(lens)[len(lens) // 2] <= DECOR_PIECE}
+    # a SAFECLIP link (035) is drawn as two small circles joined by two parallel lines on their rims: the
+    # lines are the link's body, not conductors, so the circuits on either side of a link stay apart
+    capsule_sides: set[int] = set()
+    rims = [(cx, cy, r) for cx, cy, r, _h in getattr(sheet, "circles", []) if 0.8 <= r <= 2.0]
+    if rims:
+        def rim_of(px: float, py: float):
+            for k, (cx, cy, r) in enumerate(rims):
+                if abs(px - cx) <= r + 0.15 and abs(py - cy) <= r + 0.15 and abs(math.hypot(px - cx, py - cy) - r) <= 0.15:
+                    return k
+            return None
+        rim_pairs: dict[tuple[int, int], list[int]] = defaultdict(list)
+        for s in segs:
+            if s.dashed or s.id in shape_edges:
+                continue
+            ln = math.hypot(s.x2 - s.x1, s.y2 - s.y1)
+            if ln < 2.0 or ln > 12.0:
+                continue
+            a, b2 = rim_of(s.x1, s.y1), rim_of(s.x2, s.y2)
+            if a is None or b2 is None or a == b2:
+                continue
+            rim_pairs[(min(a, b2), max(a, b2))].append(s.id)
+        for ids in rim_pairs.values():
+            if len(ids) == 2:
+                capsule_sides.update(ids)
     wires: list[Segment] = []
     for s in segs:
-        if s.id in shape_edges or s.dashed:
+        if s.id in shape_edges or s.dashed or s.id in capsule_sides:
             continue
         if math.hypot(s.x2 - s.x1, s.y2 - s.y1) < MIN_WIRE:
             continue
@@ -287,13 +311,14 @@ def build_nets(sheet: SheetData) -> NetResult:
                         seg_shape[piece.id] = dev["id"]          # drawn inside the device: part of it
                         shape_edges.add(piece.id)
                         continue
-                    if not in1 and not in2:
-                        clip = _clip_box(piece, b)
-                        if clip is not None:
-                            t0, t1 = clip
-                            if (t1 - t0) * math.hypot(piece.x2 - piece.x1, piece.y2 - piece.y1) > 0.5:
-                                nxt.extend(_split(piece, t0, t1, segs))
-                                continue
+                    clip = _clip_box(piece, b)
+                    if clip is not None:
+                        t0, t1 = clip
+                        if (t1 - t0) * math.hypot(piece.x2 - piece.x1, piece.y2 - piece.y1) > 0.5:
+                            # the conductor runs through the device (both ends outside), or into it and on to
+                            # its far edge (one end inside: the 6 A fuse on 035): keep only the outside part(s)
+                            nxt.extend(_split(piece, t0, t1, segs))
+                            continue
                     nxt.append(piece)
                 pieces = nxt
         wires.extend(pieces)

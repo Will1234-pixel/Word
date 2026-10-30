@@ -407,3 +407,24 @@ def test_verification_fixes_052_053(s052, dxf_dir):
     inc = {e["output"]: e for e in r["logic"] if e["kind"] == "incoming" and e.get("signal")}
     assert inc["3M"]["signal"] == "03TZT03052C" and inc["3N"]["signal"] == "03TZT03052D" and inc["3L"]["signal"] == "03FZA03066B"
     assert any(f.startswith("Output 03Z003599 (24V DC)") and "<feedback from its own output>" in f for f in r["facts"])
+
+
+def test_power_sheet_035_fixes(s035):
+    """Terminal captions follow the wire that ends beside them, a conductor into a fuse body stops at the
+    body, SAFECLIP link bodies do not conduct, stacked captions are kept together (verification findings)."""
+    sheet, nets = s035
+    tx = _texts(sheet)
+    by_label = {}
+    for n in nets.nets:
+        for i in n.texts:
+            by_label.setdefault(tx[i].text, set()).add(n.id)
+    assert by_label["7/C305-1"] == by_label["6L+"] and by_label["3/C655-1"] == by_label["5L+"]
+    assert by_label["7/C305-2"] == by_label["6L-"] and by_label["3/C655-2"] == by_label["5L-"]
+    assert by_label["LA2"].isdisjoint(by_label["LA3"]), "the 6 A fuse body separates isolator output and PSU feed"
+    assert by_label["4L-"].isdisjoint(by_label["AL-"]), "the SAFECLIP link LINK-4 separates 4L- from the L- ring"
+    r = explain_sheet(sheet, nets, [], {"id": "035", "title": sheet.title, "file": "", "links_in": []})
+    facts = r["facts"]
+    assert "Fuse FUSE-5 (4A), feeds 5L+, 3/C655-1." in facts and "Fuse FUSE-6 (4A), feeds 6L+, 7/C305-1." in facts
+    assert any(f.startswith("Fuse FUSE-D (4A)") and "K9202/1" in f and "K9203/1" in f for f in facts)
+    assert any(f.startswith("Fuse FUSE-4 (4A)") and "FAULT/SYS" in f and "STATUS" in f for f in facts)
+    assert r["summary"].endswith("10 fuses drawn.")

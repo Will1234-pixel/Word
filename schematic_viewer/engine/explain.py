@@ -204,7 +204,10 @@ def expr_of(node) -> str:
         return f"<feedback from {node['signal']}>" if node.get("signal") else "<feedback from its own output>"
     if node.get("incoming"):
         s = node.get("signal") or "?"
-        return f"{s} (from {node['from_sheet']})" if node.get("from_sheet") else f"{s} (from another sheet)"
+        base = f"{s} (from {node['from_sheet']})" if node.get("from_sheet") else f"{s} (from another sheet)"
+        if node.get("wire_signal") and node["wire_signal"] != s:
+            base += f" = {node['wire_signal']}"
+        return base
     if "op" in node:
         inputs = node.get("inputs") or []
         inner = ", ".join(expr_of(i) for i in inputs) if inputs else "<no input drawn>"
@@ -787,6 +790,8 @@ class _Ctx:
                         "from_sheet": ptr["sheet"] if ptr else None, "link": ptr["link"] if ptr else None,
                         "link_status": ptr["link_status"] if ptr else None,
                         "text_ids": list(self.info[box]["text_ids"]) + ([ptr["text"]] if ptr else [])}
+                if labels["signals"]:
+                    leaf["wire_signal"] = self.txt(labels["signals"][0])     # the tag written on the wire itself (03LZA03110B on 3E)
                 return self._decorate(leaf, labels, keep_signal=True)
             if labels["signals"]:
                 leaf = {"signal": self.txt(labels["signals"][0]), "net": nid, "no_driver": True, "text_ids": []}
@@ -1900,8 +1905,16 @@ def _sheet_summary(ctx: _Ctx, logic: list[dict], inputs: list[dict], channels: l
             facts.append(f"Output {e['output']}" + (f" ({d.get('desc')})" if d.get("desc") else "") + f": {_short(e.get('prose') or e['expr'], 220)}")
         for e in ann:
             facts.append(f"Annunciator {e['output']}: {_short(e['expr'])}")
+        seen_inc: set = set()
         for e in inc:
-            facts.append(f"Signal {e['output']} arrives from sheet {e.get('from_sheet') or '?'} and feeds {e.get('feeds_text') or 'nothing drawn'}" + (f"; used in {', '.join(e['used_in'])}" if e.get("used_in") else "") + ".")
+            if e["output"] in seen_inc:
+                continue
+            seen_inc.add(e["output"])
+            same = [x for x in inc if x["output"] == e["output"]]              # 3P arrives at two boxes on 053
+            feeds = _uniq([x["feeds_text"] for x in same if x.get("feeds_text")])
+            used = _uniq([u for x in same for u in (x.get("used_in") or [])])
+            facts.append(f"Signal {e['output']} arrives from sheet {e.get('from_sheet') or '?'}" + (f" at {len(same)} boxes" if len(same) > 1 else "")
+                         + f" and feeds {'; '.join(feeds) or 'nothing drawn'}" + (f"; used in {', '.join(used)}" if used else "") + ".")
         if dvs:
             facts.append("DeltaV points: " + ", ".join(f"{e['output']} = {_short(e['expr'], 80)}" for e in dvs) + ".")
         for r in inputs:
@@ -2068,7 +2081,8 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
             if e.get("via"):
                 lines.append("Through: " + ", ".join(_uniq(e["via"])) + ".")
             if d.get("desc"):
-                lines.append(f"Service: {d['desc']}.")
+                volt = re.fullmatch(r"\d+\s*V\s*(?:AC|DC)", d["desc"].strip(), re.I)     # '50V AC' over an output device is its voltage
+                lines.append(f"Voltage: {d['desc']}." if volt else f"Service: {d['desc']}.")
             if d.get("cable"):
                 lines.append(f"Cable {d['cable']}" + (f", terminals {d['terminals']}" if d.get("terminals") else "") + ".")
             if d.get("loop_type"):
@@ -2084,14 +2098,20 @@ def _text_notes(ctx: _Ctx, logic: list[dict], inputs: list[dict], net_words: dic
         if e.get("taps") and e["kind"] in ("continuation", "converter", "other", "annunciator"):
             for tp in e["taps"]:
                 add(tp["text"], f"DeltaV point {tp['label']}", [f"Modbus tap on the output {e['output']}: {e['expr']}."])
-    # modules reading the inputs
+    # modules reading the inputs (a keyswitch with two contacts has one module per contact: each gets its own signals)
     for r in inputs:
         for m in r.get("modules") or []:
+            m_sigs = []
+            for on in ctx.output_nets(m["shape"]):
+                lab = ctx.net_labels(on)
+                sig = " ".join(ctx.txt(i) for i in lab["limits"] + lab["signals"] + [w for w in lab["words"] if len(ctx.txt(w)) <= 12][:1])
+                m_sigs.append(sig if sig else "(no signal name written)")
+            m_outs = _uniq([e["output"] for e in logic if e["kind"] != "incoming" and m["shape"] in (e.get("shape_ids") or [])])
             lines = [f"Reads {r['tag']}" + (f" {r['desc']}" if r.get("desc") else "") + (f", LOOP TYPE {r['loop_type']}" if r.get("loop_type") else "") + "."]
-            if r.get("signals"):
-                lines.append("Output signals: " + ", ".join(r["signals"]) + ".")
-            if r.get("outputs"):
-                lines.append("Takes part in: " + ", ".join(r["outputs"]) + ".")
+            if m_sigs:
+                lines.append("Output signals: " + ", ".join(_uniq(m_sigs)) + ".")
+            if m_outs:
+                lines.append("Takes part in: " + ", ".join(m_outs) + ".")
             for tid in ctx.info[m["shape"]]["text_ids"]:
                 add(tid, f"{m['label']} module", lines)
     # gates, timers and converters: their logic and what they feed
