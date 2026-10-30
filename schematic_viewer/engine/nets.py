@@ -38,6 +38,7 @@ DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
 LOOSE_TEXT_TOL = 3.0 # mm, DeltaV taps (DV3_5) and limit words (HIGH, LOLO) are written further from their wire
 END_TEXT_TOL = 3.0   # mm, a short label in line with the free end of a wire ('1L-6' under its wire end on 085, '7/C305-1' left of its terminal on 035)
+BIG_BLOCK_AREA = 900.0   # mm2, a closed outline larger than this (30 x 30) is a block whose inner wire-end labels still belong to their wires
 LOOSE_LABEL_RE = re.compile(r"^(?:DV\d_\d+|HIGH|LOW|LOLO|HIHI|MID|HI|LO)$")
 PORT_TOL = 0.3       # mm, a wire end this close to a closed symbol is a port of that symbol
 GATE_PORT_TOL = 1.0  # mm, a logic gate's output leaves from its arc, up to this far from the bbox edge
@@ -239,14 +240,24 @@ def build_nets(sheet: SheetData) -> NetResult:
     symbol_shape: dict[str, int] = {}
     for sym in getattr(sheet, "symbols", []):
         sid = len(shapes)
-        shapes.append({"id": sid, "handle": sym.handle, "bbox": tuple(round(v, 3) for v in sym.bbox), "texts": [], "nets": [], "symbol": sym.name})
+        entry = {"id": sid, "handle": sym.handle, "bbox": tuple(round(v, 3) for v in sym.bbox), "texts": [], "nets": [], "symbol": sym.name}
+        if str(sym.name).upper().startswith("TRI"):
+            entry["marker"] = True           # revision triangle block (TRI-A): drawing management, not a device
+        shapes.append(entry)
         symbol_shape[sym.handle] = sid
         for i in sym.segments:
             seg_shape[i] = sid
             shape_edges.add(i)
     for sh in sheet.shapes:
         sid = len(shapes)
-        shapes.append({"id": sid, "handle": sh.handle, "bbox": tuple(round(v, 3) for v in sh.bbox), "texts": [], "nets": []})
+        w_, h_ = sh.bbox[2] - sh.bbox[0], sh.bbox[3] - sh.bbox[1]
+        npts = len(getattr(sh, "points", ()) or ())
+        entry = {"id": sid, "handle": sh.handle, "bbox": tuple(round(v, 3) for v in sh.bbox), "texts": [], "nets": []}
+        if npts >= 7 and max(w_, h_) <= 30.0:
+            entry["cloud"] = True            # a revision cloud (bulged polyline, 7+ vertices) around a corrected text: not a device, owns no text
+        elif npts <= 4 and max(w_, h_) <= 6.0 and abs(w_ - h_) <= 2.0 and npts == 3:
+            entry["marker"] = True           # a revision triangle beside the cloud
+        shapes.append(entry)
         for s in segs:
             if s.handle == sh.handle and s.kind == "shape":
                 seg_shape[s.id] = sid
@@ -258,7 +269,8 @@ def build_nets(sheet: SheetData) -> NetResult:
 
     # ---- device symbols: cut conductors that run straight through, absorb internal lines ----
     devices = [sh for sh in shapes
-               if DEVICE_MIN_DIAG <= math.hypot(sh["bbox"][2] - sh["bbox"][0], sh["bbox"][3] - sh["bbox"][1]) <= DEVICE_MAX_DIAG]
+               if DEVICE_MIN_DIAG <= math.hypot(sh["bbox"][2] - sh["bbox"][0], sh["bbox"][3] - sh["bbox"][1]) <= DEVICE_MAX_DIAG
+               and not sh.get("cloud") and not sh.get("marker")]
     dev_grid = _BoxGrid(devices) if devices else None
     # open polylines made of many short pieces are boundaries or curves, never conductors
     poly_count: dict[str, list[float]] = defaultdict(list)
@@ -480,13 +492,32 @@ def build_nets(sheet: SheetData) -> NetResult:
         best_sh = None
         best_area = math.inf
         for sh in shapes:
+            if sh.get("cloud") or sh.get("marker"):
+                continue                                  # a revision cloud does not own the text it surrounds
             bx0, by0, bx1, by1 = sh["bbox"]
             area = (bx1 - bx0) * (by1 - by0)
             if bx0 - 0.3 <= cx <= bx1 + 0.3 and by0 - 0.3 <= cy <= by1 + 0.3 and area < best_area and area < 2500:
                 best_sh, best_area = sh["id"], area
-        if best_sh is not None:
+        if best_sh is not None and best_area <= BIG_BLOCK_AREA:
             text_shape[t.id] = best_sh
             shapes[best_sh]["texts"].append(t.id)
+            continue
+        if best_sh is not None:
+            # inside a large block (a terminal block or converter outline): a one-word label at the free end of
+            # a wire belongs to the wire ('4L+' under the wire into XG.26 on 040); other texts belong to the block
+            short_ = len(t.text.strip()) <= 12 and " " not in t.text.strip() and not re.fullmatch(r"\d{1,2}|[A-Za-z]", t.text.strip())
+            owner = None
+            if short_:
+                for oid in grid.near_box(x0 - END_TEXT_TOL, y0 - END_TEXT_TOL, x1 + END_TEXT_TOL, y1 + END_TEXT_TOL):
+                    if _seg_box_dist(segs[oid], (x0, y0, x1, y1)) <= END_TEXT_TOL + 0.05 and _ends_at_text(segs[oid], (x0, y0, x1, y1), END_TEXT_TOL, grid, segs):
+                        owner = seg_net.get(oid)
+                        break
+            if owner is None:
+                text_shape[t.id] = best_sh
+                shapes[best_sh]["texts"].append(t.id)
+                continue
+            text_net[t.id] = owner
+            nets[owner].texts.append(t.id)
             continue
         # nearest wire (DeltaV taps and limit words are written further from their wire).  A wire whose
         # free end stops right above, below or beside the text owns it even when another wire passes

@@ -140,8 +140,12 @@ def test_project_links_power(dxf_dir, tmp_path):
     assert by[("1119", "044")]["status"] == "backref"
     s035 = sheet_json(out, "035")
     amb = [L for L in s035["links"] if L["kind"] == "xref" and L["label"] == "XG.21:2"]
-    assert amb and amb[0]["status"] == "ambiguous" and len(amb[0]["candidates"]) == 2
-    assert all(c["label"] == "XG.21" for c in amb[0]["candidates"])
+    # two XG.21 texts exist on 040; the back pointer '035.50 (FUSE-A)' written under AL+ AL- settles which one
+    assert amb and amb[0]["status"] in ("verified", "backref") and amb[0]["dst_sheet"] == "040"
+    s040 = sheet_json(out, "040")
+    back = [L for L in s040["links"] if L["kind"] == "xref" and L["dst_sheet"] == "035"]
+    assert {L["label"] for L in back} >= {"FUSE-A", "FUSE-B", "FUSE-C"} and all(L["status"] in ("verified", "backref", "matched") for L in back)
+    assert amb[0]["candidates"][0]["label"] == "035.50 (FUSE-A)" and amb[0]["candidates"][0]["q"] == 1
 
 
 def test_duplicate_sheet_numbers_get_distinct_ids(dxf_dir, tmp_path):

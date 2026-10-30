@@ -37,7 +37,7 @@ class Ident:
     extra: dict = field(default_factory=dict)
 
 
-XREF_RE = re.compile(r"^(\d{3}[A-Z]?)\.(\d{3})$")
+XREF_RE = re.compile(r"^(\d{3}[A-Z]?)\.(\d{2,3})(?:\s*\(([^()]{1,16})\))?$")   # 052.225, 035.50 (FUSE-A): sheet.grid, optional inline label
 SIGNAL_RE = re.compile(r"^\d[A-Z]{1,2}$")
 
 _RULES: list[tuple[str, re.Pattern]] = [
@@ -77,7 +77,10 @@ def classify(text: str, sheet_ids: set[str] | None = None, on_schedule: bool = F
         return out
     m = XREF_RE.match(t)
     if m:
-        out.append(Ident("xref", t, t, {"sheet": m.group(1), "grid": int(m.group(2))}))
+        extra = {"sheet": m.group(1), "grid": int(m.group(2))}
+        if m.group(3):
+            extra["companion"] = m.group(3).strip()      # '035.50 (FUSE-A)': the label is written in the pointer itself
+        out.append(Ident("xref", t, t, extra))
         return out
     m = LOOP_TYPE_RE.search(t)
     if m:

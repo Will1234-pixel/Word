@@ -90,6 +90,7 @@ DIRECTION_WORDS = {"IN", "OUT"}
 WIRE_NO_RE = re.compile(r"^1[12]\d{2}/\d{1,2}[+-]?$")        # loop drawing wire number: card position / channel (1101/4, 1106/3+)
 ZERO_TAG_RE = re.compile(r"^\d{2}[A-Z][A-Z0]{0,4}\d{4,5}[A-Z]?$")   # a tag typed with zeros for the letter O (03Z003578 on 052)
 CAPTION_WORDS = {"P/B", "K/S", "L/S", "P/S", "H/S"}         # device-type captions beside console symbols, not wire labels
+NOT_LABEL_RE = re.compile(r"^(?:ETC\.?|\(\d{1,2}\)|(?:[A-Z/]{1,6}\s+)?\d+(?:\.\d+)?\s*mm(?:SQ|2|²)?(?:\s+[A-Z/]+)*)$", re.I)   # 'ETC', '(7)', '0.5mmSq RED', 'SW 1.0mm': not wire names
 
 __all__ = ["ports", "classify_shape", "fld_logic", "net_explanations", "sheet_summary", "explain_sheet",
            "sheet_kind", "expr_of", "loop_channels"]
@@ -394,6 +395,8 @@ class _Ctx:
         items.sort(key=lambda t: (-round(t.bbox[3], 1), t.bbox[0]))
         words = [t.text for t in items]
         kind = classify_shape(words, (w, h), sh.get("symbol"))
+        if sh.get("marker") or (sh.get("cloud") and not any(MODEL_RE.match(wd.strip()) for wd in words)):
+            kind = "unknown"                              # revision cloud or triangle: drawing management, not a device
         label = " ".join(words)
         if kind == "gate":
             label = next(t.text.upper() for t in items if t.text.strip().upper() in GATE_WORDS)
@@ -418,8 +421,11 @@ class _Ctx:
         near: list[str] = []
         if kind in ("device", "label_box", "unknown", "module", "converter", "timer") and max(w, h) <= 60:
             for t in self.sheet.texts:
-                if t.frame or t.id in self.text_shape or t.id in self.text_net or len(t.text) > 12:
+                if t.frame or t.id in self.text_net or len(t.text) > 12:
                     continue
+                host = self.text_shape.get(t.id)
+                if host is not None and (host == sh["id"] or max(_size(self.shape_by_id[host]["bbox"])) <= 16.0):
+                    continue                              # inside this or another small symbol; a big enclosing block is fine (F1 1.6A in Z 6013)
                 gx, gy = _gap(b, t.bbox)
                 if (gx <= NEAR_TEXT_TOL and gy <= NEAR_TEXT_TOL) or (gx <= 1.5 and gy <= 1.5 * NEAR_TEXT_TOL) or (gy <= 1.5 and gx <= 1.5 * NEAR_TEXT_TOL):
                     near.append(t.id)
@@ -903,7 +909,7 @@ class _Ctx:
                 cab = self.cable_of_box(shape_id)
                 words = f"terminal{'s' if len(nums) > 1 else ''} {', '.join(nums)}"
                 return f"cable {cab} {words}" if cab else words
-            near = " ".join(self.txt(i) for i in info["near"][:3])
+            near = " ".join(self.txt(i) for i in info["near"][:3]) if max(_size(info["bbox"])) <= 12.0 else ""
             base = info["label"] or info["symbol"]
             if not base:
                 return f"symbol ({near})" if near else "unnamed symbol"
@@ -1184,11 +1190,17 @@ def _decorative_net(ctx: _Ctx, n: Net, shapes_here) -> bool:
         for cx, cy, r, _h in ctx.sheet.circles:
             if r <= 3.0 and cx - r - 0.1 <= bb[0] and bb[2] <= cx + r + 0.1 and cy - r - 0.1 <= bb[1] and bb[3] <= cy + r + 0.1:
                 return True
+    length = sum(math.hypot(ctx.segs[i].x2 - ctx.segs[i].x1, ctx.segs[i].y2 - ctx.segs[i].y1) for i in n.segments if i in ctx.segs)
+    if length < 3.0 and bb[2] - bb[0] <= 2.0 and bb[3] - bb[1] <= 2.0 and not ctx.net_texts.get(n.id):
+        return True                                       # the strokes of a + or - polarity sign
     sids = _uniq([s for s, _side in shapes_here])
-    if len(sids) == 1 and ctx.info[sids[0]]["kind"] in ("converter", "device", "module", "unknown"):
-        sb = ctx.info[sids[0]]["bbox"]
+    hosts = [ctx.info[s] for s in sids] if sids else [i for i in ctx.info.values() if i["kind"] in ("converter", "device", "module") and max(_size(i["bbox"])) <= 60]
+    for info in hosts:
+        if len(sids) == 1 and info["kind"] not in ("converter", "device", "module", "unknown"):
+            continue
+        sb = info["bbox"]
         if sb[0] - 0.3 <= bb[0] and bb[2] <= sb[2] + 0.3 and sb[1] - 0.3 <= bb[1] and bb[3] <= sb[3] + 0.3:
-            return True
+            return True                                   # strokes inside one symbol (table rules of a module box, pin stubs)
     return False
 
 
@@ -1560,10 +1572,13 @@ def _loop_channels(ctx: _Ctx) -> list[dict]:
         pin_ids = []
         pins_ch, pins_sup = [], []                       # PIN column: the channel's own pins; PINS column: the card supply pins
         for ph in pin_hdrs:
+            # the PIN column left of POSITION holds the channel's own pins; a PIN or PINS column right of it
+            # holds the card's common supply and screen pins (z2 / z12 / z4-z6 on the F3236 sheets)
+            channel_col = ph.text.strip().upper() == "PIN" and ph.bbox[0] < hp.bbox[0]
             for x in _below_header(ctx, ph, PIN_RE):
                 pins.append(x.text.strip())
                 pin_ids.append(x.id)
-                (pins_ch if ph.text.strip().upper() == "PIN" else pins_sup).append(x.text.strip())
+                (pins_ch if channel_col else pins_sup).append(x.text.strip())
         # the module heading above the table
         mods = [t for t in texts if MODULE_RE.match(t.text.strip()) and t.bbox[1] >= hp.bbox[3] - 0.5 and t.bbox[1] - hp.bbox[3] <= 12 and abs(_center(t.bbox)[0] - _center(hp.bbox)[0]) <= 40]
         mod = mods[0].text.strip() if mods else None
@@ -1585,7 +1600,7 @@ def _loop_channels(ctx: _Ctx) -> list[dict]:
                "text_ids": [hp.id, pos[0].id] + ([ch[0].id] if ch else []) + ([tag.id] if tag else []) + ([mods[0].id] if mods else []) + pin_ids}
         if tag:
             desc = [t for t in texts if t.bbox[3] <= tag.bbox[1] + 0.3 and tag.bbox[1] - t.bbox[3] <= 9 and _overlap_x(t.bbox, tag.bbox) > -5
-                    and not ctx.idents.get(t.id) and not LOOP_TYPE_RE.search(t.text)]
+                    and not ctx.idents.get(t.id) and not LOOP_TYPE_RE.search(t.text) and not re.fullmatch(r"\(\d{1,2}\)", t.text.strip())]
             desc.sort(key=lambda t: -t.bbox[3])
             rec["desc"] = " ".join(t.text.strip() for t in desc[:3])
             rec["text_ids"] += [t.id for t in desc[:3]]
@@ -1678,7 +1693,7 @@ def _net_explanations(ctx: _Ctx, logic: list[dict]) -> dict[str, dict]:
             continue
         lines: list[str] = []
         title = ""
-        caption_ids = {i for i in labels["words"] if ctx.txt(i).strip().upper() in CAPTION_WORDS}
+        caption_ids = {i for i in labels["words"] if ctx.txt(i).strip().upper() in CAPTION_WORDS or NOT_LABEL_RE.match(ctx.txt(i).strip())}
         labels["words"] = [i for i in labels["words"] if i not in caption_ids]
         sig = " ".join(ctx.txt(i) for i in labels["limits"] + labels["signals"][:1])
         if sig:
@@ -1826,6 +1841,8 @@ def _near_pin_texts(ctx: _Ctx, n: Net, tol: float = 4.5) -> list[str]:
         s = t.text.strip()
         if not re.fullmatch(r"\d{1,2}|[a-z]\d{1,2}", s):
             continue
+        if (getattr(t, "height", 0.0) or 0.0) < 1.5:
+            continue                                      # the superscript 2 of a mm2 wire-size callout
         if not (bb[0] <= t.bbox[0] and t.bbox[2] <= bb[2] and bb[1] <= t.bbox[1] and t.bbox[3] <= bb[3]):
             continue
         d = min(_seg_box_dist(ctx.segs[i], t.bbox) for i in n.segments if i in ctx.segs)

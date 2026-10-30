@@ -201,6 +201,10 @@ evidence. Root causes found and fixed:
 | Terminal captions bound to the wire their text box touched: "FUSE-5 feeds 5L+, 7/C305-1" (the No.7 plant cable belongs to 6L+), FUSE-6 without destination; second cooling fan K9203/1 and the word STATUS under FAULT/SYS dropped | 035 | same label rule as above (end of the wire beside the caption wins); stacked caption lines kept together |
 | A conductor drawn into a fuse body and on to its far edge kept both sides of the 6 A AC fuse on one net (LA2 and LA3); the SAFECLIP link LINK-4 merged 4L- with the L- ring because its body lines conducted | 035 | the part of a conductor inside a device body is cut away; link capsules (two small circles joined by two parallel lines) do not conduct |
 | Both contacts of a keyswitch were read, but the module note listed every output of the device for each module; W07 and W17 named only the incoming box, not the tag written on the wire; "3P arrives" printed twice | 053 | per-module outputs; "3E (from 051) = 03LZA03110B"; "arrives at 2 boxes" |
+| Loop channel "Service: (7)" (a sequence mark beside the keyswitch, not the caption); "channel pins d2/z12" where z12 is the card's common supply pin; 1L+10 and 1L-10 on one wire | 099 | sequence marks ignored; the PIN column right of POSITION is the supply group; label rule as above |
+| Revision clouds and revision triangles treated as devices: they cut the wires through them, owned the corrected text (d2, 4L+) and appeared as "symbol d2 (I/O PLUG)"; 34 table rules of a module box listed as unlabelled wires | 099, 040 | bulged polylines of 7 or more vertices and TRI blocks are drawing management, not devices; strokes inside a module box are not conductors |
+| "0 fuses or links" on the main power schematic although six fuses F1/F2 (1.6A) are drawn inside the Z 6013 modules; "1 explicit pointer" although '035.50 (FUSE-A)', '035.70 (FUSE-B)', '035.90 (FUSE-C)' point to sheet 035 | 040 | texts inside a big enclosing block still name the small symbols in it; pointers with a two-digit grid and an inline label are recognised, and a back pointer is accepted only when it points back at our pointer's own position (the 035 to 040 power feeds are now backref instead of ambiguous) |
+| The superscript 2 of a mm² callout reported as "pin 2"; wire-size notes ("SW 1.0mm", "0.5mmSq RED") and "ETC" used as wire names; symbol tags built from unrelated nearby texts on large blocks | 040, 075 | tiny texts ignored; specification words are not names; nearby words only for small symbols |
 
 Confirmed correct by the reviewers: the 3B, 3P, 3A and 03ZO0300x logic trees,
 the incoming signals and their pointers, the loop channel tables of 075, the
@@ -220,3 +224,13 @@ Still open, reported but not changed:
 * A signal consumed twice on one sheet (3P on 053) shows as "link multiple".
 * Dossier wording for tag letters comes from the glossary and can mislabel a
   device type (a pH switch described through the Q letter).
+* Main power schematic 040: the fan and fuse monitor relay (Z 6018) and the
+  watchdog path are drawn logic that the explanations do not trace; the ten
+  SAFECLIP links, the two AC fuses and the isolator on 035 and the 4A fuses
+  without a name on 040 are not counted as devices; labels bound to a wire
+  that merely passes them (XG.5 / XG.25, GND / XG11) remain.
+* Loop drawings: the module pin names (z2 / z12 / z4 / z6) are listed but
+  their roles (L-, L+, screen) are not derived; the supply return from pin
+  d26 and the plug-side stubs are shown as separate short wires.
+* Sheet 099 is titled "LOOP DRAWING - OUTPUTS" although its loops are digital
+  inputs (keyswitch contacts into an F3236); the kind follows the title.

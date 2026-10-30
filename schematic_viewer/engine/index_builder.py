@@ -175,7 +175,11 @@ QUALITY_WHY = {0: "label and back pointer", 1: "back pointer near grid position"
 def resolve_xref(src: SheetRecord, xref: TextItem, dst: Optional[SheetRecord], dst_sheet: str, grid: int) -> Link:
     lid = f"{src.data.sheet_id}:{xref.id}"
     comp_ids = src.companions.get(xref.id, [])
-    labels = [src.texts[c].text for c in comp_ids]
+    comp_items: list[tuple[str, list]] = [(src.texts[c].text, src.idents.get(c, [])) for c in comp_ids]
+    inline = next((i.extra.get("companion") for i in src.idents.get(xref.id, []) if i.kind == "xref" and i.extra.get("companion")), None)
+    if inline:
+        comp_items.insert(0, (inline, classify(inline)))        # '035.50 (FUSE-A)': the label is part of the pointer text
+    labels = [txt for txt, _ in comp_items]
     label = labels[0] if labels else ""
     if dst is None:
         return Link(lid, "xref", "missing_sheet", src.data.sheet_id, xref.id, dst_sheet, label=label, grid=grid,
@@ -191,10 +195,9 @@ def resolve_xref(src: SheetRecord, xref: TextItem, dst: Optional[SheetRecord], d
     cands: list[dict] = []
     seen: set[str] = set()
     used_label = label
-    for c in comp_ids:
-        ct = src.texts[c]
-        exact = {norm_label(ct.text)} | {f"{i.kind}:{i.key}" for i in src.idents.get(c, [])}
-        relaxed = match_keys(ct.text, src.idents.get(c, [])) - exact
+    for ct_text, ct_idents in comp_items:
+        exact = {norm_label(ct_text)} | {f"{i.kind}:{i.key}" for i in ct_idents}
+        relaxed = match_keys(ct_text, ct_idents) - exact
         found = False
         for t in dst.texts.values():
             keys = dst_keys.get(t.id)
@@ -214,17 +217,25 @@ def resolve_xref(src: SheetRecord, xref: TextItem, dst: Optional[SheetRecord], d
             seen.add(t.id)
             found = True
         if found:
-            used_label = ct.text
+            used_label = ct_text
             break
+    # back pointers on the destination that name our sheet: the one whose grid points at OUR pointer's own
+    # position is the reciprocal one ('035.50 (FUSE-A)' on 040 answers '040.048' written at grid 50 of 035);
+    # back pointers aimed elsewhere on our sheet are only far matches
+    src_x = _center(xref)[0]
+    backs = []
     for t in dst.texts.values():
         m = XREF_RE.match(t.text)
         if not m or m.group(1) != src.data.sheet_id or t.id in seen:
             continue
         tcx, tcy = _center(t)
-        gd = abs(tcx - gx)
-        q = 1 if gd <= 60 else 4
+        backs.append((abs(_grid_x(src, int(m.group(2))) - src_x), abs(tcx - gx), t, tcx, tcy))
+    best_mutual = min((b[0] for b in backs if b[1] <= 60), default=None)      # among those near the expected position
+    for mutual, gd, t, tcx, tcy in backs:
+        reciprocal = gd <= 60 and best_mutual is not None and mutual <= 40.0 and mutual <= best_mutual + 3.0
+        q = 1 if reciprocal else 4
         cands.append({"sheet": dst_sheet, "text": t.id, "label": t.text, "x": round(tcx, 2), "y": round(tcy, 2),
-                      "grid_dist": round(gd, 1), "back": t.id, "q": q, "why": QUALITY_WHY[q]})
+                      "grid_dist": round(gd, 1), "back": t.id, "q": q, "why": QUALITY_WHY[q], "mutual": round(mutual, 1)})
     cands.sort(key=lambda c: (c["q"], c["grid_dist"]))
     if not cands:
         return Link(lid, "xref", "unresolved", src.data.sheet_id, xref.id, dst_sheet, dst_point=(round(gx, 2), round(ymid, 2)),
