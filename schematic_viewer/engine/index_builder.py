@@ -459,6 +459,19 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
     if pdf_path:
         pdf_info = attach_pdf(pdf_path, out_dir, sheets_meta, file_of, backdrops, progress)
 
+    dossier_count = 0
+    if build_dossier is not None:
+        try:
+            dossier = build_dossier(records)
+            _write_json_gz(os.path.join(out_dir, "dossier.json.gz"), dossier)
+            dossier_count = len(dossier)
+        except Exception as exc:
+            progress(f"  ! dossier failed: {exc}")
+    glossary_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glossary.json")
+    if os.path.exists(glossary_src):
+        import shutil
+        shutil.copyfile(glossary_src, os.path.join(out_dir, "glossary.json"))
+
     # ---- issues & stats -------------------------------------------------------------
     stat = defaultdict(int)
     issues = []
@@ -484,18 +497,7 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
         json.dump(project, fh, indent=1)
     _write_json_gz(os.path.join(out_dir, "index.json.gz"), index)
     _write_json_gz(os.path.join(out_dir, "search.json.gz"), search_rows)
-    dossier_count = 0
-    if build_dossier is not None:
-        try:
-            dossier = build_dossier(records)
-            _write_json_gz(os.path.join(out_dir, "dossier.json.gz"), dossier)
-            dossier_count = len(dossier)
-        except Exception as exc:
-            progress(f"  ! dossier failed: {exc}")
-    glossary_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glossary.json")
-    if os.path.exists(glossary_src):
-        import shutil
-        shutil.copyfile(glossary_src, os.path.join(out_dir, "glossary.json"))
+
     with open(os.path.join(out_dir, "issues.json"), "w", encoding="utf-8") as fh:
         json.dump(issues, fh, indent=1)
     ul = os.path.join(out_dir, "user_links.json")
