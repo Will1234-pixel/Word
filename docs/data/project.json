@@ -1,6 +1,6 @@
 {
  "name": "data",
- "created": "2026-10-30 19:33:30",
+ "created": "2026-10-30 20:17:59",
  "volume": "P3",
  "sheets": [
   {
@@ -736,7 +736,7 @@
    ],
    "svg": "sheets/035.svg.gz",
    "texts": 296,
-   "nets": 103,
+   "nets": 117,
    "links": 12,
    "warnings": [],
    "source": "dxf",
@@ -1775,7 +1775,7 @@
    ],
    "svg": "sheets/084.svg.gz",
    "texts": 318,
-   "nets": 160,
+   "nets": 161,
    "links": 0,
    "warnings": [],
    "source": "dxf",
@@ -4609,5 +4609,5 @@
   "pages_with_text": 1,
   "aligned_backdrops": 134
  },
- "import_seconds": 201.4
+ "import_seconds": 196.5
 }
