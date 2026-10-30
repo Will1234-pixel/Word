@@ -4,12 +4,16 @@
 const $ = (s) => document.querySelector(s);
 const SVGNS = "http://www.w3.org/2000/svg";
 const AUTO_GO = new Set(["verified", "matched", "backref", "typical", "sheet", "confirmed", "manual"]);
+const STATUS_TEXT = { path: "signal path", dossier: "written on" };   // badge wording for statuses the viewer itself creates
 
 const state = {
   project: null, sheets: [], sheetMeta: {}, sheetId: null, sheet: null,
   vb: { x: 0, y: 0, w: 100, h: 100 }, history: [], future: [],
   userLinks: [], linkMode: null, selected: null, issues: null, loading: false,
   trail: [],
+  // explanations: drawing-set dossier and glossary (loaded on first use), the logic entry open in the Explain tab,
+  // and a pending "signal path" hop (open the matching logic entry after the next navigation)
+  dossier: null, glossary: null, explainSel: null, explainSheet: null, explainDirty: true, pathPending: null, whatSeq: 0,
 };
 const view = $("#view"), gContent = $("#content"), gHits = $("#hits"), gHl = $("#hl"), gBack = $("#backdrop"), gPaper = $("#paper");
 
@@ -29,6 +33,7 @@ function sheetTitle(id) { const m = state.sheetMeta[id]; return m ? `${id} – $
 function showTab(name) {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
+  if (name === "explain" && state.explainDirty) renderExplainTab();
 }
 const DATA = "data/";          // all URLs are relative so the page also works under a sub-path (GitHub Pages)
 async function api(path, opts) {
@@ -139,6 +144,142 @@ async function appearances(sid, tid) {
   return { text: t, groups };
 }
 
+// ------------------------------------------------------------------ explanations ("what this is")
+// The sheet JSON may carry `explain` = {kind, summary, facts[], logic[], nets{netId:{title,lines,kind}}, texts{textId:{title,lines}}},
+// data/dossier.json.gz = {"kind:key": {title, lines[], entries:[{sheet,text,label,role,context[]}]}} and
+// data/glossary.json = [{pattern, term, meaning, source}]. Every part is optional: the page shows what exists.
+const arr = (x) => (Array.isArray(x) ? x : []);
+const str = (x) => (x == null ? "" : String(x));
+function explainOf(sheet) { const e = sheet && sheet.explain; return e && typeof e === "object" && !Array.isArray(e) ? e : null; }
+function explainNets(sheet) { const e = explainOf(sheet); return e && e.nets && typeof e.nets === "object" ? e.nets : {}; }
+function explainTexts(sheet) { const e = explainOf(sheet); return e && e.texts && typeof e.texts === "object" ? e.texts : {}; }
+function explainLogic(sheet) { const e = explainOf(sheet); return e ? arr(e.logic).filter((x) => x && typeof x === "object") : []; }
+let dossierP = null, glossaryP = null;
+function loadDossier() {
+  if (!dossierP) dossierP = loadJSON(DATA + "dossier.json.gz").then((d) => (state.dossier = d && typeof d === "object" && !Array.isArray(d) ? d : {})).catch(() => (state.dossier = {}));
+  return dossierP;
+}
+const pyToJsRegex = (p) => str(p).replace(/\(\?P</g, "(?<").replace(/\\Z/g, "$");   // the glossary patterns are written for Python
+function loadGlossary() {
+  if (!glossaryP) glossaryP = loadJSON(DATA + "glossary.json").then((g) => {
+    const out = [];
+    for (const e of arr(g)) {
+      if (!e || !e.pattern) continue;
+      try { out.push({ rx: new RegExp(pyToJsRegex(e.pattern), e.ignore_case ? "i" : ""), entry: e }); } catch (err) { /* pattern not usable in this browser: skip it */ }
+    }
+    return (state.glossary = out);
+  }).catch(() => (state.glossary = []));
+  return glossaryP;
+}
+const fillTemplate = (tpl, m) => str(tpl).replace(/\{(\d+)\}/g, (_, i) => m[+i] || "").replace(/\s+/g, " ").trim();
+const LETTER_KINDS = new Set(["tag_plant", "tag_letter", "tag_suffix", "tag_qualifier"]);   // letter-by-letter tag decoding: listed last
+function glossaryMatches(text) {
+  const t = str(text).replace(/\s+/g, " ").trim(); if (!t || !state.glossary) return [];
+  const out = [];
+  for (const { rx, entry } of state.glossary) {
+    const m = rx.exec(t); if (!m) continue;
+    out.push({ term: fillTemplate(entry.term, m) || t, meaning: fillTemplate(entry.meaning, m), source: str(entry.source), kind: str(entry.kind), letter: LETTER_KINDS.has(entry.kind) });
+  }
+  return out.sort((a, b) => (a.letter ? 1 : 0) - (b.letter ? 1 : 0));
+}
+function identKeys(t) {
+  const keys = [];
+  for (const i of arr(t && t.idents)) { if (!i || !i.kind) continue; keys.push(`${i.kind}:${i.key}`); if (i.kind === "tag" && i.extra && i.extra.base) keys.push(`tagbase:${i.extra.base}`); }
+  return keys;
+}
+function dossierFor(t) {
+  if (!state.dossier) return null;
+  for (const k of identKeys(t)) { const d = state.dossier[k]; if (d && typeof d === "object") return { key: k, ...d }; }
+  return null;
+}
+const firstSentence = (s) => { s = str(s); const i = s.indexOf(". "); return i > 0 ? s.slice(0, i + 1) : s; };
+async function whatThisIs(t) {
+  // -> {title, lines[], source, entries[], key} from the note on this sheet, the drawing-set dossier or the glossary, in that order; null when nothing is written
+  if (!t) return null;
+  const note = explainTexts(state.sheet)[t.id];
+  const hasIdent = identKeys(t).length > 0;
+  if (hasIdent && !state.dossier) await loadDossier();
+  const dos = hasIdent ? dossierFor(t) : null;
+  let res = null;
+  if (note && (note.title || arr(note.lines).length)) res = { title: str(note.title) || t.text, lines: arr(note.lines).map(str), source: "sheet" };
+  if (dos) {
+    const lines = arr(dos.lines).map(str), general = lines.filter((l) => !/^Sheet \S+ \(/.test(l) && !/^Appears on /.test(l));
+    if (!res) res = { title: str(dos.title) || t.text, lines: lines.filter((l) => !/^Appears on /.test(l)), source: "dossier" };
+    else res.lines = res.lines.concat(general.filter((l) => !res.lines.includes(l)));
+    res.entries = arr(dos.entries).filter((e) => e && e.sheet); res.key = dos.key;
+  }
+  if (!res) {
+    if (!state.glossary) await loadGlossary();
+    const g = glossaryMatches(t.text);
+    if (g.length) {
+      const same = normKey(g[0].term) === normKey(t.text);      // the term only repeats the text: the meaning is the news
+      res = { title: same ? t.text : `${t.text}: ${g[0].term}`, source: "glossary",
+              lines: g.slice(0, 4).map((x) => (normKey(x.term) === normKey(t.text) ? x.meaning : `${x.term}: ${x.meaning}`)).concat(g[0].source ? [`Source: ${g[0].source}`] : []) };
+    }
+  }
+  return res;
+}
+function tipTitle(w) {   // one line for the compact note: the title, plus the first line that adds something when the title alone says little
+  const t = str(w && w.title), tn = normKey(t);
+  const extra = arr(w && w.lines).map(str).find((l) => { const body = normKey(l.replace(/^[^:]{1,24}:\s*/, "")).replace(/\.$/, ""); return body && !tn.includes(body); });
+  const s = t.length < 24 && extra ? `${t}. ${firstSentence(extra)}` : t;
+  return s.length > 170 ? s.slice(0, 167) + "..." : s;
+}
+function netTipTitle(w) {
+  const t = str(w && w.title), l = arr(w && w.lines).map(str).find((x) => !/^Labels on this wire/.test(x) && !/^Part of the logic/.test(x)) || "";
+  const s = l ? `${t}: ${firstSentence(l)}` : t;
+  return s.length > 170 ? s.slice(0, 167) + "..." : s;
+}
+// ---- compact note next to the cursor: one line and a "More" button; it closes on the next click on the drawing, on Esc or with its x
+function hideTip() { $("#tip").classList.add("hidden"); }
+function showTip(pos, title, onMore) {
+  const p = $("#tip"); if (!title) return;
+  if (!$("#popup").classList.contains("hidden")) return;      // a choice list is open: it has priority
+  $("#tipText").textContent = title;
+  p.classList.remove("hidden");
+  const r = $("#canvas").getBoundingClientRect();
+  let x = pos && pos.clientX != null ? pos.clientX - r.left + 14 : 20, y = pos && pos.clientY != null ? pos.clientY - r.top + 16 : 20;
+  x = Math.max(4, Math.min(x, r.width - p.offsetWidth - 8)); y = Math.max(4, Math.min(y, r.height - p.offsetHeight - 30));
+  p.style.left = x + "px"; p.style.top = y + "px";
+  $("#tipMore").onclick = () => { hideTip(); if (onMore) onMore(); };
+  $("#tipClose").onclick = hideTip;
+}
+function posOfBox(bbox) {   // screen position just below the right end of a drawing box
+  const r = view.getBoundingClientRect(), b = bboxToSvg(bbox);
+  return { clientX: r.left + (b.x + b.w - state.vb.x) / state.vb.w * r.width, clientY: r.top + (b.y + b.h - state.vb.y) / state.vb.h * r.height };
+}
+function openSelection(anchor) {
+  $("#side").classList.remove("hidden"); showTab("selection"); applyVB();
+  const a = anchor && document.querySelector(anchor); if (a && a.scrollIntoView) a.scrollIntoView({ block: "start" });
+}
+async function tipForText(t, pos) {
+  const seq = ++state.whatSeq;
+  const w = await whatThisIs(t).catch(() => null);
+  if (seq !== state.whatSeq || !w || !state.selected || state.selected.text !== t.id || state.selected.sheet !== state.sheetId) return;
+  showTip(pos || posOfBox(t.bbox), tipTitle(w), () => openSelection("#what"));
+}
+async function renderWhat(t) {
+  // the "What this is" block at the top of the Selection panel
+  const box = $("#what"); if (!box) return;
+  const w = await whatThisIs(t).catch(() => null);
+  if ($("#what") !== box || !state.selected || state.selected.text !== t.id || state.selected.sheet !== state.sheetId) return;
+  box.classList.remove("pending");
+  if (!w) { box.innerHTML = `<div class="what-title">What this is</div><div class="what-line muted">Nothing more is written about "${esc(t.text)}": no note on this sheet, no dossier entry and no glossary term matches it.</div>`; return; }
+  const SRC = { sheet: "Read from the texts and wiring of this sheet.", dossier: "Read from every sheet on which this identifier is written.", glossary: "Glossary term; the sheet it was read from is quoted as the source." };
+  let h = `<div class="what-title">${esc(w.title)}</div>` + w.lines.map((l) => `<div class="what-line">${esc(l)}</div>`).join("");
+  const nw = t.net != null ? explainNets(state.sheet)[String(t.net)] : null;
+  if (nw && nw.title) h += `<div class="what-line muted">On wire: <span class="chip" data-net="${esc(t.net)}" title="highlight this wire and read what it carries">${esc(nw.title)}</span></div>`;
+  h += `<div class="what-src">${SRC[w.source] || ""}</div>`;
+  const entries = arr(w.entries);
+  if (entries.length) {
+    h += `<h4>Written on</h4>` + entries.map((e, i) => { const here = e.sheet === state.sheetId && e.text === t.id; return `<div class="row ${here ? "current" : ""}" data-dos="${i}" title="${esc(arr(e.context).join("; "))}"><span class="lbl">sheet <b>${esc(e.sheet)}</b> ${esc(e.role || "")}${here ? " <small>(this text)</small>" : ""}<br><small>${esc(arr(e.context).slice(0, 3).join("; "))}</small></span><span class="badge same">${esc(normKey(e.label || "") === normKey(t.text) ? "same label" : e.label || "")}</span></div>`; }).join("");
+    h += `<div class="legend">Same identifier written elsewhere: not by itself a verified connection.</div>`;
+  }
+  box.innerHTML = h;
+  box.querySelectorAll("[data-dos]").forEach((r) => (r.onclick = () => { const e = entries[+r.dataset.dos]; if (e.sheet === state.sheetId && e.text === t.id) return; navigate({ sheet: e.sheet, text: e.text, label: e.label || t.text, status: "dossier", note: e.role || "" }); }));
+  const nc = box.querySelector(".chip[data-net]"); if (nc) nc.onclick = () => onNetClick(+nc.dataset.net, null, true);
+}
+
 // ------------------------------------------------------------------ view box / pan / zoom
 function applyVB() {
   const { x, y, w, h } = state.vb;
@@ -175,6 +316,12 @@ function zoomToBox(b, minW) {   // b in svg coords {x,y,w,h}
   const ar = view.clientWidth / Math.max(1, view.clientHeight);
   let w = Math.max(minW || 110, b.w * 7, (b.h * 7) * ar), h = w / ar;
   if (b.h * 1.5 > h) { h = b.h * 1.5; w = h * ar; }
+  setVB(b.x + b.w / 2 - w / 2, b.y + b.h / 2 - h / 2, w, h);
+}
+function zoomToFit(b) {   // b in svg coords: show the whole box with a margin (used for the wiring of one logic output)
+  const ar = view.clientWidth / Math.max(1, view.clientHeight);
+  let w = Math.max(b.w * 1.15 + 10, 60), h = Math.max(b.h * 1.15 + 10, 40);
+  if (w / h > ar) h = w / ar; else w = h * ar;
   setVB(b.x + b.w / 2 - w / 2, b.y + b.h / 2 - h / 2, w, h);
 }
 (function installPanZoom() {
@@ -215,9 +362,10 @@ function pulseIt(node) {
   if ($("#hlPulse").checked) { node.classList.add("pulse"); clearTimeout(pulseTimer); pulseTimer = setTimeout(() => node.classList.remove("pulse"), 3300); }
 }
 function highlightBox(bbox, opts) {
-  const b = bboxToSvg(bbox), pad = Math.max(0.8, b.h * 0.35), c = (opts && opts.color) || hlColor();
-  const r = el("rect", { x: b.x - pad, y: b.y - pad, width: b.w + 2 * pad, height: b.h + 2 * pad, rx: 0.8, class: "hl-box", fill: c, stroke: c }, true);
-  gHl.appendChild(r); if (!(opts && opts.noPulse)) pulseIt(r); applyVB(); return r;
+  opts = opts || {};
+  const b = bboxToSvg(bbox), pad = opts.pad != null ? opts.pad : Math.max(0.8, b.h * 0.35), c = opts.color || hlColor();
+  const r = el("rect", { x: b.x - pad, y: b.y - pad, width: b.w + 2 * pad, height: b.h + 2 * pad, rx: 0.8, class: "hl-box" + (opts.cls ? " " + opts.cls : ""), fill: c, stroke: c }, true);
+  gHl.appendChild(r); if (!opts.noPulse) pulseIt(r); applyVB(); return r;
 }
 function highlightPoint(x, y) {
   const c = hlColor(); const g = el("g", { class: "hl-point-group" }, true);
@@ -252,6 +400,7 @@ async function loadSheet(id) {
   sheet._linksOut = {}; sheet.links.forEach((L) => ((sheet._linksOut[L.src_text] = sheet._linksOut[L.src_text] || []).push(L)));
   sheet._linksIn = {}; (sheet.links_in || []).forEach((L) => ((sheet._linksIn[L.to_text] = sheet._linksIn[L.to_text] || []).push(L)));
   state.sheet = sheet; state.sheetId = id; state.userLinks = linksForSheet(id);
+  state.explainDirty = true; state.explainSel = null; hideTip();
   gContent.innerHTML = ""; gHits.innerHTML = ""; gHl.innerHTML = ""; gBack.innerHTML = ""; gPaper.innerHTML = "";
   const ex = sheet.extents, pm = 3;
   gPaper.appendChild(el("rect", { x: ex[0] - pm, y: -ex[3] - pm, width: ex[2] - ex[0] + 2 * pm, height: ex[3] - ex[1] + 2 * pm, fill: "#fff" }, true));
@@ -267,6 +416,7 @@ async function loadSheet(id) {
   try { history.replaceState(null, "", "#" + id); } catch (e) { /* ignore */ }
   document.querySelectorAll(".sheetlist .row").forEach((r) => r.classList.toggle("current", r.dataset.id === id));
   state.loading = false; setStatus(sheet.nets_skipped ? "wire tracing is off on this large layout sheet" : "");
+  if ($("#tab-explain").classList.contains("active")) renderExplainTab();
   return sheet;
 }
 function buildBackdrop(id) {
@@ -312,6 +462,7 @@ function snapshot() { return { sheet: state.sheetId, vb: { ...state.vb }, label:
 async function navigate(target, opts) {
   // target: {sheet, text?, bbox?, point?, label?, status?, color?}
   opts = opts || {};
+  hideTip();
   if (!opts.noHistory && state.sheetId) { state.history.push(snapshot()); state.future = []; updateNavButtons(); }
   await loadSheet(target.sheet);
   clearHighlights(false);
@@ -322,18 +473,21 @@ async function navigate(target, opts) {
   else fitSheet();
   if (target.net != null && state.sheet._nets[target.net]) highlightNet(state.sheet._nets[target.net]);
   addTrail(target);
-  if (target.text && state.sheet._texts[target.text] && !opts.keepSelection) selectText(state.sheet._texts[target.text], { silent: true });
-  if (target.status) setStatus(`${target.label || ""}  →  ${target.sheet}   [${target.status}]${target.note ? "  " + target.note : ""}`, /ambiguous|unresolved|same/.test(target.status));
+  const dest = target.text && state.sheet._texts[target.text];
+  if (dest && !opts.keepSelection) { selectText(dest, { silent: true }); tipForText(dest, null); }
+  if (target.status) setStatus(`${target.label || ""}  →  ${target.sheet}   [${STATUS_TEXT[target.status] || target.status}]${target.note ? "  " + target.note : ""}`, /ambiguous|unresolved|same/.test(target.status));
   updateNavButtons();
+  const pp = state.pathPending; state.pathPending = null;    // a "signal path" hop: open the matching logic entry on the new sheet
+  if (pp && pp.sheet === state.sheetId) arriveOnPath(pp);
 }
 async function goBack() {
   const s = state.history.pop(); if (!s) return;
-  state.future.push(snapshot());
+  hideTip(); state.future.push(snapshot());
   await loadSheet(s.sheet); clearHighlights(false); setVB(s.vb.x, s.vb.y, s.vb.w, s.vb.h); updateNavButtons(); setStatus("back");
 }
 async function goForward() {
   const s = state.future.pop(); if (!s) return;
-  state.history.push(snapshot());
+  hideTip(); state.history.push(snapshot());
   await loadSheet(s.sheet); clearHighlights(false); setVB(s.vb.x, s.vb.y, s.vb.w, s.vb.h); updateNavButtons();
 }
 function updateNavButtons() { $("#btnBack").disabled = !state.history.length; $("#btnFwd").disabled = !state.future.length; }
@@ -346,7 +500,7 @@ function renderTrail() {
   const box = $("#tab-trail"); box.innerHTML = "<h3>Navigation trail</h3><p class='muted'>Newest at the bottom. Click an entry to return there.</p>";
   state.trail.forEach((e, i) => {
     const row = el("div", { class: "row" });
-    row.innerHTML = `<span class="lbl">${i + 1}. <b>${esc(e.sheet)}</b> ${esc(e.label)}</span>${e.status ? `<span class="badge ${esc(e.status)}">${esc(e.status)}</span>` : ""}`;
+    row.innerHTML = `<span class="lbl">${i + 1}. <b>${esc(e.sheet)}</b> ${esc(e.label)}</span>${e.status ? `<span class="badge ${esc(e.status)}">${esc(STATUS_TEXT[e.status] || e.status)}</span>` : ""}`;
     row.onclick = () => navigate({ sheet: e.sheet, text: e.text, bbox: e.bbox, point: e.point, label: e.label });
     box.appendChild(row);
   });
@@ -396,17 +550,18 @@ async function onTextClick(id, ev) {
   hidePopup();
   if (state.linkMode) return completeManualLink(t);
   selectText(t);
+  tipForText(t, ev);           // the compact "what this is" note next to the cursor
   const { out } = destinationsFor(t);
   const live = out.filter((L) => L.status !== "rejected");
   const direct = live.filter((L) => AUTO_GO.has(L.status) && L.dst_sheet && (L.dst_text || L.dst_point || L.kind === "sheet" || L.kind === "typical"));
   if (live.length === 1 && direct.length === 1) return navigate(linkTarget(direct[0], t.text), { keepSelection: false });
-  if (live.length >= 1) return showChoices(t, live, ev);
+  if (live.length >= 1) return showChoices(t, live, ev, await whatLine(t));
   // no explicit pointer: offer the other appearances of the same identifier
   const app = await appearances(state.sheetId, id);
   renderAppearances(t, app);
   const occ = app.groups.flatMap((g) => g.occurrences.map((o) => ({ ...o, kind: g.kind, key: g.label })));
   if (occ.length === 1) return navigate({ sheet: occ[0].sheet, text: occ[0].text, label: t.text, status: "same label", note: "repeated label – not a verified connection" });
-  if (occ.length > 1) return showAppearancePopup(t, app, ev);
+  if (occ.length > 1) return showAppearancePopup(t, app, ev, await whatLine(t));
   if (t.net != null) {
     // nothing to jump to: show which conductor on this page the label belongs to
     onNetClick(t.net, ev, true, t);
@@ -420,15 +575,18 @@ function onNetClick(netId, ev, fromText, fromLabel) {
   clearHighlights(true); highlightNet(net);
   const exits = netExits(net);
   renderNetPanel(net, exits, fromLabel);
+  const words = explainNets(state.sheet)[String(netId)];
+  const wordsHtml = words && words.title ? `<div class="what-line">${esc(netTipTitle(words))}</div>` : "";
   const direct = exits.filter((x) => AUTO_GO.has(x.link.status));
   if (!fromText && direct.length === 1 && exits.length === 1) {
     setStatus(`wire → ${direct[0].text.text} → sheet ${direct[0].link.dst_sheet}`);
     setTimeout(() => navigate(linkTarget(direct[0].link, direct[0].text.text)), 350);
   } else if (exits.length > 1) {
-    showPopup(ev, `<h4>Where does this wire go?</h4>` + exits.map((x, i) => rowHtml(x.link, x.text.text, `data-exit="${i}"`)).join(""), (p) => {
+    showPopup(ev, wordsHtml + `<h4>Where does this wire go?</h4>` + exits.map((x, i) => rowHtml(x.link, x.text.text, `data-exit="${i}"`)).join(""), (p) => {
       p.querySelectorAll("[data-exit]").forEach((r) => (r.onclick = () => { const x = exits[+r.dataset.exit]; hidePopup(); navigate(linkTarget(x.link, x.text.text)); }));
     });
   } else if (!exits.length) setStatus(`wire highlighted (${net.segs.length} segment${net.segs.length > 1 ? "s" : ""}) – no cross-reference attached`);
+  if (words && words.title && ev && ev.clientX != null) showTip(ev, netTipTitle(words), () => openSelection("#what"));
 }
 function netExits(net) {
   const ids = new Set(net.texts || []);
@@ -465,6 +623,7 @@ function selectText(t, opts) {
   const box = $("#tab-selection");
   let h = `<div class="sel-title">${esc(t.text)}</div><div class="muted">sheet ${esc(state.sheetId)} · ${esc(t.kind)} · x ${fmt((t.bbox[0] + t.bbox[2]) / 2)} mm, y ${fmt((t.bbox[1] + t.bbox[3]) / 2)} mm</div>`;
   if (t.idents && t.idents.length) h += `<div>${t.idents.map((i) => `<span class="chip">${esc(i.kind)}: ${esc(i.key)}</span>`).join("")}</div>`;
+  h += `<div class="what pending" id="what">looking up what this is ...</div>`;
   h += `<div style="margin:6px 0"><button class="small" id="selLink">+ Link from here</button> <button class="small" id="selWire" ${t.net == null ? "disabled" : ""}>Highlight wire</button> <button class="small" id="selApp">Other appearances</button></div>`;
   if (out.length) {
     h += `<h4>Destinations</h4>` + out.map((L, i) => rowHtml(L, L.label || t.text, `data-out="${i}"`) +
@@ -498,6 +657,7 @@ function selectText(t, opts) {
   $("#selLink").onclick = () => startLinkMode(t);
   $("#selWire").onclick = () => onNetClick(t.net, null, true);
   $("#selApp").onclick = async () => { renderAppearances(t, await appearances(state.sheetId, t.id)); };
+  renderWhat(t);
   if (!(opts && opts.silent)) showTab("selection");
 }
 function renderAppearances(t, app) {
@@ -512,13 +672,17 @@ function renderAppearances(t, app) {
   box.querySelectorAll("[data-app]").forEach((r) => (r.onclick = () => { const [gi, oi] = r.dataset.app.split("|").map(Number); const o = app.groups[gi].occurrences[oi]; navigate({ sheet: o.sheet, text: o.text, label: t.text, status: "same label", note: "repeated label – not a verified connection" }); }));
   showTab("selection");
 }
-function showAppearancePopup(t, app, ev) {
+async function whatLine(t) {   // the one-line explanation shown at the top of a choice list (the cursor note is hidden while a list is open)
+  const w = await whatThisIs(t).catch(() => null);
+  return w ? `<div class="what-line">${esc(tipTitle(w))}</div>` : "";
+}
+function showAppearancePopup(t, app, ev, head) {
   const occ = app.groups.flatMap((g) => g.occurrences.map((o) => ({ ...o, kind: g.kind })));
-  showPopup(ev, `<h4>"${esc(t.text)}" also appears on</h4><div class="note">same label – not verified as a connection</div>` +
+  showPopup(ev, (head || "") + `<h4>"${esc(t.text)}" also appears on</h4><div class="note">same label – not verified as a connection</div>` +
     occ.map((o, i) => `<div class="row" data-i="${i}"><span class="lbl">sheet <b>${esc(o.sheet)}</b> ${esc(o.label)} <small>${esc((state.sheetMeta[o.sheet] || {}).title || "")}</small></span><span class="badge same">${esc(o.kind)}</span></div>`).join(""),
     (p) => p.querySelectorAll("[data-i]").forEach((r) => (r.onclick = () => { const o = occ[+r.dataset.i]; hidePopup(); navigate({ sheet: o.sheet, text: o.text, label: t.text, status: "same label", note: "repeated label – not a verified connection" }); })));
 }
-function showChoices(t, links, ev) {
+function showChoices(t, links, ev, head) {
   // one uncertain link with candidates, or several links
   let items = [];
   for (const L of links) {
@@ -527,26 +691,31 @@ function showChoices(t, links, ev) {
   }
   if (items.length === 1 && AUTO_GO.has(items[0].status)) return navigate({ sheet: items[0].sheet, text: items[0].text, point: items[0].point, label: t.text, status: items[0].status });
   if (!items.length) return setStatus(`"${t.text}": ${links[0].note || links[0].status}`, true);
-  showPopup(ev, `<h4>${esc(t.text)} – ${items.length} possible destination${items.length > 1 ? "s" : ""}</h4>` +
+  showPopup(ev, (head || "") + `<h4>${esc(t.text)} – ${items.length} possible destination${items.length > 1 ? "s" : ""}</h4>` +
     items.map((it, i) => `<div class="row" data-i="${i}"><span class="lbl"><b>${esc(it.label)}</b> → sheet ${esc(it.sheet)} <small>${esc(it.why || "")}${it.grid != null ? ", grid Δ " + it.grid + " mm" : ""}</small></span><span class="badge ${esc(it.status)}">${esc(it.status)}</span></div>`).join(""),
     (p) => p.querySelectorAll("[data-i]").forEach((r) => (r.onclick = () => { const it = items[+r.dataset.i]; hidePopup(); navigate({ sheet: it.sheet, text: it.text, point: it.point, label: t.text, status: it.status, note: it.why }); })));
 }
 function showPopup(ev, html, wire) {
   const p = $("#popup"); p.innerHTML = html + `<div style="text-align:right;margin-top:4px"><button class="small" id="popClose">close</button></div>`;
-  p.classList.remove("hidden");
+  p.classList.remove("hidden"); hideTip();
   const r = $("#canvas").getBoundingClientRect();
   let x = ev ? ev.clientX - r.left + 12 : 20, y = ev ? ev.clientY - r.top + 12 : 20;
   x = Math.min(x, r.width - 380); y = Math.min(y, r.height - 60 - Math.min(p.offsetHeight, r.height / 2));
   p.style.left = Math.max(4, x) + "px"; p.style.top = Math.max(4, y) + "px";
   $("#popClose").onclick = hidePopup; if (wire) wire(p);
 }
-function hidePopup() { $("#popup").classList.add("hidden"); }
+function hidePopup() { $("#popup").classList.add("hidden"); hideTip(); }
 function renderNetPanel(net, exits, fromLabel) {
   const box = $("#tab-selection");
   const labels = (net.texts || []).map((id) => textById(id)).filter(Boolean);
   const shapes = (net.shapes || []).map((id) => state.sheet._shapes[id]).filter(Boolean);
+  const words = explainNets(state.sheet)[String(net.id)];
   let h = `<div class="sel-title">${fromLabel ? "Conductor of “" + esc(fromLabel.text) + "”" : "Conductor"} on sheet ${esc(state.sheetId)}</div>`;
   if (fromLabel) h += `<div class="note">“${esc(fromLabel.text)}” has no cross-reference and is not written on any other sheet, so there is nowhere to jump. The green highlight shows the piece of wiring this label belongs to on this page, as drawn.</div>`;
+  if (fromLabel) h += `<div class="what pending" id="what">looking up what this is ...</div>`;
+  if (words && (words.title || arr(words.lines).length)) {
+    h += `<div class="what"${fromLabel ? "" : ' id="what"'}><div class="what-title">${esc(words.title || "What this wire carries")}</div>${arr(words.lines).map((l) => `<div class="what-line">${esc(l)}</div>`).join("")}<div class="what-src">Read from the labels on this wire and the symbols it reaches.</div></div>`;
+  }
   h += `<div class="muted">${net.segs.length} drawn segment${net.segs.length > 1 ? "s" : ""}. Wires are joined at corners and junction dots and stop at device symbols; crossing lines are not joined.</div>`;
   if (labels.length) h += `<h4>Labels on this wire</h4><div>${labels.map((t) => `<span class="chip" data-t="${esc(t.id)}">${esc(t.text)}</span>`).join("")}</div>`;
   if (shapes.length) h += `<h4>Symbols it touches</h4><div>${shapes.map((s) => `<span class="chip">${esc(s.texts.map((x) => (textById(x) || {}).text).filter(Boolean).join(" ") || "symbol")}</span>`).join("")}</div>`;
@@ -555,6 +724,7 @@ function renderNetPanel(net, exits, fromLabel) {
   box.innerHTML = h;
   box.querySelectorAll("[data-exit]").forEach((r) => (r.onclick = () => { const x = exits[+r.dataset.exit]; navigate(linkTarget(x.link, x.text.text)); }));
   box.querySelectorAll(".chip[data-t]").forEach((c) => (c.onclick = () => { const t = textById(c.dataset.t); selectText(t); highlightBox(t.bbox, { noPulse: true }); }));
+  if (fromLabel) renderWhat(fromLabel);
   showTab("selection");
 }
 
@@ -615,10 +785,253 @@ function renderSheetList() {
   const list = box.querySelector(".sheetlist");
   state.sheets.forEach((s) => {
     const row = el("div", { class: "row", "data-id": s.id });
-    row.innerHTML = `<span class="lbl"><b>${esc(s.id)}</b> ${esc(s.title || "")}<br><small>${s.links} links · ${s.nets} wires${s.pdf_page ? " · PDF page " + s.pdf_page : ""}${s.warnings && s.warnings.length ? " · ⚠ " + esc(s.warnings[0]) : ""}</small></span>`;
+    row.innerHTML = `<span class="lbl"><b>${esc(s.id)}</b> ${esc(s.title || "")}<br><small>${s.links} links · ${s.nets} wires${s.pdf_page ? " · PDF page " + s.pdf_page : ""}${s.warnings && s.warnings.length ? " · ⚠ " + esc(s.warnings[0]) : ""}</small></span><button class="small" data-explain="${esc(s.id)}" title="What this sheet does">Explain</button>`;
     row.onclick = () => navigate({ sheet: s.id, label: s.title });
+    row.querySelector("[data-explain]").onclick = async (ev) => { ev.stopPropagation(); if (state.sheetId !== s.id) await navigate({ sheet: s.id, label: s.title }); openExplain(); };
     list.appendChild(row);
   });
+}
+
+// ------------------------------------------------------------------ Explain sheet: summary, facts, logic outline, signal path
+const KIND_ORDER = ["continuation", "incoming", "other", "converter", "dv", "annunciator"];
+const KIND_TITLE = { continuation: "Signals leaving this sheet", incoming: "Signals arriving from other sheets", other: "Process device outputs", converter: "Analogue outputs through converters", dv: "DeltaV Modbus points", annunciator: "Annunciator windows" };
+const SHEET_KIND = { fld: "functional logic diagram", power: "power distribution", card: "distribution card", loop_input: "loop drawing, inputs", loop_output: "loop drawing, outputs", typical: "typical loops", elco: "ELCO schedule", annunciator: "annunciator wiring", layout: "layout drawing", schedule: "schedule" };
+function entryArrow(e) {   // short form for the list rows: '3B → 052'
+  if (e.kind === "continuation") return `→ ${e.dest_sheet || "?"}`;
+  if (e.kind === "incoming") return `← ${e.from_sheet || "?"}`;
+  if (e.kind === "converter") return [e.signal_in, e.signal_out].filter(Boolean).join(" → ") || "converter";
+  if (e.kind === "dv") return "tap";
+  if (e.kind === "annunciator") return "window";
+  if (e.kind === "other") return arr(e.via).length ? "via " + e.via.join(", ") : "device output";
+  return str(e.kind);
+}
+function entryWords(e) {   // sentence form for the status line
+  if (e.kind === "continuation") return `leaves to sheet ${e.dest_sheet || "?"}`;
+  if (e.kind === "incoming") return `arrives from sheet ${e.from_sheet || "?"}`;
+  if (e.kind === "converter") return `converter ${e.signal_in || ""} to ${e.signal_out || ""}`.replace(/\s+/g, " ");
+  if (e.kind === "dv") return "DeltaV point";
+  if (e.kind === "annunciator") return "annunciator window";
+  return "output";
+}
+function entryBadge(e) { return e.link_status ? `<span class="badge ${esc(e.link_status)}">${esc(e.link_status)}</span>` : `<span class="badge kind">${esc(e.kind || "")}</span>`; }
+function shortExpr(e, n) { const x = str(e.expr); n = n || 70; return x.length > n ? x.slice(0, n - 3) + "..." : x; }
+function openExplain() { $("#side").classList.remove("hidden"); applyVB(); renderExplainTab(); showTab("explain"); }
+function renderExplainTab() {
+  const box = $("#tab-explain"); state.explainDirty = false; state.explainSheet = state.sheetId;
+  if (!state.sheet) { box.innerHTML = `<p class="muted">No sheet loaded.</p>`; return; }
+  const ex = explainOf(state.sheet), sid = state.sheetId;
+  let h = `<h3>Sheet ${esc(sid)} <span class="muted" style="font-weight:400">${esc(state.sheet.title || "")}</span></h3>`;
+  if (!ex) { box.innerHTML = h + `<div class="note">No explanation data for this sheet. The importer produces it; run the import again with the current version of the program.</div>`; return; }
+  if (ex.kind) h += `<div><span class="badge kind">${esc(SHEET_KIND[ex.kind] || ex.kind)}</span></div>`;
+  if (ex.summary) h += `<p class="summary">${esc(ex.summary)}</p>`;
+  arr(ex.warnings).forEach((w) => (h += `<div class="note warn">${esc(w)}</div>`));
+  const facts = arr(ex.facts).map(str).filter(Boolean), SHOW = 10;
+  if (facts.length) {
+    h += `<h4>Facts read from the drawing</h4><ul class="facts">${facts.map((f, i) => `<li${i >= SHOW ? ' class="hidden more-fact"' : ""}>${esc(f)}</li>`).join("")}</ul>`;
+    if (facts.length > SHOW) h += `<button class="small" id="moreFacts">show all ${facts.length} facts</button>`;
+  }
+  const logic = explainLogic(state.sheet);
+  if (logic.length) {
+    h += `<h4>Logic, one row per output</h4><p class="legend">Click a row to highlight everything that takes part in it and to read the logic as an outline. Click a line of the outline to highlight that input on the drawing.</p>`;
+    const kinds = KIND_ORDER.concat(logic.map((e) => e.kind || "other").filter((k) => !KIND_ORDER.includes(k)));
+    for (const k of [...new Set(kinds)]) {
+      const rows = logic.filter((e) => (e.kind || "other") === k); if (!rows.length) continue;
+      h += `<div class="muted" style="margin-top:8px"><b>${esc(KIND_TITLE[k] || k)}</b> (${rows.length})</div>`;
+      h += rows.map((e) => `<div class="row logic-row" data-e="${logic.indexOf(e)}" title="${esc(str(e.expr))}"><span class="lbl"><b>${esc(e.output || "?")}</b> ${esc(entryArrow(e))}${e.expr ? ` <small>${esc(shortExpr(e))}</small>` : ""}</span>${entryBadge(e)}</div>`).join("");
+    }
+  } else if (ex.kind === "fld") h += `<p class="muted">No logic could be traced on this sheet.</p>`;
+  if (!ex.summary && !facts.length && !logic.length) h += `<p class="muted">The explanation data for this sheet is empty.</p>`;
+  box.innerHTML = h;
+  const mf = $("#moreFacts"); if (mf) mf.onclick = () => { box.querySelectorAll(".more-fact").forEach((li) => li.classList.remove("hidden")); mf.remove(); };
+  box.querySelectorAll(".logic-row").forEach((r) => (r.onclick = () => selectLogic(logic[+r.dataset.e])));
+  if (state.explainSel && state.explainSel.sheet === sid && logic[state.explainSel.index]) renderLogicDetail(logic[state.explainSel.index], state.explainSel.index);
+}
+function selectLogic(e, opts) {
+  if (!e) return;
+  opts = opts || {};
+  if (state.explainSheet !== state.sheetId || !$("#tab-explain").querySelector(".logic-row")) renderExplainTab();
+  const logic = explainLogic(state.sheet), idx = logic.indexOf(e);
+  state.explainSel = { sheet: state.sheetId, index: idx };
+  hidePopup();
+  highlightEntry(e, opts);
+  renderLogicDetail(e, idx);
+  $("#side").classList.remove("hidden"); showTab("explain");
+  setStatus(`${e.output || ""} ${entryWords(e)}${e.expr ? ": " + shortExpr(e, 160) : ""}`);
+}
+function entryIds(e) {   // everything drawn that takes part in an entry: the explicit lists plus whatever the tree names
+  const nets = new Set(), shapes = new Set(), texts = new Set();
+  const add = (n) => {
+    if (!n || typeof n !== "object") return;
+    if (n.net != null) nets.add(n.net); if (n.field_net != null) nets.add(n.field_net);
+    [n.shape, n.module_shape, n.field_shape].forEach((s) => { if (s != null) shapes.add(s); });
+    arr(n.text_ids).forEach((t) => texts.add(t)); arr(n.taps).forEach((t) => { if (t && t.text) texts.add(t.text); });
+    arr(n.inputs).forEach(add);
+  };
+  arr(e.net_ids).forEach((n) => nets.add(n)); arr(e.shape_ids).forEach((s) => shapes.add(s)); arr(e.text_ids).forEach((t) => texts.add(t));
+  add(e); add(e.tree); add(e.device); arr(e.feeds).forEach((f) => { if (f && f.shape != null) shapes.add(f.shape); });
+  if (e.text) texts.add(e.text);
+  return { nets: [...nets], shapes: [...shapes], texts: [...texts] };
+}
+function unionBox(boxes) { let b = null; for (const x of boxes) { if (!x || x.length < 4) continue; b = b ? [Math.min(b[0], x[0]), Math.min(b[1], x[1]), Math.max(b[2], x[2]), Math.max(b[3], x[3])] : x.slice(0, 4); } return b; }
+function highlightEntry(e, opts) {
+  clearHighlights(false);
+  const ids = entryIds(e), c = hlColor(), boxes = [];
+  for (const nid of ids.nets) { const n = state.sheet._nets[nid]; if (!n) continue; const p = highlightNet(n, c); if (nid !== e.net) p.classList.remove("pulse"); boxes.push(n.bbox); }
+  for (const sid of ids.shapes) { const sh = state.sheet._shapes[sid]; if (!sh || !sh.bbox) continue; highlightBox(sh.bbox, { color: c, noPulse: true, pad: 0.6 }); boxes.push(sh.bbox); }
+  for (const tid of ids.texts) { const t = textById(tid); if (!t) continue; highlightBox(t.bbox, { color: c, noPulse: true, pad: 0.4, cls: "hl-text" }); boxes.push(t.bbox); }
+  const ub = unionBox(boxes);
+  if (ub && !(opts && opts.noZoom)) zoomToFit(bboxToSvg(ub));
+  applyVB();
+  return ub;
+}
+function renderLogicDetail(e, idx) {
+  const box = $("#tab-explain");
+  box.querySelectorAll(".logic-detail").forEach((d) => d.remove());
+  box.querySelectorAll(".logic-row").forEach((r) => r.classList.toggle("active", +r.dataset.e === idx));
+  const row = box.querySelector(`.logic-row[data-e="${idx}"]`); if (!row) return;
+  const L = entryLink(e), dv = e.device && typeof e.device === "object" ? e.device : {};
+  let h = "";
+  if (e.kind === "continuation") {
+    h += `<div>Leaves this sheet to <b>sheet ${esc(e.dest_sheet || "?")}</b>${e.pointer ? ` (pointer ${esc(e.pointer)})` : ""}${e.link_status ? `, link ${esc(e.link_status)}` : ""}.</div>`;
+    h += `<div class="actions"><button class="small primary" data-follow="1" ${L ? "" : "disabled"}>Follow to sheet ${esc(e.dest_sheet || "?")}</button>${L ? "" : `<small class="muted">no link found for this pointer</small>`}</div>`;
+  } else if (e.kind === "incoming") {
+    h += `<div>Arrives from <b>sheet ${esc(e.from_sheet || "?")}</b>${e.pointer ? ` (pointer ${esc(e.pointer)})` : ""}${e.feeds_text ? ` and feeds ${esc(e.feeds_text)}` : ""}.</div>`;
+    if (arr(e.used_in).length) h += `<div>Used in: ${e.used_in.map((u) => `<span class="chip" data-use="${esc(u)}" title="open this output">${esc(u)}</span>`).join("")}</div>`;
+    h += `<div class="actions"><button class="small primary" data-follow="1" ${L ? "" : "disabled"}>Go to sheet ${esc(e.from_sheet || "?")}, where it is made</button></div>`;
+  } else if (e.kind === "converter") {
+    h += `<div>Converter ${esc((e.tree && e.tree.op) || "")}: takes ${esc(e.signal_in || "its input")} and gives ${esc(e.signal_out || "its output")}${dv.tag ? ` to process device tag <b>${esc(dv.tag)}</b>` : ""}${dv.cable ? `, cable ${esc(dv.cable)}${dv.terminals ? " terminals " + esc(dv.terminals) : ""}` : ""}.</div>`;
+  } else if (e.kind === "dv") h += `<div>DeltaV Modbus point tapped on a logic wire. What is on that wire:</div>`;
+  else if (e.kind === "annunciator") h += `<div>Annunciator window <b>${esc(e.output || "")}</b> is driven by:</div>`;
+  else if (e.kind === "other") h += `<div>Process device output${dv.tag ? ` <b>${esc(dv.tag)}</b>` : ""}${dv.desc ? " " + esc(dv.desc) : ""}${dv.cable ? `, cable ${esc(dv.cable)}${dv.terminals ? " terminals " + esc(dv.terminals) : ""}` : ""}${arr(e.via).length ? `, through ${esc(e.via.join(" and "))}` : ""}.</div>`;
+  if (arr(e.taps).length) h += `<div>DeltaV taps on the output wire: ${e.taps.map((t) => `<span class="chip tap"${t && t.text ? ` data-t="${esc(t.text)}"` : ""}>${esc((t && t.label) || "")}</span>`).join("")}</div>`;
+  if (e.expr) h += `<div class="expr">${esc(e.expr)}</div>`;
+  const leaves = [];
+  if (e.tree && typeof e.tree === "object") h += `<h4>Logic outline</h4><div class="tree">${treeHtml(e.tree, 0, leaves)}</div>`;
+  else if (e.kind !== "incoming") h += `<p class="muted">No logic tree was traced for this output${e.expr ? "; the one-line form above is all that is known" : ""}.</p>`;
+  const d = el("div", { class: "logic-detail" }); d.innerHTML = h;
+  row.after(d);
+  d.querySelectorAll("[data-follow]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); followEntry(e); }));
+  d.querySelectorAll(".chip[data-t]").forEach((c) => (c.onclick = () => { const t = textById(c.dataset.t); if (t) { selectText(t); highlightBox(t.bbox); } }));
+  d.querySelectorAll(".chip[data-use]").forEach((c) => (c.onclick = () => { const u = explainLogic(state.sheet).find((x) => x.output === c.dataset.use); if (u) selectLogic(u); }));
+  d.querySelectorAll("[data-leaf]").forEach((n) => (n.onclick = (ev) => { ev.stopPropagation(); d.querySelectorAll(".tline").forEach((x) => x.classList.toggle("active", x === n)); highlightLeaf(leaves[+n.dataset.leaf]); }));
+  d.querySelectorAll("[data-go]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); followLeaf(leaves[+b.dataset.go]); }));
+  d.querySelectorAll("[data-dossier]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); showLeafDossier(leaves[+b.dataset.dossier]); }));
+  if (d.scrollIntoView) d.scrollIntoView({ block: "nearest" });
+}
+function tapsHtml(n) { return arr(n.taps).map((t) => `<span class="chip tap">${esc((t && t.label) || "")}</span>`).join(""); }
+function treeHtml(n, depth, leaves) {
+  // indented outline of a logic tree; every line is clickable (data-leaf = index into `leaves`)
+  if (!n || typeof n !== "object" || depth > 40) return "";
+  const i = leaves.push(n) - 1;
+  const line = (inner, cls) => `<div class="tnode" style="--d:${depth}"><span class="tline ${cls || ""}" data-leaf="${i}" title="click to highlight on the drawing">${inner}</span></div>`;
+  if (n.op != null || Array.isArray(n.inputs)) {
+    const kind = str(n.kind), op = str(n.op);
+    let head = kind === "gate" ? `<span class="op">${esc(op)}</span> gate` : kind === "timer" ? `timer <span class="op">${esc(op)}</span>` : kind === "converter" ? `converter <span class="op">${esc(op)}</span>` : kind === "module" ? `module <span class="op">${esc(op)}</span>` : `<span class="op">${esc(op || kind || "block")}</span>`;
+    if (n.signal) head += ` = <span class="signal">${esc(n.signal)}</span>`;
+    if (n.label && n.label !== n.signal) head += ` <small>${esc(n.label)}</small>`;
+    head += tapsHtml(n);
+    const ins = arr(n.inputs);
+    return line(head) + (ins.length ? ins.map((c) => treeHtml(c, depth + 1, leaves)).join("") : `<div class="tnode" style="--d:${depth + 1}"><span class="open">no input wire found</span></div>`);
+  }
+  return line(leafHtml(n, i), n.cycle ? "cycle" : "");
+}
+function leafHtml(n, i) {
+  if (n.cycle) return `<span class="cycle">feedback: loops back to logic already shown above${n.shape != null ? " (symbol " + esc(n.shape) + ")" : ""}; not followed further</span>` + tapsHtml(n);
+  if (n.unlabelled || (!n.signal && !n.tag && !n.label && !n.device)) return `<span class="open">unlabelled wire</span>${n.net != null ? ` <small class="muted">(wire ${esc(n.net)})</small>` : ""}` + tapsHtml(n);
+  let h = "";
+  if (n.incoming || n.from_sheet) {
+    h += `<span class="signal">${esc(n.signal || n.label || "")}</span> arrives from sheet <b>${esc(n.from_sheet || "?")}</b>${n.link_status ? ` <span class="badge ${esc(n.link_status)}">${esc(n.link_status)}</span>` : ""}`;
+    return h + ` <button class="small" data-go="${i}" title="go to the sheet where this signal is made">Go</button>` + tapsHtml(n);
+  }
+  if (n.signal) h += `${n.limit ? esc(n.limit) + " " : ""}<span class="signal">${esc(n.signal)}</span>`;
+  if (n.tag) {
+    h += (h ? " from " : (n.limit ? esc(n.limit) + " " : "")) + `<b>${esc(n.tag)}</b>${n.desc ? " " + esc(n.desc) : ""}${n.device ? " (" + esc(n.device) + ")" : ""}${n.location ? ", " + esc(n.location) : ""}`;
+    if (!n.signal && n.label && !str(n.device).includes(n.label)) h += ` (${esc(n.label)})`;
+  } else if (n.label && !n.signal) h += `<span class="signal">${esc(n.label)}</span>${n.device ? " " + esc(n.device) : ""}`;
+  else if (n.device && !n.signal) h += esc(n.device);
+  if (n.module) h += ` <small class="muted">via ${esc(n.module)}</small>`;
+  if (n.tag && !n.signal && n.module) h += ` <span class="open">no signal name written</span>`;
+  if (n.tag) h += ` <button class="small" data-dossier="${i}" title="What is this device? Opens its note and dossier">?</button>`;
+  return h + tapsHtml(n);
+}
+function leafWords(n) {
+  if (!n) return "";
+  if (n.cycle) return "feedback wire: loops back to logic already shown";
+  if (n.op != null) return `${n.kind === "gate" ? n.op + " gate" : n.op}${n.signal ? " = " + n.signal : ""}`;
+  if (n.incoming || n.from_sheet) return `${n.signal || n.label || ""} arrives from sheet ${n.from_sheet || "?"}`;
+  const parts = [];
+  if (n.limit) parts.push(n.limit);
+  if (n.signal) parts.push(n.signal);
+  if (n.tag) parts.push((n.signal ? "from " : "") + n.tag + (n.desc ? " " + n.desc : ""));
+  if (n.device) parts.push("(" + n.device + ")");
+  if (!n.signal && !n.tag && n.label) parts.push(n.label);
+  if (n.module) parts.push("via " + n.module);
+  return parts.join(" ") || "unlabelled wire";
+}
+function highlightLeaf(n) {
+  if (!n) return;
+  gHl.querySelectorAll(".hl-leaf").forEach((x) => x.remove());
+  const c = "#ff6d00", boxes = [];
+  [n.net, n.field_net].forEach((nid) => { const net = nid != null && state.sheet._nets[nid]; if (net) { highlightNet(net, c).classList.add("hl-leaf"); boxes.push(net.bbox); } });
+  [n.shape, n.module_shape, n.field_shape].forEach((sid) => { const sh = sid != null && state.sheet._shapes[sid]; if (sh && sh.bbox) { highlightBox(sh.bbox, { color: c, pad: 0.6, cls: "hl-leaf" }); boxes.push(sh.bbox); } });
+  arr(n.text_ids).forEach((tid) => { const t = textById(tid); if (t) { highlightBox(t.bbox, { color: c, pad: 0.4, cls: "hl-leaf" }); boxes.push(t.bbox); } });
+  const ub = unionBox(boxes);
+  if (!ub) return setStatus(`${leafWords(n)}: nothing drawn to highlight`, true);
+  const b = bboxToSvg(ub), vb = state.vb;   // bring it into view, keeping the zoom when it fits
+  if (b.x < vb.x || b.y < vb.y || b.x + b.w > vb.x + vb.w || b.y + b.h > vb.y + vb.h) {
+    if (b.w > vb.w * 0.9 || b.h > vb.h * 0.9) zoomToFit(b); else setVB(b.x + b.w / 2 - vb.w / 2, b.y + b.h / 2 - vb.h / 2, vb.w, vb.h);
+  }
+  setStatus(leafWords(n));
+}
+function linkById(id) { return id ? arr(state.sheet.links).find((L) => L.id === id) || null : null; }
+function entryLink(e) {   // the explicit link of a continuation / incoming entry, or the output label's own destination
+  if (!e) return null;
+  let L = linkById(e.link);
+  if (!L && e.pointer_text) L = (state.sheet._linksOut[e.pointer_text] || [])[0] || null;
+  if (!L) { const t = arr(e.text_ids).map(textById).find((x) => x && x.text === e.output); if (t) L = destinationsFor(t).out.find((x) => x.status !== "rejected" && x.dst_sheet) || null; }
+  if (!L || !L.dst_sheet) return null;
+  const d = userDecision(L.id); if (d && d.action === "reject") return null;
+  return L;
+}
+async function followEntry(e) {
+  // Signal path: follow a continuation to the sheet it goes to (or an incoming signal back to where it is made)
+  // and open the matching logic entry there, so the signal can be walked sheet by sheet with its logic shown at each hop
+  const L = entryLink(e); if (!L) return setStatus(`no link found for ${e.output || "this signal"}`, true);
+  const want = e.kind === "incoming" ? "continuation" : "incoming";
+  state.pathPending = { label: e.output, want, from: state.sheetId, sheet: L.dst_sheet };
+  const d = userDecision(L.id), status = d ? (d.action === "confirm" ? "confirmed" : "rejected") : L.status;
+  if (L.candidates && L.candidates.length > 1 && !AUTO_GO.has(status)) {   // several boxes: the engineer chooses, the path continues after the choice
+    const t = textById(L.src_text) || { text: e.output || "" };
+    return showChoices(t, [{ ...L, status }], null);
+  }
+  await navigate({ sheet: L.dst_sheet, text: L.dst_text, point: L.dst_point, label: e.output, status: "path",
+                   note: want === "incoming" ? `signal ${e.output} continues from sheet ${state.sheetId}` : `signal ${e.output} is made on sheet ${L.dst_sheet}` });
+}
+function followLeaf(n) {   // 'Go' on an incoming leaf of the outline
+  const label = n.signal || n.label || "";
+  const e = explainLogic(state.sheet).find((x) => x.kind === "incoming" && x.output === label);
+  if (e) return followEntry(e);
+  const L = linkById(n.link); if (!L || !L.dst_sheet) return setStatus(`no link found for ${label || "this signal"}`, true);
+  state.pathPending = { label, want: "continuation", from: state.sheetId, sheet: L.dst_sheet };
+  navigate({ sheet: L.dst_sheet, text: L.dst_text, point: L.dst_point, label, status: "path" });
+}
+function showLeafDossier(n) {   // '?' on a device leaf: select its tag text so the "What this is" block and the dossier open
+  const t = arr(n.text_ids).map(textById).find((x) => x && x.text === n.tag) || state.sheet.texts.find((x) => !x.frame && x.text === n.tag);
+  if (!t) return setStatus(`${n.tag}: tag text not found on this sheet`, true);
+  selectText(t); highlightBox(t.bbox, { pad: 0.6 });
+  tipForText(t, null);
+}
+function arriveOnPath(pp) {
+  // after a signal-path navigation: open the logic entry with the same label on the new sheet and name the hop in the trail
+  const logic = explainLogic(state.sheet), key = normKey(pp.label || "");
+  const e = logic.find((x) => x.kind === pp.want && normKey(x.output || "") === key) || logic.find((x) => x.kind === pp.want && normKey(x.signal || "") === key) || logic.find((x) => normKey(x.output || "") === key);
+  const last = state.trail[state.trail.length - 1];
+  if (!e) { if (last) { last.label = `${pp.label} from sheet ${pp.from}`; renderTrail(); } return setStatus(`sheet ${state.sheetId}: ${pp.label} is highlighted, but the explanation data has no logic entry for it`, true); }
+  if (last) {
+    last.label = e.kind === "incoming" ? `${pp.label} arrives from ${pp.from}${e.feeds_text ? ", feeds " + e.feeds_text : ""}${arr(e.used_in).length ? ", used in " + e.used_in.slice(0, 4).join(", ") : ""}` : `${pp.label} is made here${e.expr ? ": " + shortExpr(e, 60) : ""}`;
+    renderTrail();
+  }
+  selectLogic(e);
 }
 
 // ------------------------------------------------------------------ init
@@ -640,6 +1053,7 @@ async function init() {
   $("#btnNext").onclick = () => { const i = state.sheets.findIndex((s) => s.id === state.sheetId); if (i < state.sheets.length - 1) navigate({ sheet: state.sheets[i + 1].id }); };
   $("#btnBack").onclick = goBack; $("#btnFwd").onclick = goForward;
   $("#btnFit").onclick = fitSheet;
+  $("#btnExplain").onclick = openExplain;
   $("#btnSearch").onclick = doSearch; $("#searchBox").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
   $("#viewMode").onchange = applyViewMode;
   $("#btnSide").onclick = () => { $("#side").classList.toggle("hidden"); applyVB(); };
@@ -650,6 +1064,7 @@ async function init() {
     if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) { e.preventDefault(); goBack(); }
     else if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); goForward(); }
     else if (e.key === "f" || e.key === "F") fitSheet();
+    else if (e.key === "e" || e.key === "E") openExplain();
     else if (e.key === "+" || e.key === "=") zoomAt(view.clientWidth / 2 + view.getBoundingClientRect().left, view.clientHeight / 2 + view.getBoundingClientRect().top, 1.4);
     else if (e.key === "-") zoomAt(view.clientWidth / 2 + view.getBoundingClientRect().left, view.clientHeight / 2 + view.getBoundingClientRect().top, 0.7);
     else if (e.key === "Escape") { hidePopup(); state.linkMode = null; $("#btnLink").classList.remove("primary"); clearHighlights(true); }
@@ -663,6 +1078,7 @@ async function init() {
   document.title = `${pj.name} – Schematic Viewer`;
   updateNavButtons();
 }
-window.viewer = { navigate, state, loadSheet, fitSheet, goBack, destinationsFor, onTextClick, onNetClick };
+window.viewer = { navigate, state, loadSheet, fitSheet, goBack, destinationsFor, onTextClick, onNetClick,
+                  selectText, whatThisIs, openExplain, renderExplainTab, selectLogic, followEntry, showTip, hideTip, explainLogic: () => explainLogic(state.sheet) };
 init().catch((e) => { setStatus("failed to load project: " + e.message, true); console.error(e); });
 })();
