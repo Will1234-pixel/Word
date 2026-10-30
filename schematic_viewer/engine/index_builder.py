@@ -31,6 +31,15 @@ from .identifiers import Ident, XREF_RE, classify, is_connection_kind
 from .nets import build_nets, NetResult
 from .svg_render import render_modelspace, write_svg
 
+try:                                     # drawing-derived explanations (engine/explain.py)
+    from .explain import explain_sheet
+except Exception:                        # pragma: no cover - module optional
+    explain_sheet = None
+try:                                     # cross-sheet dossier + glossary (engine/dossier.py)
+    from .dossier import build_dossier
+except Exception:                        # pragma: no cover - module optional
+    build_dossier = None
+
 DEFAULT_RULER = (0.998, -4.6)   # x_mm = a*grid + b when a sheet has no ruler
 
 
@@ -425,10 +434,16 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
             "id": sid, "file": file_of[sid], "title": d.title, "drgno": d.drgno, "rev": d.rev,
             "extents": d.extents, "ruler": d.ruler, "warnings": d.warnings,
             "texts": texts_json, "nets": nets_json,
-            "shapes": [{"id": s["id"], "bbox": s["bbox"], "texts": s["texts"], "nets": s["nets"], "handle": s["handle"]} for s in (rec.nets.shapes if rec.nets else [])],
+            "shapes": [dict(s) for s in (rec.nets.shapes if rec.nets else [])],
             "links": out_links, "links_in": links_in.get(sid, []),
             "nets_skipped": bool(rec.nets and rec.nets.skipped),
         }
+        if explain_sheet is not None:
+            try:
+                sheet_json["explain"] = explain_sheet(d, rec.nets, out_links, {"id": sid, "title": d.title, "file": file_of[sid], "links_in": links_in.get(sid, [])})
+            except Exception as exc:     # an explanation failure must never break the import
+                sheet_json["explain"] = {"kind": "other", "summary": "", "facts": [f"explanation not available: {exc}"], "logic": [], "nets": {}, "texts": {}}
+                d.warnings.append(f"explain failed: {exc}")
         _write_json_gz(os.path.join(out_dir, "sheets", f"{sid}.json.gz"), sheet_json)
         for t in texts_json:
             if not t["frame"]:
@@ -461,7 +476,7 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
         "sheets": sheets_meta,
         "stats": dict(stat),
         "counts": {"sheets": len(sheets_meta), "texts": sum(s["texts"] for s in sheets_meta), "links": len(links),
-                   "identifiers": sum(len(v) for v in index.values()), "issues": len(issues)},
+                   "identifiers": sum(len(v) for v in index.values()), "issues": len(issues), "dossier": dossier_count},
         "pdf": pdf_info,
         "import_seconds": round(time.time() - t_start, 1),
     }
@@ -469,6 +484,18 @@ def build_project(dxf_files: list[str], out_dir: str, progress: Callable[[str], 
         json.dump(project, fh, indent=1)
     _write_json_gz(os.path.join(out_dir, "index.json.gz"), index)
     _write_json_gz(os.path.join(out_dir, "search.json.gz"), search_rows)
+    dossier_count = 0
+    if build_dossier is not None:
+        try:
+            dossier = build_dossier(records)
+            _write_json_gz(os.path.join(out_dir, "dossier.json.gz"), dossier)
+            dossier_count = len(dossier)
+        except Exception as exc:
+            progress(f"  ! dossier failed: {exc}")
+    glossary_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glossary.json")
+    if os.path.exists(glossary_src):
+        import shutil
+        shutil.copyfile(glossary_src, os.path.join(out_dir, "glossary.json"))
     with open(os.path.join(out_dir, "issues.json"), "w", encoding="utf-8") as fh:
         json.dump(issues, fh, indent=1)
     ul = os.path.join(out_dir, "user_links.json")
