@@ -37,6 +37,14 @@ DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
 SHAPE_MAX_DIAG = 90  # mm, closed loops smaller than this are symbols, not ring wiring
 SMALL_SYMBOL = 4.5   # mm, a block symbol up to this size with two wires on it is an in-line part (terminal, link)
+DEVICE_MIN_DIAG = 1.5   # mm, closed symbols between these sizes are devices (diode, fuse, coil, contact, lamp body):
+DEVICE_MAX_DIAG = 16.0  # a conductor drawn straight through one is cut there, lines inside belong to it
+MINI_SYMBOL = 4.5    # mm, a cluster of short open line-work (connector pin, terminal foot) passes the conductor through
+DECOR_POLY_SEGS = 20  # an open polyline with this many short pieces is a boundary or curve, not a wire
+DECOR_PIECE = 6.0     # mm, "short" for the rule above (median piece length)
+ZIGZAG_MAX = 1.5      # mm, a component made only of pieces this short (8 or more) is hatching / a zigzag symbol
+MIN_WIRE = 0.2        # mm, anything shorter is drawing noise
+DEBUG_MINI: list = []   # filled with the clusters that joined conductors (diagnostics)
 MAX_SEGMENTS = 16000 # skip wire tracing on huge layout drawings
 
 
@@ -241,10 +249,52 @@ def build_nets(sheet: SheetData) -> NetResult:
         for m in ex["segments"]:
             seg_shape[m] = sid
 
-    # ---- wire union-find ---------------------------------------------------------
+    # ---- device symbols: cut conductors that run straight through, absorb internal lines ----
+    devices = [sh for sh in shapes
+               if DEVICE_MIN_DIAG <= math.hypot(sh["bbox"][2] - sh["bbox"][0], sh["bbox"][3] - sh["bbox"][1]) <= DEVICE_MAX_DIAG]
+    dev_grid = _BoxGrid(devices) if devices else None
+    # open polylines made of many short pieces are boundaries or curves, never conductors
+    poly_count: dict[str, list[float]] = defaultdict(list)
+    for s in segs:
+        if s.kind == "pline" and not s.dashed:
+            poly_count[s.handle].append(math.hypot(s.x2 - s.x1, s.y2 - s.y1))
+    decorative = {h for h, lens in poly_count.items()
+                  if len(lens) >= DECOR_POLY_SEGS and sorted(lens)[len(lens) // 2] <= DECOR_PIECE}
+    wires: list[Segment] = []
+    for s in segs:
+        if s.id in shape_edges or s.dashed:
+            continue
+        if math.hypot(s.x2 - s.x1, s.y2 - s.y1) < MIN_WIRE:
+            continue
+        if s.kind == "pline" and s.handle in decorative:
+            continue
+        pieces = [s]
+        if dev_grid is not None:
+            for dev in dev_grid.candidates(s):
+                b = dev["bbox"]
+                nxt: list[Segment] = []
+                for piece in pieces:
+                    in1 = _inside(piece.x1, piece.y1, b)
+                    in2 = _inside(piece.x2, piece.y2, b)
+                    if in1 and in2:
+                        seg_shape[piece.id] = dev["id"]          # drawn inside the device: part of it
+                        shape_edges.add(piece.id)
+                        continue
+                    if not in1 and not in2:
+                        clip = _clip_box(piece, b)
+                        if clip is not None:
+                            t0, t1 = clip
+                            if (t1 - t0) * math.hypot(piece.x2 - piece.x1, piece.y2 - piece.y1) > 0.5:
+                                nxt.extend(_split(piece, t0, t1, segs))
+                                continue
+                    nxt.append(piece)
+                pieces = nxt
+        wires.extend(pieces)
+
     # dashed line work (enclosures, scope boundaries, mechanical links) never conducts
-    wires = [s for s in segs if s.id not in shape_edges and not s.dashed]
     dot_grid_pts = sheet.junctions
+    for i in range(len(seg_nodes), len(segs)):        # nodes for pieces created by splitting (id order)
+        seg_nodes.append((node(segs[i].x1, segs[i].y1), node(segs[i].x2, segs[i].y2)))
 
     def dot_near(px, py) -> bool:
         for jx, jy in dot_grid_pts:
@@ -326,6 +376,47 @@ def build_nets(sheet: SheetData) -> NetResult:
             a, b = touching
             uf.union(a, b)
 
+    # tiny open line-work (connector pins, terminal feet): clusters of short lines joined at
+    # corners; a wire whose END lies inside such a cluster is connected through it
+    short = [w for w in wires if math.hypot(w.x2 - w.x1, w.y2 - w.y1) <= MINI_SYMBOL]
+    cuf = _UF(len(segs))
+    first_at: dict[int, int] = {}
+    for w in short:
+        for n in seg_nodes[w.id]:
+            if n in first_at:
+                cuf.union(first_at[n], w.id)
+            else:
+                first_at[n] = w.id
+    clusters: dict[int, list[Segment]] = defaultdict(list)
+    for w in short:
+        clusters[cuf.find(w.id)].append(w)
+    for members in clusters.values():
+        if len(members) < 2:
+            continue
+        xs = [v for m in members for v in (m.x1, m.x2)]
+        ys = [v for m in members for v in (m.y1, m.y2)]
+        bx0, by0, bx1, by1 = min(xs), min(ys), max(xs), max(ys)
+        if bx1 - bx0 > MINI_SYMBOL or by1 - by0 > MINI_SYMBOL:
+            continue
+        member_ids = {m.id for m in members}
+        ending: set[int] = set()
+        for oid in grid.near_box(bx0 - 0.3, by0 - 0.3, bx1 + 0.3, by1 + 0.3):
+            if oid in member_ids:
+                continue
+            o = segs[oid]
+            for px, py in ((o.x1, o.y1), (o.x2, o.y2)):
+                if bx0 - 0.3 <= px <= bx1 + 0.3 and by0 - 0.3 <= py <= by1 + 0.3:
+                    ending.add(oid)
+                    break
+        roots = {uf.find(e) for e in ending}
+        if 2 <= len(roots) <= 3:
+            DEBUG_MINI.append(((round(bx0, 1), round(by0, 1), round(bx1, 1), round(by1, 1)), len(members), sorted(ending)))
+            base = members[0].id
+            for e in ending:
+                uf.union(base, e)
+            for m in members:
+                uf.union(base, m.id)
+
     # ---- assemble nets -----------------------------------------------------------
     groups: dict[int, list[int]] = defaultdict(list)
     for s in wires:
@@ -333,6 +424,8 @@ def build_nets(sheet: SheetData) -> NetResult:
     nets: list[Net] = []
     seg_net: dict[int, int] = {}
     for members in groups.values():
+        if len(members) >= 8 and max(math.hypot(segs[i].x2 - segs[i].x1, segs[i].y2 - segs[i].y1) for i in members) <= ZIGZAG_MAX:
+            continue                                   # hatching / zigzag symbol, not wiring
         xs = [v for sid in members for v in (segs[sid].x1, segs[sid].x2)]
         ys = [v for sid in members for v in (segs[sid].y1, segs[sid].y2)]
         nid = len(nets)
@@ -373,6 +466,71 @@ def build_nets(sheet: SheetData) -> NetResult:
             text_net[t.id] = best_net
             nets[best_net].texts.append(t.id)
     return NetResult(nets, shapes, seg_net, text_net, text_shape)
+
+
+def _inside(x: float, y: float, b, tol: float = 0.05) -> bool:
+    return b[0] - tol <= x <= b[2] + tol and b[1] - tol <= y <= b[3] + tol
+
+
+def _clip_box(s: Segment, b):
+    """Liang-Barsky: parameter range of the segment inside the box, or None."""
+    dx, dy = s.x2 - s.x1, s.y2 - s.y1
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, s.x1 - b[0]), (dx, b[2] - s.x1), (-dy, s.y1 - b[1]), (dy, b[3] - s.y1)):
+        if abs(p) < 1e-12:
+            if q < 0:
+                return None
+            continue
+        r = q / p
+        if p < 0:
+            if r > t1:
+                return None
+            t0 = max(t0, r)
+        else:
+            if r < t0:
+                return None
+            t1 = min(t1, r)
+    return (t0, t1) if t0 < t1 else None
+
+
+def _split(s: Segment, t0: float, t1: float, segs: list[Segment]) -> list[Segment]:
+    """Replace a segment crossing a device by its two outside parts (appended to *segs*)."""
+    out = []
+    for (ta, tb) in ((0.0, t0), (t1, 1.0)):
+        if tb - ta <= 1e-9:
+            continue
+        piece = Segment(len(segs), s.handle, s.layer,
+                        s.x1 + (s.x2 - s.x1) * ta, s.y1 + (s.y2 - s.y1) * ta,
+                        s.x1 + (s.x2 - s.x1) * tb, s.y1 + (s.y2 - s.y1) * tb, s.kind, s.dashed, s.block)
+        segs.append(piece)
+        out.append(piece)
+    return out
+
+
+class _BoxGrid:
+    """Coarse grid over device boxes for quick candidate lookup."""
+
+    def __init__(self, boxes: list[dict], cell: float = 10.0) -> None:
+        self.cell = cell
+        self.cells: dict[tuple[int, int], list[dict]] = defaultdict(list)
+        for bx in boxes:
+            b = bx["bbox"]
+            for ix in range(int(math.floor(b[0] / cell)), int(math.floor(b[2] / cell)) + 1):
+                for iy in range(int(math.floor(b[1] / cell)), int(math.floor(b[3] / cell)) + 1):
+                    self.cells[(ix, iy)].append(bx)
+
+    def candidates(self, s: Segment) -> list[dict]:
+        c = self.cell
+        x0, x1 = sorted((s.x1, s.x2))
+        y0, y1 = sorted((s.y1, s.y2))
+        seen: dict[int, dict] = {}
+        for ix in range(int(math.floor(x0 / c)), int(math.floor(x1 / c)) + 1):
+            for iy in range(int(math.floor(y0 / c)), int(math.floor(y1 / c)) + 1):
+                for bx in self.cells.get((ix, iy), ()):
+                    b = bx["bbox"]
+                    if x0 <= b[2] and x1 >= b[0] and y0 <= b[3] and y1 >= b[1]:
+                        seen[bx["id"]] = bx
+        return list(seen.values())
 
 
 def _find_bridges(adj: dict[int, list[tuple[int, int]]]) -> set[int]:

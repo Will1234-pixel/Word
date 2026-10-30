@@ -212,3 +212,35 @@ def test_nets_do_not_merge_distinct_conductors_on_power_sheet(dxf_dir):
         assert not ({"LA3", "NA3"} <= labels), "live and neutral must stay separate"
         assert not ({"LA3", "PSU A L-"} <= labels), "230 V input must stay separate from 24 V output"
     assert any(sg.dashed for sg in s.segments)      # enclosures are recognised as dashed line-work
+
+
+def test_nets_stop_at_fuses_and_pass_connector_pins(dxf_dir):
+    """Sheet 045 (F7133 card): 1L+9 is the circuit downstream of fuse F1 - from its label box,
+    through the front connector pin, up to the fuse, including the two dotted taps - and not the 1L+ bus."""
+    s = read_sheet(dxf(dxf_dir, "10265-P3-045.dxf"))
+    r = build_nets(s)
+    tx = {t.id: t for t in s.texts}
+    t = next(t for t in s.texts if t.text == "1L+9")
+    net = r.nets[r.text_net[t.id]]
+    labels = {tx[i].text for i in net.texts}
+    assert labels == {"1L+9"}
+    assert net.bbox[3] <= 180.0 and net.bbox[1] <= 78.0          # reaches the fuse, not beyond; starts at the label box
+    assert len(net.segments) >= 8                                   # connector pin passed, taps included
+    lminus = next(t for t in s.texts if t.text == "L-")
+    assert r.text_net[lminus.id] != net.id
+
+
+def test_nets_keep_polarities_apart_on_sheet_040(dxf_dir):
+    s = read_sheet(dxf(dxf_dir, "10265-P3-040.dxf"))
+    r = build_nets(s)
+    tx = {t.id: t for t in s.texts}
+    for n in r.nets:
+        labels = {tx[i].text for i in n.texts}
+        for pair in (("AL+", "AL-"), ("BL+", "BL-"), ("CL+", "CL-")):
+            assert not (set(pair) <= labels), f"{pair} merged in net {n.id}"
+
+
+def test_revision_clouds_are_not_wires(dxf_dir):
+    s = read_sheet(dxf(dxf_dir, "10265-P3-056A.dxf"))
+    r = build_nets(s)
+    assert max(len(n.segments) for n in r.nets) < 40
