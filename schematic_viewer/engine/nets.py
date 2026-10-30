@@ -24,6 +24,7 @@ only groups the drawn conductors of one sheet.
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -35,6 +36,11 @@ CORNER_TOL = 1.0     # mm, a T landing this close to the host's end is a corner 
 SHORT_HOST = 6.0     # mm, a wire landing on a line this short passes through a small symbol (terminal foot)
 DOT_TOL = 0.35       # mm, wire passes through a junction dot
 TEXT_TOL = 1.2       # mm, label-to-wire distance
+LOOSE_TEXT_TOL = 3.0 # mm, DeltaV taps (DV3_5) and limit words (HIGH, LOLO) are written further from their wire
+LOOSE_LABEL_RE = re.compile(r"^(?:DV\d_\d+|HIGH|LOW|LOLO|HIHI|MID|HI|LO)$")
+PORT_TOL = 0.3       # mm, a wire end this close to a closed symbol is a port of that symbol
+GATE_PORT_TOL = 1.0  # mm, a logic gate's output leaves from its arc, up to this far from the bbox edge
+GATE_WORDS = {"AND", "OR", "NOT", "XOR", "NAND", "NOR"}
 SHAPE_MAX_DIAG = 90  # mm, closed loops smaller than this are symbols, not ring wiring
 SMALL_SYMBOL = 4.5   # mm, a block symbol up to this size with two wires on it is an in-line part (terminal, link)
 DEVICE_MIN_DIAG = 1.5   # mm, closed symbols between these sizes are devices (diode, fuse, coil, contact, lamp body):
@@ -456,16 +462,84 @@ def build_nets(sheet: SheetData) -> NetResult:
             text_shape[t.id] = best_sh
             shapes[best_sh]["texts"].append(t.id)
             continue
-        # nearest wire
-        best_d, best_net = TEXT_TOL, None
-        for oid in grid.near_box(x0 - TEXT_TOL, y0 - TEXT_TOL, x1 + TEXT_TOL, y1 + TEXT_TOL):
+        # nearest wire (DeltaV taps and limit words are written further from their wire)
+        tol = LOOSE_TEXT_TOL if LOOSE_LABEL_RE.match(t.text) else TEXT_TOL
+        best_d, best_net = tol + 0.05, None          # inclusive: DV3_12 on 053 sits exactly 3.0 mm from its wire end
+        for oid in grid.near_box(x0 - tol, y0 - tol, x1 + tol, y1 + tol):
             d = _seg_box_dist(segs[oid], (x0, y0, x1, y1))
             if d < best_d:
                 best_d, best_net = d, seg_net.get(oid)
         if best_net is not None:
             text_net[t.id] = best_net
             nets[best_net].texts.append(t.id)
+    shape_ports(segs, nets, shapes, {t.id: t.text for t in sheet.texts})
     return NetResult(nets, shapes, seg_net, text_net, text_shape)
+
+
+def _port_side(px: float, py: float, ox: float, oy: float) -> str:
+    """Side of a symbol a wire end (px, py) belongs to, from the direction of the wire's other end."""
+    dx, dy = ox - px, oy - py
+    if abs(dx) >= abs(dy):
+        return "R" if dx > 0 else "L"
+    return "T" if dy > 0 else "B"
+
+
+def shape_ports(segs: list[Segment], nets: list[Net], shapes: list[dict], text_of: dict[str, str] | None = None) -> dict[int, list[dict]]:
+    """Record where conductors touch each closed symbol: ``shape['ports']`` =
+    ``[{net, side: 'L'|'R'|'T'|'B', x, y}, ...]``.
+
+    A port is a wire END lying within PORT_TOL of the symbol's bbox (inside the
+    box is allowed too: an OR gate's inputs stop on its concave back, a push
+    button's wire starts inside its outline) while the wire's other end is
+    outside the box.  The side is the direction the wire leaves in.  Logic gate
+    outputs leave from an arc, so for gates the tolerance on the bbox is
+    GATE_PORT_TOL.  Symbols the net builder registered on a net (``net.shapes``)
+    but that got no port this way (tag ovals, whose bulged ends lie outside
+    the vertex bbox) get one from the nearest wire end within 2 mm.
+    Returns {shape id: ports} and stores the same list on every shape dict.
+    """
+    for sh in shapes:
+        sh["ports"] = []
+    if not shapes or not nets:
+        return {}
+    text_of = text_of or {}
+    gates = {sh["id"] for sh in shapes if any(text_of.get(t, "").strip().upper() in GATE_WORDS for t in sh.get("texts", []))}
+    grid = _BoxGrid(shapes, cell=10.0)
+    by_id = {sh["id"]: sh for sh in shapes}
+    for net in nets:
+        seen: set[tuple] = set()
+        got: set[int] = set()
+        for sid in net.segments:
+            s = segs[sid]
+            for px, py, ox, oy in ((s.x1, s.y1, s.x2, s.y2), (s.x2, s.y2, s.x1, s.y1)):
+                for sh in grid.near_point(px, py, GATE_PORT_TOL):
+                    b = sh["bbox"]
+                    tol = GATE_PORT_TOL if sh["id"] in gates else PORT_TOL
+                    if not _inside(px, py, b, tol) or _inside(ox, oy, b, 0.0):
+                        continue
+                    side = _port_side(px, py, ox, oy)
+                    key = (sh["id"], side, round(px, 1), round(py, 1))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    got.add(sh["id"])
+                    sh["ports"].append({"net": net.id, "side": side, "x": round(px, 2), "y": round(py, 2)})
+        for shid in net.shapes:
+            if shid in got or shid not in by_id:
+                continue
+            sh = by_id[shid]
+            b = sh["bbox"]
+            best = None
+            for sid in net.segments:
+                s = segs[sid]
+                for px, py, ox, oy in ((s.x1, s.y1, s.x2, s.y2), (s.x2, s.y2, s.x1, s.y1)):
+                    d = math.hypot(max(b[0] - px, 0.0, px - b[2]), max(b[1] - py, 0.0, py - b[3]))
+                    if d <= 2.0 and (best is None or d < best[0]):
+                        best = (d, px, py, ox, oy)
+            if best is not None:
+                _d, px, py, ox, oy = best
+                sh["ports"].append({"net": net.id, "side": _port_side(px, py, ox, oy), "x": round(px, 2), "y": round(py, 2)})
+    return {sh["id"]: sh["ports"] for sh in shapes}
 
 
 def _inside(x: float, y: float, b, tol: float = 0.05) -> bool:
@@ -518,6 +592,17 @@ class _BoxGrid:
             for ix in range(int(math.floor(b[0] / cell)), int(math.floor(b[2] / cell)) + 1):
                 for iy in range(int(math.floor(b[1] / cell)), int(math.floor(b[3] / cell)) + 1):
                     self.cells[(ix, iy)].append(bx)
+
+    def near_point(self, x: float, y: float, r: float) -> list[dict]:
+        c = self.cell
+        seen: dict[int, dict] = {}
+        for ix in range(int(math.floor((x - r) / c)), int(math.floor((x + r) / c)) + 1):
+            for iy in range(int(math.floor((y - r) / c)), int(math.floor((y + r) / c)) + 1):
+                for bx in self.cells.get((ix, iy), ()):
+                    b = bx["bbox"]
+                    if b[0] - r <= x <= b[2] + r and b[1] - r <= y <= b[3] + r:
+                        seen[bx["id"]] = bx
+        return list(seen.values())
 
     def candidates(self, s: Segment) -> list[dict]:
         c = self.cell

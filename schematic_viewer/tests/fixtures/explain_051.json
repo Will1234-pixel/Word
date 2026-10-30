@@ -1,0 +1,223 @@
+{
+ "_comment": "Hand-made 'explain' object for FLD sheet 051 (C10265H/P3) used to exercise the viewer. Text, net, shape and link ids are the real ones from the drawing data; the wording follows what is written on the sheet. It describes part of the sheet only (outputs 3B and 3P, input 3A, DeltaV point DV3_5, the ISOCON 6 converter and window W12).",
+ "kind": "fld",
+ "summary": "Functional logic diagram 051 (FLD - No.3 PLANT COPPER DISSOLVING AREA). Field devices in the left column are read by ANALOG I/P F6217 and DIGITAL I/P F3236 modules; their software signals go through AND, OR and timer symbols to continuation boxes (3B to sheet 052, 3P to sheet 053), to annunciator windows and to DeltaV Modbus taps. Signal 3A arrives from sheet 052. This fixture covers only part of the sheet.",
+ "facts": [
+  "Output 3B -> sheet 052: AND of eight inputs: OR(3A (from 052), 03HZS03350 P/B 'C'), OR(AND(03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C'), 03HZS03354 P/B 'F'), AND(03HZS03354 P/B 'F', 03FZA03002, 03FZA03004, 03FZA03006A, 03QZA03581, 03LZA03691, 03FZA03007, 03FZA03008, 03FZA03010)), 03FZA03012, 03PDZA03078, HIGH 03TZA03052A, OR(03EZS03412, 03EZS03413), HIGH 03LZA03110A, OR(MID 03LZA03110C, 03HZA03559) (link verified).",
+  "Output 3P -> sheet 053: AND(03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C' [no signal name]), 03HZS03354 P/B 'F' [no signal name]) (link multiple: two boxes 3P exist on sheet 053).",
+  "Signal 3A arrives from sheet 052 (pointer 052.225, link verified) and feeds an OR gate; used in 3B, DV3_1, DV3_5.",
+  "Output 03ZRT03581: V TO I ISOCON 6(03QZT03581 (1-5V)) -> 03ZRT03581, cable 3/C735 terminals 1 & 2.",
+  "DeltaV points: DV3_5 is tapped on the 3B output wire; DV3_1 on the output of the OR gate taking 3A; DV3_2 on the output of the AND gate making 3P.",
+  "Annunciator W12: 03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C' [no signal name]). Annunciator W01: 03FZA03002.",
+  "Input 03FZT03002 Nitric Acid, LOOP TYPE AI1, cable 3/C650 terminals 1 & 2, read by ANALOG I/P F6217, signals 03FZA03002.",
+  "Input 03HZS03350 LOW FLOWS RESET, LOOP TYPE DI1, cable 3/C654 terminals 4 & 11, console push button P/B 'C' in the CONTROL ROOM, read by DIGITAL I/P F3236; no signal name is written on its output wire.",
+  "Input 03HZS03354 COPPER DISSOLVING STOP, LOOP TYPE DI1, cable 3/C654 terminals 8 & 11, console push button P/B 'F' in the CONTROL ROOM, read by DIGITAL I/P F3236; no signal name is written on its output wire.",
+  "The timer box reads T1 OFF and 2 mins; its output wire is labelled 03HZA03350.",
+  "This explanation is a hand-made test fixture and covers part of sheet 051 only."
+ ],
+ "logic": [
+  {
+   "output": "3B", "kind": "continuation", "dest_sheet": "052", "pointer": "052.170", "pointer_text": "t67B2",
+   "link": "051:t67B2", "link_status": "verified", "shape": 19, "net": 30,
+   "expr": "AND(OR(3A (from 052), 03HZS03350 P/B 'C' [no signal name]), OR(AND(03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C' [no signal name]), 03HZS03354 P/B 'F' [no signal name]), AND(03HZS03354 P/B 'F' [no signal name], 03FZA03002, 03FZA03004, 03FZA03006A, 03QZA03581, 03LZA03691, 03FZA03007, 03FZA03008, 03FZA03010)), 03FZA03012, 03PDZA03078, HIGH 03TZA03052A, OR(03EZS03412, 03EZS03413), HIGH 03LZA03110A, OR(MID 03LZA03110C, 03HZA03559))",
+   "taps": [{"label": "DV3_5", "text": "t66F6"}],
+   "text_ids": ["t67B0", "t67B2", "t67B3", "t66F6"], "shape_ids": [19, 20], "net_ids": [30],
+   "tree": {
+    "op": "AND", "kind": "gate", "shape": 20, "net": 30, "text_ids": ["t67B3"],
+    "inputs": [
+     {"op": "OR", "kind": "gate", "shape": 40, "net": 34, "text_ids": ["t6893"], "taps": [{"label": "DV3_1", "text": "t67AF"}],
+      "inputs": [
+       {"signal": "3A", "incoming": true, "from_sheet": "052", "link": "051:t66DC", "link_status": "verified", "shape": 18, "net": 49, "text_ids": ["t67AD", "t66DC"]},
+       {"tag": "03HZS03350", "desc": "LOW FLOWS RESET", "device": "P/B 'C'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "4 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 34, "field_shape": 35, "field_net": 63, "net": 27, "text_ids": ["t684F", "t684E", "t67DA", "t6851", "t6749"]}
+      ]},
+     {"op": "OR", "kind": "gate", "shape": 17, "net": 32, "text_ids": ["t67AA"],
+      "inputs": [
+       {"op": "AND", "kind": "gate", "shape": 16, "net": 33, "text_ids": ["t67A2"], "taps": [{"label": "DV3_2", "text": "t6702"}],
+        "inputs": [
+         {"op": "T1 OFF 2 mins", "kind": "timer", "shape": 24, "net": 36, "signal": "03HZA03350", "text_ids": ["t67D3", "t67D1", "t6710"],
+          "inputs": [
+           {"tag": "03HZS03350", "desc": "LOW FLOWS RESET", "device": "P/B 'C'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "4 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 34, "field_shape": 35, "field_net": 63, "net": 27, "text_ids": ["t684F", "t684E", "t67DA", "t6851", "t6749"]}
+          ]},
+         {"tag": "03HZS03354", "desc": "COPPER DISSOLVING STOP", "device": "P/B 'F'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "8 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 37, "field_shape": 36, "field_net": 64, "net": 16, "text_ids": ["t670A", "t67FC", "t67FD", "t67D9", "t6850", "t6748"]}
+        ]},
+       {"op": "AND", "kind": "gate", "shape": 4, "net": 31, "text_ids": ["t6640"],
+        "inputs": [
+         {"tag": "03HZS03354", "desc": "COPPER DISSOLVING STOP", "device": "P/B 'F'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "8 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 37, "field_shape": 36, "field_net": 64, "net": 16, "text_ids": ["t670A", "t67FC", "t67FD", "t67D9", "t6850", "t6748"]},
+         {"signal": "03FZA03002", "tag": "03FZT03002", "desc": "Nitric Acid", "loop_type": "AI1", "cable": "3/C650", "terminals": "1 & 2", "module": "ANALOG I/P F6217", "module_shape": 39, "field_shape": 54, "field_net": 69, "net": 15, "text_ids": ["t688B", "t6890", "t66BC"]},
+         {"signal": "03FZA03004", "tag": "03FZT03004", "desc": "Scrubber Liquor", "loop_type": "AI1", "cable": "3/C650", "terminals": "3 & 4", "module": "ANALOG I/P F6217", "module_shape": 31, "field_shape": 55, "field_net": 61, "net": 14, "text_ids": ["t6846", "t684B", "t66BB"]},
+         {"signal": "03FZA03006A", "tag": "03FZT03006", "desc": "Oxygen", "loop_type": "AI1", "cable": "3/C731", "terminals": "1 & 2", "module": "ANALOG I/P F6217", "module_shape": 30, "field_shape": 56, "field_net": 59, "net": 13, "text_ids": ["t6836", "t683B", "t66BA"]},
+         {"signal": "03QZA03581", "tag": "03QZT03581", "desc": "Flow Density", "loop_type": "AI1", "cable": "3/C668", "terminals": "13 & 14", "module": "ANALOG I/P F6217", "module_shape": 9, "field_shape": 53, "field_net": 23, "net": 12, "text_ids": ["t66C0", "t66D3", "t66B9"]},
+         {"signal": "03LZA03691", "tag": "03LZT03691", "desc": "LEVEL IN 3F3", "loop_type": "AI2", "cable": "3/C668", "terminals": "3 & 4", "module": "ANALOG I/P F6217", "module_shape": 8, "field_shape": 52, "field_net": 25, "net": 11, "text_ids": ["t66AB", "t66AF"]},
+         {"signal": "03FZA03007", "tag": "03FZT03007", "desc": "Recirculation Flow", "loop_type": "AI2", "cable": "3/C668", "terminals": "5 & 6", "module": "ANALOG I/P F6217", "module_shape": 7, "field_shape": 51, "field_net": 21, "net": 10, "text_ids": ["t668F", "t6693"]},
+         {"signal": "03FZA03008", "tag": "03FZT03008", "desc": "Recirculation Flow", "loop_type": "AI2", "cable": "3/C668", "terminals": "7 & 8", "module": "ANALOG I/P F6217", "module_shape": 5, "field_shape": 49, "field_net": 17, "net": 9, "text_ids": ["t6657", "t665B"]},
+         {"signal": "03FZA03010", "tag": "03FZT03010", "desc": "Recirculation Flow", "loop_type": "AI2", "cable": "3/C668", "terminals": "9 & 10", "module": "ANALOG I/P F6217", "module_shape": 6, "field_shape": 50, "field_net": 19, "net": 8, "text_ids": ["t6673", "t6677"]}
+        ]}
+      ]},
+     {"signal": "03FZA03012", "tag": "03FZT03012", "desc": "Recirculation Flow", "loop_type": "AI2", "cable": "3/C650", "terminals": "17 & 18", "module": "ANALOG I/P F6217", "module_shape": 29, "field_net": 44, "net": 56, "text_ids": ["t6827"]},
+     {"signal": "03PDZA03078", "tag": "03PDZT03078", "desc": "Vent Fan D.P.", "loop_type": "AI2", "cable": "3/C650", "terminals": "9 & 10", "module": "ANALOG I/P F6217", "module_shape": 28, "field_net": 43, "net": 47, "text_ids": ["t6817"]},
+     {"signal": "03TZA03052A", "limit": "HIGH", "tag": "03TZT03052", "desc": "Recirculation Temp", "loop_type": "AI1", "cable": "3/C731", "terminals": "3 & 4", "module": "ANALOG I/P F6217", "module_shape": 27, "field_net": 54, "net": 40, "text_ids": ["t6807", "t66DB"]},
+     {"op": "OR", "kind": "gate", "shape": 23, "net": 29, "text_ids": ["t67C7"], "taps": [{"label": "DV3_6", "text": "t66F2"}],
+      "inputs": [
+       {"signal": "03EZS03412", "tag": "03EZS03412", "desc": "3J4A Pump Running", "loop_type": "DI1", "cable": "3/C651", "terminals": "11 & 12", "module": "DIGITAL I/P F3236", "module_shape": 38, "field_shape": 61, "field_net": 67, "net": 65, "text_ids": ["t687A", "t6880"]},
+       {"signal": "03EZS03413", "tag": "03EZS03413", "desc": "3J4B Pump Running", "loop_type": "DI1", "cable": "3/C651", "terminals": "13 & 14", "module": "DIGITAL I/P F3236", "module_shape": 26, "field_shape": 60, "field_net": 52, "net": 48, "text_ids": ["t67F9", "t67FA"]}
+      ]},
+     {"signal": "03LZA03110A", "limit": "HIGH", "tag": "03LZT03110", "desc": "3F1 Dissolver Level", "loop_type": "AI2", "cable": "3/C650", "terminals": "11 & 12", "module": "ANALOG I/P F6217", "module_shape": 25, "field_net": 45, "net": 41, "text_ids": ["t67EB", "t66E0"]},
+     {"op": "OR", "kind": "gate", "shape": 22, "net": 28, "text_ids": ["t67C3"], "taps": [{"label": "DV3_7", "text": "t66EE"}],
+      "inputs": [
+       {"signal": "03LZA03110C", "limit": "MID", "tag": "03LZT03110", "desc": "3F1 Dissolver Level", "loop_type": "AI2", "cable": "3/C650", "terminals": "11 & 12", "module": "ANALOG I/P F6217", "module_shape": 25, "field_net": 45, "net": 1, "text_ids": ["t67E0", "t66DE"]},
+       {"signal": "03HZA03559", "tag": "03HZS03110", "desc": "3F1 MID LEVEL TRIP LZA-3110C NORMAL OPERATION/OVERRIDE", "device": "K/S 'B'", "location": "CONTROL ROOM", "loop_type": "DI1", "module": "DIGITAL I/P F3236", "module_shape": 33, "field_net": 62, "net": 0, "text_ids": ["t6860"]}
+      ]}
+    ]
+   }
+  },
+  {
+   "output": "3A", "kind": "incoming", "from_sheet": "052", "pointer": "052.225", "pointer_text": "t66DC",
+   "link": "051:t66DC", "link_status": "verified", "shape": 18, "net": 49,
+   "feeds": [{"shape": 40, "kind": "gate", "label": "OR gate", "side": "L"}], "feeds_text": "OR gate",
+   "used_in": ["3B", "DV3_1", "DV3_5"],
+   "text_ids": ["t67AD", "t66DC"], "shape_ids": [18], "net_ids": [49], "tree": null, "expr": "", "taps": []
+  },
+  {
+   "output": "3P", "kind": "continuation", "dest_sheet": "053", "pointer": "053.140", "pointer_text": "t6AE5",
+   "link": "051:t6AE5", "link_status": "multiple", "shape": 41, "net": 33,
+   "expr": "AND(03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C' [no signal name]), 03HZS03354 P/B 'F' [no signal name])",
+   "taps": [{"label": "DV3_2", "text": "t6702"}],
+   "text_ids": ["t6AE4", "t6AE5"], "shape_ids": [41], "net_ids": [33],
+   "tree": {
+    "op": "AND", "kind": "gate", "shape": 16, "net": 33, "text_ids": ["t67A2"],
+    "inputs": [
+     {"op": "T1 OFF 2 mins", "kind": "timer", "shape": 24, "net": 36, "signal": "03HZA03350", "text_ids": ["t67D3", "t67D1", "t6710"],
+      "inputs": [
+       {"tag": "03HZS03350", "desc": "LOW FLOWS RESET", "device": "P/B 'C'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "4 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 34, "field_shape": 35, "field_net": 63, "net": 27, "text_ids": ["t684F", "t684E", "t67DA", "t6851", "t6749"]}
+      ]},
+     {"tag": "03HZS03354", "desc": "COPPER DISSOLVING STOP", "device": "P/B 'F'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "8 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 37, "field_shape": 36, "field_net": 64, "net": 16, "text_ids": ["t670A", "t67FC", "t67FD", "t67D9", "t6850", "t6748"]}
+    ]
+   }
+  },
+  {
+   "output": "DV3_5", "kind": "dv", "text": "t66F6", "net": 30, "dest_sheet": null, "link": null,
+   "expr": "AND(OR(3A (from 052), 03HZS03350 P/B 'C' [no signal name]), OR(AND(03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C' [no signal name]), 03HZS03354 P/B 'F' [no signal name]), AND(03HZS03354 P/B 'F' [no signal name], 03FZA03002, 03FZA03004, 03FZA03006A, 03QZA03581, 03LZA03691, 03FZA03007, 03FZA03008, 03FZA03010)), 03FZA03012, 03PDZA03078, HIGH 03TZA03052A, OR(03EZS03412, 03EZS03413), HIGH 03LZA03110A, OR(MID 03LZA03110C, 03HZA03559))",
+   "taps": [], "text_ids": ["t66F6", "t67B3"], "shape_ids": [20], "net_ids": [30],
+   "tree": {
+    "op": "AND", "kind": "gate", "shape": 20, "net": 30, "text_ids": ["t67B3"],
+    "inputs": [
+     {"op": "OR", "kind": "gate", "shape": 40, "net": 34, "text_ids": ["t6893"], "taps": [{"label": "DV3_1", "text": "t67AF"}],
+      "inputs": [
+       {"signal": "3A", "incoming": true, "from_sheet": "052", "link": "051:t66DC", "link_status": "verified", "shape": 18, "net": 49, "text_ids": ["t67AD", "t66DC"]},
+       {"tag": "03HZS03350", "desc": "LOW FLOWS RESET", "device": "P/B 'C'", "location": "CONTROL ROOM", "loop_type": "DI1", "module": "DIGITAL I/P F3236", "module_shape": 34, "field_shape": 35, "field_net": 63, "net": 27, "text_ids": ["t684F", "t67DA"]}
+      ]},
+     {"op": "OR", "kind": "gate", "shape": 17, "net": 32, "text_ids": ["t67AA"], "inputs": [
+       {"op": "AND", "kind": "gate", "shape": 16, "net": 33, "text_ids": ["t67A2"], "inputs": [
+         {"op": "T1 OFF 2 mins", "kind": "timer", "shape": 24, "net": 36, "signal": "03HZA03350", "text_ids": ["t67D3", "t67D1", "t6710"], "inputs": [
+           {"tag": "03HZS03350", "desc": "LOW FLOWS RESET", "device": "P/B 'C'", "loop_type": "DI1", "module": "DIGITAL I/P F3236", "module_shape": 34, "field_shape": 35, "field_net": 63, "net": 27, "text_ids": ["t684F", "t67DA"]}]},
+         {"tag": "03HZS03354", "desc": "COPPER DISSOLVING STOP", "device": "P/B 'F'", "loop_type": "DI1", "module": "DIGITAL I/P F3236", "module_shape": 37, "field_shape": 36, "field_net": 64, "net": 16, "text_ids": ["t670A", "t67D9"]}]},
+       {"op": "AND", "kind": "gate", "shape": 4, "net": 31, "text_ids": ["t6640"], "inputs": [
+         {"tag": "03HZS03354", "desc": "COPPER DISSOLVING STOP", "device": "P/B 'F'", "loop_type": "DI1", "module": "DIGITAL I/P F3236", "module_shape": 37, "field_shape": 36, "field_net": 64, "net": 16, "text_ids": ["t670A", "t67D9"]},
+         {"signal": "03FZA03002", "tag": "03FZT03002", "desc": "Nitric Acid", "module": "ANALOG I/P F6217", "module_shape": 39, "field_shape": 54, "field_net": 69, "net": 15, "text_ids": ["t688B", "t6890"]},
+         {"signal": "03FZA03004", "tag": "03FZT03004", "desc": "Scrubber Liquor", "module": "ANALOG I/P F6217", "module_shape": 31, "field_shape": 55, "field_net": 61, "net": 14, "text_ids": ["t6846", "t684B"]},
+         {"signal": "03FZA03006A", "tag": "03FZT03006", "desc": "Oxygen", "module": "ANALOG I/P F6217", "module_shape": 30, "field_shape": 56, "field_net": 59, "net": 13, "text_ids": ["t6836", "t683B"]},
+         {"signal": "03QZA03581", "tag": "03QZT03581", "desc": "Flow Density", "module": "ANALOG I/P F6217", "module_shape": 9, "field_shape": 53, "field_net": 23, "net": 12, "text_ids": ["t66C0", "t66D3"]},
+         {"signal": "03LZA03691", "tag": "03LZT03691", "desc": "LEVEL IN 3F3", "module": "ANALOG I/P F6217", "module_shape": 8, "field_shape": 52, "field_net": 25, "net": 11, "text_ids": ["t66AB", "t66AF"]},
+         {"signal": "03FZA03007", "tag": "03FZT03007", "desc": "Recirculation Flow", "module": "ANALOG I/P F6217", "module_shape": 7, "field_shape": 51, "field_net": 21, "net": 10, "text_ids": ["t668F", "t6693"]},
+         {"signal": "03FZA03008", "tag": "03FZT03008", "desc": "Recirculation Flow", "module": "ANALOG I/P F6217", "module_shape": 5, "field_shape": 49, "field_net": 17, "net": 9, "text_ids": ["t6657", "t665B"]},
+         {"signal": "03FZA03010", "tag": "03FZT03010", "desc": "Recirculation Flow", "module": "ANALOG I/P F6217", "module_shape": 6, "field_shape": 50, "field_net": 19, "net": 8, "text_ids": ["t6673", "t6677"]}]}]},
+     {"signal": "03FZA03012", "tag": "03FZT03012", "desc": "Recirculation Flow", "module": "ANALOG I/P F6217", "module_shape": 29, "field_net": 44, "net": 56, "text_ids": ["t6827"]},
+     {"signal": "03PDZA03078", "tag": "03PDZT03078", "desc": "Vent Fan D.P.", "module": "ANALOG I/P F6217", "module_shape": 28, "field_net": 43, "net": 47, "text_ids": ["t6817"]},
+     {"signal": "03TZA03052A", "limit": "HIGH", "tag": "03TZT03052", "desc": "Recirculation Temp", "module": "ANALOG I/P F6217", "module_shape": 27, "field_net": 54, "net": 40, "text_ids": ["t6807", "t66DB"]},
+     {"op": "OR", "kind": "gate", "shape": 23, "net": 29, "text_ids": ["t67C7"], "taps": [{"label": "DV3_6", "text": "t66F2"}], "inputs": [
+       {"signal": "03EZS03412", "tag": "03EZS03412", "desc": "3J4A Pump Running", "module": "DIGITAL I/P F3236", "module_shape": 38, "field_shape": 61, "field_net": 67, "net": 65, "text_ids": ["t687A", "t6880"]},
+       {"signal": "03EZS03413", "tag": "03EZS03413", "desc": "3J4B Pump Running", "module": "DIGITAL I/P F3236", "module_shape": 26, "field_shape": 60, "field_net": 52, "net": 48, "text_ids": ["t67F9", "t67FA"]}]},
+     {"signal": "03LZA03110A", "limit": "HIGH", "tag": "03LZT03110", "desc": "3F1 Dissolver Level", "module": "ANALOG I/P F6217", "module_shape": 25, "field_net": 45, "net": 41, "text_ids": ["t67EB", "t66E0"]},
+     {"op": "OR", "kind": "gate", "shape": 22, "net": 28, "text_ids": ["t67C3"], "taps": [{"label": "DV3_7", "text": "t66EE"}], "inputs": [
+       {"signal": "03LZA03110C", "limit": "MID", "tag": "03LZT03110", "desc": "3F1 Dissolver Level", "module": "ANALOG I/P F6217", "module_shape": 25, "field_net": 45, "net": 1, "text_ids": ["t67E0", "t66DE"]},
+       {"signal": "03HZA03559", "tag": "03HZS03110", "desc": "3F1 MID LEVEL TRIP LZA-3110C NORMAL OPERATION/OVERRIDE", "device": "K/S 'B'", "module": "DIGITAL I/P F3236", "module_shape": 33, "field_net": 62, "net": 0, "text_ids": ["t6860"]}]}
+    ]
+   }
+  },
+  {
+   "output": "03ZRT03581", "kind": "converter", "shape": 0, "net": 7, "dest_sheet": null, "link": null,
+   "signal_in": "1-5V", "signal_out": "4-20mA",
+   "device": {"tag": "03ZRT03581", "desc": "", "loop_type": null, "cable": "3/C735", "terminals": "1 & 2", "shape": 45, "net": 7, "text_ids": ["t6606", "t6607", "t6608"]},
+   "text_ids": ["t6606", "t6607", "t6608", "t6BC3", "t6BC6", "t660B", "t6609"], "shape_ids": [0, 45, 53], "net_ids": [7, 23],
+   "tree": {"op": "V TO I ISOCON 6", "kind": "converter", "shape": 0, "net": 7, "text_ids": ["t6BC3", "t6BC6"],
+            "inputs": [{"tag": "03QZT03581", "desc": "Flow Density", "loop_type": "AI1", "cable": "3/C668", "terminals": "13 & 14", "label": "1-5V", "shape": 53, "net": 23, "text_ids": ["t66D3", "t66B9", "t660B"]}]},
+   "expr": "V TO I ISOCON 6(03QZT03581 (1-5V)) -> 03ZRT03581", "taps": []
+  },
+  {
+   "output": "W12", "kind": "annunciator", "text": "t66EB", "net": 36, "dest_sheet": null, "link": null,
+   "text_ids": ["t66EB", "t67D3", "t67D1", "t6710"], "shape_ids": [24], "net_ids": [36],
+   "tree": {"op": "T1 OFF 2 mins", "kind": "timer", "shape": 24, "net": 36, "signal": "03HZA03350", "text_ids": ["t67D3", "t67D1", "t6710"],
+            "inputs": [{"tag": "03HZS03350", "desc": "LOW FLOWS RESET", "device": "P/B 'C'", "location": "CONTROL ROOM", "loop_type": "DI1", "cable": "3/C654", "terminals": "4 & 11", "label": "P/B", "module": "DIGITAL I/P F3236", "module_shape": 34, "field_shape": 35, "field_net": 63, "net": 27, "text_ids": ["t684F", "t684E", "t67DA", "t6851", "t6749"]}]},
+   "expr": "03HZA03350=T1 OFF 2 mins(03HZS03350 P/B 'C' [no signal name])", "taps": []
+  }
+ ],
+ "nets": {
+  "30": {"title": "3B", "kind": "signal", "lines": [
+   "Labels on this wire: DV3_5.",
+   "Output of the AND gate with eight inputs; it ends in continuation box 3B with pointer 052.170 (link verified).",
+   "DeltaV point DV3_5 is tapped on it.",
+   "Part of the logic for: 3B -> sheet 052, DV3_5."]},
+  "49": {"title": "3A from sheet 052", "kind": "signal", "lines": [
+   "Labels on this wire: none. It starts at continuation box 3A with pointer 052.225 (link verified).",
+   "Goes to: OR gate, together with 03HZS03350 P/B 'C'.",
+   "Part of the logic for: 3B -> sheet 052, DV3_1, DV3_5."]},
+  "36": {"title": "03HZA03350", "kind": "signal", "lines": [
+   "Labels on this wire: 03HZA03350.",
+   "Output of the timer box T1 OFF 2 mins, whose input is 03HZS03350 LOW FLOWS RESET (P/B 'C', CONTROL ROOM) through DIGITAL I/P F3236.",
+   "Goes to: AND gate; annunciator window W12.",
+   "Part of the logic for: 3B -> sheet 052, 3P -> sheet 053, W12, DV3_2, DV3_5."]},
+  "15": {"title": "03FZA03002", "kind": "signal", "lines": [
+   "Labels on this wire: 03FZA03002.",
+   "Software signal 03FZA03002 from ANALOG I/P F6217, field input 03FZT03002 Nitric Acid, LOOP TYPE AI1.",
+   "Goes to: AND gate; annunciator window W01.",
+   "Part of the logic for: 3B -> sheet 052, W01, DV3_5."]},
+  "27": {"title": "03HZS03350 P/B 'C' (no signal name written)", "kind": "signal", "lines": [
+   "Labels on this wire: none.",
+   "Output of DIGITAL I/P F3236 reading 03HZS03350 LOW FLOWS RESET (P/B 'C', CONTROL ROOM).",
+   "Goes to: OR gate; timer box T1 OFF 2 mins.",
+   "The drawing writes no software signal name on this wire."]},
+  "23": {"title": "1-5V", "kind": "wire", "lines": [
+   "Labels on this wire: 1-5V.",
+   "From field input 03QZT03581 Flow Density (cable 3/C668, terminals 13 & 14).",
+   "Goes to: ANALOG I/P F6217; converter V TO I ISOCON 6."]},
+  "7": {"title": "4-20mA", "kind": "wire", "lines": [
+   "Labels on this wire: 4-20mA.",
+   "Output of converter V TO I ISOCON 6 (input 1-5V from 03QZT03581).",
+   "Goes to: process device tag 03ZRT03581, cable 3/C735 terminals 1 & 2."]}
+ },
+ "texts": {
+  "t6890": {"title": "03FZT03002 Nitric Acid", "lines": [
+   "Service: Nitric Acid.", "LOOP TYPE AI1.", "Cable 3/C650, terminals 1 & 2.", "Read by ANALOG I/P F6217.",
+   "Software signals: 03FZA03002.", "Takes part in: 3B, W01, DV3_5."]},
+  "t688B": {"title": "03FZA03002", "lines": [
+   "Software signal from ANALOG I/P F6217 reading 03FZT03002 Nitric Acid (LOOP TYPE AI1, cable 3/C650 terminals 1 & 2).",
+   "Goes to: AND gate; annunciator window W01.", "Takes part in: 3B, W01, DV3_5."]},
+  "t66F6": {"title": "DeltaV point DV3_5", "lines": [
+   "Tapped on the output wire of the AND gate that makes 3B (to sheet 052).",
+   "What is on that wire: AND(OR(3A (from 052), 03HZS03350 P/B 'C'), OR(AND(T1 OFF 2 mins of 03HZS03350, 03HZS03354 P/B 'F'), AND(03HZS03354 P/B 'F' and eight analogue signals)), 03FZA03012, 03PDZA03078, HIGH 03TZA03052A, OR(03EZS03412, 03EZS03413), HIGH 03LZA03110A, OR(MID 03LZA03110C, 03HZA03559))."]},
+  "t66DC": {"title": "3A from sheet 052", "lines": [
+   "Pointer 052.225 beside continuation box 3A: the signal arrives from sheet 052, grid 225 (link verified).",
+   "On this sheet it feeds the OR gate together with 03HZS03350 P/B 'C'.", "Used in: 3B, DV3_1, DV3_5."]},
+  "t67AD": {"title": "3A from sheet 052", "lines": [
+   "Continuation box 3A with pointer 052.225: the signal arrives from sheet 052, grid 225 (link verified).",
+   "On this sheet it feeds the OR gate together with 03HZS03350 P/B 'C'.", "Used in: 3B, DV3_1, DV3_5."]},
+  "t67B0": {"title": "3B to sheet 052", "lines": [
+   "Continuation box 3B with pointer 052.170: the output leaves to sheet 052, grid 170 (link verified).",
+   "It is the output of the AND gate with eight inputs; see the logic outline under Explain sheet.",
+   "DeltaV point DV3_5 is tapped on the same wire."]},
+  "t67B2": {"title": "3B to sheet 052", "lines": [
+   "Pointer 052.170 beside continuation box 3B: the output leaves to sheet 052, grid 170 (link verified).",
+   "It is the output of the AND gate with eight inputs; see the logic outline under Explain sheet."]},
+  "t67D3": {"title": "Timer T1 OFF 2 mins", "lines": [
+   "Timer box with the words T1 OFF and 2 mins, as written.",
+   "Input: 03HZS03350 LOW FLOWS RESET (P/B 'C', CONTROL ROOM) through DIGITAL I/P F3236.",
+   "Output wire labelled 03HZA03350; it goes to the AND gate making 3P and to annunciator window W12."]},
+  "t6710": {"title": "03HZA03350", "lines": [
+   "Label on the output wire of the timer box T1 OFF 2 mins.",
+   "Goes to: AND gate (3P) and annunciator window W12.", "Takes part in: 3B, 3P, W12, DV3_2, DV3_5."]},
+  "t6AE4": {"title": "3P to sheet 053", "lines": [
+   "Continuation box 3P with pointer 053.140: the output leaves to sheet 053, grid 140. Two boxes 3P exist on sheet 053, so the link is marked multiple; choose the one you need.",
+   "It is the output of AND(03HZA03350 = T1 OFF 2 mins(03HZS03350 P/B 'C'), 03HZS03354 P/B 'F').",
+   "DeltaV point DV3_2 is tapped on the same wire."]}
+ }
+}

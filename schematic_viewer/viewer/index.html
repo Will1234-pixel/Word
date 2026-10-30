@@ -16,6 +16,7 @@
     <label>Sheet <select id="sheetSelect"></select></label>
     <button id="btnPrev" title="Previous sheet">&#8249;</button>
     <button id="btnNext" title="Next sheet">&#8250;</button>
+    <button id="btnExplain" title="What this sheet does: summary, facts and the logic of every output (E)">Explain sheet</button>
   </div>
   <div class="group grow">
     <input id="searchBox" type="search" placeholder="Search wire number, tag, cable, terminal, signal ... (Enter)" autocomplete="off">
@@ -38,6 +39,7 @@
   <aside id="side">
     <nav id="tabs">
       <button data-tab="selection" class="active">Selection</button>
+      <button data-tab="explain">Explain</button>
       <button data-tab="search">Search</button>
       <button data-tab="trail">Trail</button>
       <button data-tab="issues">Issues</button>
@@ -45,6 +47,7 @@
       <button data-tab="help">Help</button>
     </nav>
     <section id="tab-selection" class="tab active"><p class="muted">Click a wire number, tag, cable, terminal, signal label or cross-reference on the drawing. Click a wire to highlight the whole conductor.</p></section>
+    <section id="tab-explain" class="tab"><p class="muted">Press <b>Explain sheet</b> to see what the current sheet does: a summary, the facts read from the drawing and, on logic diagrams, the logic behind every output.</p></section>
     <section id="tab-search" class="tab"><p class="muted">Type an identifier in the search box above.</p></section>
     <section id="tab-trail" class="tab"><p class="muted">Your navigation trail appears here.</p></section>
     <section id="tab-issues" class="tab"><p class="muted">Loading ...</p></section>
@@ -53,13 +56,16 @@
       <h3>How to use</h3>
       <ul>
         <li><b>Click</b> a cross-reference such as <code>052.225</code>, a signal label (<code>3A</code>), a tag, a cable number or a terminal: the viewer opens the destination page, zooms in and flashes the match.</li>
-        <li><b>Click a wire</b> to highlight the whole conductor on this page and list where it goes. Moving the mouse over a wire previews that conductor in blue. Conductors are joined at corners and junction dots only; a wire that ends on the middle of another line without a dot is not treated as a branch.</li>
+        <li><b>What this is</b>: every click also shows a small note next to the cursor saying what the clicked text is (read from the drawing). Press <i>More</i>, or look at the top of the <i>Selection</i> tab, for the full explanation: service, loop type, cable, module, the signals it produces and the other sheets it appears on.</li>
+        <li><b>Click a wire</b> to highlight the whole conductor on this page, read what it carries and list where it goes. Moving the mouse over a wire previews that conductor in blue. Conductors are joined at corners and junction dots only; a wire that ends on the middle of another line without a dot is not treated as a branch.</li>
+        <li><b>Explain sheet</b> (toolbar button, key <kbd>E</kbd>, or <i>Explain</i> next to a sheet in the <i>Sheets</i> tab): a summary of the sheet, the facts read from it and, on functional logic diagrams, one row per output. Click a row to highlight all its wiring and see the logic as an outline; click a line of the outline to highlight that input. <i>Follow to sheet</i> walks a continuation signal to the next sheet and opens its logic there; the hops are added to the <i>Trail</i>.</li>
         <li><b>Back</b> returns to the page and location you came from (also Backspace).</li>
         <li><b>Several matches</b>: a list appears; choose the right one.</li>
-        <li><b>Status badges</b>: <span class="badge verified">verified</span> label found and the destination points back; <span class="badge matched">matched</span> label found, no back pointer; <span class="badge backref">back pointer</span> destination points back but the label differs; <span class="badge same">same label</span> repeated label, <i>not</i> a verified connection; <span class="badge ambiguous">ambiguous</span>/<span class="badge unresolved">unresolved</span> needs your judgement.</li>
-        <li><b>Mouse</b>: wheel zooms, drag pans, double-click zooms in. Keys: F fit, +/- zoom, arrows pan.</li>
+        <li><b>Status badges</b>: <span class="badge verified">verified</span> label found and the destination points back; <span class="badge matched">matched</span> label found, no back pointer; <span class="badge backref">back pointer</span> destination points back but the label differs; <span class="badge same">same label</span> repeated label, <i>not</i> a verified connection; <span class="badge ambiguous">ambiguous</span>/<span class="badge unresolved">unresolved</span> needs your judgement; <span class="badge path">signal path</span> a hop made with <i>Follow to sheet</i>.</li>
+        <li><b>Mouse</b>: wheel zooms, drag pans, double-click zooms in. Keys: F fit, E explain sheet, +/- zoom, arrows pan, Esc closes notes and clears highlights.</li>
         <li><b>Manual links</b>: select a text, press <i>+ Link</i>, then click the destination (any page). Use <i>Confirm</i> / <i>Reject</i> on automatic links.</li>
       </ul>
+      <p class="muted">Every explanation is built only from text and geometry on the drawings. Where the drawing leaves something open the note says so, for example "unlabelled wire" or "no signal name written". Nothing about plant behaviour is inferred.</p>
       <h3>Manual link decisions</h3>
       <p id="modeNote" class="muted"></p>
       <p><button id="btnExport" class="small">Export manual links (JSON file)</button> <button id="btnImport" class="small">Import manual links</button><input type="file" id="importFile" accept=".json,application/json" hidden></p>
@@ -74,6 +80,7 @@
       <g id="hl"></g>
     </svg>
     <div id="popup" class="hidden"></div>
+    <div id="tip" class="hidden" role="status"><span id="tipText"></span><button class="small" id="tipMore" title="Open the full explanation in the side panel">More</button><button class="small" id="tipClose" title="Close (Esc)">&#215;</button></div>
     <div id="status"><span id="statusSheet"></span><span id="statusMsg"></span><span id="statusPos"></span></div>
   </main>
 </div>

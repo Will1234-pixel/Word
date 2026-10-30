@@ -1,0 +1,1332 @@
+[
+  {
+    "pattern": "^\\(?L\\+\\)?$",
+    "term": "L+",
+    "kind": "supply",
+    "meaning": "24 V dc positive supply rail (+ve). Wired in red. Every I/O circuit takes its L+ from a fused feed nL+.",
+    "source": "018 wire colours '24V +ve = RED'; 035 '24Vdc DISTRIBUTION FOR L+ RED SPOT FUSES'; 043 '+ve = 1.0mmSq RED'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^\\(?L-\\)?$",
+    "term": "L-",
+    "kind": "supply",
+    "meaning": "24 V dc negative (0 V) return rail (-ve). Wired in black. Note 1 on sheet 035: L- connections must be separate and single when connected in a ring.",
+    "source": "018 '24V -ve = BLACK'; 035 '24Vdc DISTRIBUTION FOR L- SAFECLIP LINKS' and note 1; 043 '-ve = 1.0mmSq BLACK'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^\\(?([1-6])L\\+\\)?$",
+    "term": "{1}L+",
+    "kind": "supply",
+    "meaning": "Fused 24 V dc positive feed number {1}: the output of red spot fuse FUSE-{1} (4 A) on the L+ distribution, sheet 035. Its return is {1}L- through SAFECLIP link LINK-{1}. Sheet 035 captions the feeds: 1L+ and 2L+ 'F7133 POWER' (to the F7133 distribution cards 1118-1121 and 1218-1221), 4L+ 'FAULT/SYS STATUS', 5L+ 'No.3 PLANT ANNUN SUPPLY' (cable 3/C655-1), 6L+ 'No.7 PLANT ANNUN SUPPLY' (cable 7/C305-1); 3L+ leaves sheet 035 without a caption.",
+    "source": "035 FUSE-1..FUSE-6 and the captions under each feed; 025 '24V DISTRIBUTION BOARD LAYOUT'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^\\(?([1-6])L-\\)?$",
+    "term": "{1}L-",
+    "kind": "supply",
+    "meaning": "24 V dc return of fused circuit {1}: joins the L- bus through SAFECLIP link LINK-{1} on sheet 035. It belongs with feed {1}L+.",
+    "source": "035 '24Vdc DISTRIBUTION FOR L- SAFECLIP LINKS', LINK-1..LINK-6",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^\\(?([ABCD])L\\+\\)?$",
+    "term": "{1}L+",
+    "kind": "supply",
+    "meaning": "24 V dc positive feed through red spot fuse FUSE-{1} on sheet 035. FUSE-A, FUSE-B and FUSE-C (10 A) are captioned 'PLC POWER' and go to terminals XG.21, XG.22 and XG.23 on sheet 040 (one per rack power unit); FUSE-D (4 A) is captioned 'COOLING FANS' and feeds fans K9202 and K9203. Sheet 035 also writes AL+ at the output of PSU A and BL+ at the output of the PSU B redundancy module.",
+    "source": "035; 040 'AL+ AL- 035.50 (FUSE-A)', 'BL+ BL- 035.70 (FUSE-B)', 'CL+ CL- 035.90 (FUSE-C)'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^\\(?([ABCD])L-\\)?$",
+    "term": "{1}L-",
+    "kind": "supply",
+    "meaning": "24 V dc return of feed {1}L+, connected to the L- bus through SAFECLIP link LINK-{1} on sheet 035. AL- and BL- are also written at the outputs of PSU A and PSU B.",
+    "source": "035 LINK-A..LINK-D; 040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PSU ([AB]) L([+-])$",
+    "term": "PSU {1} L{2}",
+    "kind": "supply",
+    "meaning": "24 V dc output terminal L{2} of power supply unit PSU {1} (PULS QS40.244, 24 V dc / 40 A), sheet 035.",
+    "source": "035 'PSU A L+', 'PSU A L-', 'PSU B L+', 'PSU B L-'; 039",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PSU(?: ([AB]))?$",
+    "term": "PSU {1}",
+    "kind": "equipment",
+    "meaning": "Power supply unit: PULS QS40.244, 230 V ac in, 24 V dc / 40 A out. Two units (PSU A, PSU B) work in dual redundancy through a PULS YR80.242 redundancy module.",
+    "source": "035 'PULS PSU'S 230Vac/24Vdc', 'DUAL REDUNDANCY'; 039 'POWER SUPPLY RACK - PULS QS40.244 & YR80.242'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PULS QS40\\.244$",
+    "term": "PULS QS40.244",
+    "kind": "equipment",
+    "meaning": "24 V dc / 40 A power supply unit (PSU A and PSU B) fed from the 230 V ac supply, sheet 035.",
+    "source": "035 'PULS QS40.244 24Vdc/40A'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PULS YR80\\.242$",
+    "term": "PULS YR80.242",
+    "kind": "equipment",
+    "meaning": "Redundancy module that combines the outputs of PSU A and PSU B ('DUAL REDUNDANCY') into the 24 V dc distribution, sheet 035.",
+    "source": "035 'PULS YR80.242 REDUNDANCY MODULE'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^([NL])A([1-4])$",
+    "term": "{1}A{2}",
+    "kind": "supply",
+    "meaning": "Wire number on the 230 V ac supply 'A' (N = neutral, L = live), segment {2}: NA1/LA1 at the incoming terminals, NA2/LA2 after the 20 A isolator 'A', NA3/LA3 after AC fuse 'A' (6 A) into PSU A, NA4/LA4 after AC fuse 'B' into PSU B.",
+    "source": "035 '230Vac SUPPLY A', NA1..NA4, LA1..LA4",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(Gr/Ye|Bu|Br)$",
+    "term": "{1}",
+    "kind": "wiring",
+    "meaning": "Wire colour of the 230 V ac incomer: Gr/Ye = green/yellow (earth), Bu = blue (neutral), Br = brown (live). Legend: >=120Vac LIVE = BROWN, NEUTRAL = BLUE, EARTH = YELLOW/GREEN.",
+    "source": "035; 018 wire colours",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:SAK|EK)4/35$",
+    "term": "SAK4/35 / EK4/35",
+    "kind": "equipment",
+    "meaning": "Terminal types written at the 230 V ac incoming terminals E, N, L on sheet 035: EK4/35 on the earth, SAK4/35 on neutral and live.",
+    "source": "035",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^CLIENT SCOPE$|^SCOPE INTERFACE$",
+    "term": "scope interface",
+    "kind": "note",
+    "meaning": "Boundary of supply on sheet 035: the 230 V ac supply and the ferrite rings for EMC suppression above the scope interface line are client scope.",
+    "source": "035 'CLIENT SCOPE', 'FERRITE RINGS FOR EMC SUPPRESSION', 'SCOPE INTERFACE'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^XG\\.?(\\d{1,2})(?::(\\d{1,2}))?$",
+    "term": "XG.{1}",
+    "kind": "terminal",
+    "meaning": "Terminal group XG.{1} of the cabinet power and rack wiring (the number after the colon is the terminal within the group). XG.21, XG.22, XG.23 receive the fused PLC power feeds AL+, BL+, CL+ from sheet 035 (one per rack power unit, sheet 040); XG.1, XG.3 (panel earth), XG.10 and XG.11 (L- return) appear on the F7133 card sheets 043-050; XG.4 (+5V) and XG.12 (GND) feed the I/O racks on sheet 040.",
+    "source": "035 '040.048 XG.21:2'; 040 XG.1-XG.5, XG.21-XG.26, XG4/XG11/XG12; 043 'XG.10:1', 'XG.3 PANEL EARTH', 'XG.11'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PANEL EARTH$",
+    "term": "panel earth",
+    "kind": "terminal",
+    "meaning": "Panel earth connection of the F7133 card (terminal XG.3, sheets 043-050).",
+    "source": "043 'PANEL EARTH' at XG.3",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^INSTRUMENT EARTH$",
+    "term": "instrument earth",
+    "kind": "terminal",
+    "meaning": "Instrument earth bar: sheet 035 connects the 24 V dc L- bus to it with 16mmSq green/yellow; the loop drawings land cable screens on it.",
+    "source": "035 'INSTRUMENT EARTH 16mmSq GREEN/YELLOW'; 070 'INSTRUMENT EARTH'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^K92(\\d{2})(?:/([12]))?$",
+    "term": "K92{1}",
+    "kind": "equipment",
+    "meaning": "Cabinet cooling fan K92{1} (a fan, not a relay: the layout sheets show 'CUTOUTS FOR FAN K9202' and sheet 040 labels 'FAN K9212'). On sheet 035 the fans are fed from FUSE-D, captioned 'COOLING FANS': K92xx/1 is the + connection on DL+, K92xx/2 the return on DL-.",
+    "source": "021/022 'SHOWING CUTOUTS FOR FAN K9202'; 035 'K9202/1 K9203/1' under DL+, 'K9202/2 K9203/2' under DL-; 040 'FAN K9212'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^COOLING FANS$",
+    "term": "cooling fans",
+    "kind": "caption",
+    "meaning": "Caption of the DL+ / DL- feed on sheet 035: supply to the cabinet cooling fans K9202 and K9203 (FUSE-D, 4 A).",
+    "source": "035",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PLC POWER$",
+    "term": "PLC power",
+    "kind": "caption",
+    "meaning": "Caption of the AL+, BL+ and CL+ feeds on sheet 035 (FUSE-A/B/C, 10 A): power to the HIMA PLC rack power units via terminals XG.21, XG.22, XG.23 on sheet 040.",
+    "source": "035; 040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^F7133 POWER$",
+    "term": "F7133 power",
+    "kind": "caption",
+    "meaning": "Caption of the 1L+ and 2L+ feeds on sheet 035: supply to the F7133 24 V distribution cards 1118-1121 (pointer 043.060) and 1218-1221 (pointer 047.060); returns 1L- and 2L- go to XG.11 (pointers 043.260, 047.260).",
+    "source": "035",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^FAULT/SYS(?: STATUS)?$",
+    "term": "fault / system status",
+    "kind": "caption",
+    "meaning": "Caption of the 4L+ / 4L- feed on sheet 035: the fault and system status circuit.",
+    "source": "035 'FAULT/SYS STATUS' under 4L+ and on the L- side",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:No\\.([37]) PLANT )?ANNUN SUPPLY$",
+    "term": "annunciator supply",
+    "kind": "caption",
+    "meaning": "24 V dc supply to a plant annunciator cabinet. Sheet 035: 5L+ leaves through cable 3/C655-1 ('No.3 PLANT ANNUN SUPPLY', return 3/C655-2 on 5L-), 6L+ through cable 7/C305-1 ('No.7 PLANT ANNUN SUPPLY', return 7/C305-2 on 6L-). Sheet 208 receives 3/C655 at the annunciator 'TERM BLOCK 3/C655 +VE -VE EARTH'.",
+    "source": "035; 208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^LINK-([A-D1-6])$",
+    "term": "LINK-{1}",
+    "kind": "component",
+    "meaning": "SAFECLIP link {1} in the 24 V dc L- distribution on sheet 035: the removable link through which return {1}L- joins the L- bus. Mounted on the 24 V distribution board; sheet 025: 'LINK HOLDERS TO BE GEC REDSPOT, SIZE A1, FRONT CONNECTED, WHITE'.",
+    "source": "035 '24Vdc DISTRIBUTION FOR L- SAFECLIP LINKS'; 025",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^SAFECLIP(?: LINKS?)?$",
+    "term": "SAFECLIP link",
+    "kind": "component",
+    "meaning": "Removable link in a link holder; the L- return of every fused 24 V circuit passes through one (LINK-A..D, LINK-1..6 on sheet 035).",
+    "source": "035; 025",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^FUSE-([A-D1-6])$",
+    "term": "FUSE-{1}",
+    "kind": "component",
+    "meaning": "Red spot fuse {1} in the 24 V dc L+ distribution on sheet 035, feeding circuit {1}L+ (FUSE-A, B, C 10 A 'PLC POWER'; FUSE-D 4 A 'COOLING FANS'; FUSE-1..6 4 A). Sheet 025: 'FUSE HOLDERS TO BE GEC REDSPOT, SIZE A1, FRONT CONNECTED, BLACK'.",
+    "source": "035 '24Vdc DISTRIBUTION FOR L+ RED SPOT FUSES'; 025",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^RED ?SPOT(?: FUSES?)?$",
+    "term": "red spot fuse",
+    "kind": "component",
+    "meaning": "Fuse in a GEC Redspot front-connected holder on the 24 V distribution board; each 24 V dc L+ feed on sheet 035 has one (FUSE-A..D, FUSE-1..6).",
+    "source": "035; 025 'FUSE HOLDERS TO BE GEC REDSPOT'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^AC-$",
+    "term": "AC fuse",
+    "kind": "component",
+    "meaning": "First line of the caption 'AC- FUSE A 6A' / 'AC- FUSE B 6A': the 6 A fuse in the 230 V ac live feed to PSU A / PSU B, sheet 035.",
+    "source": "035",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^F([1-4])$",
+    "term": "F{1}",
+    "kind": "component",
+    "meaning": "Fuse {1} (4 A) on an F7133 24 V distribution card (sheets 043-050); its output is one nL+k wire to an I/O card position. Note 1 on 043: if F1-F4 fails the corresponding LED flashes and the card relay de-energises. (On sheet 040, F1 and F2 are the 1.6 A fuses of the Z6013 units at XG.24 / XG.25.)",
+    "source": "043 F1..F4 '4A', note 1; 040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^L([1-4])$",
+    "term": "L{1}",
+    "kind": "component",
+    "meaning": "LED {1} on an F7133 24 V distribution card: flashes when fuse F{1} fails; loss of the incoming 24 V dc extinguishes the LEDs (note 1, sheet 043).",
+    "source": "043 L1..L4, note 1",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^X([1-4])$",
+    "term": "X{1}",
+    "kind": "component",
+    "meaning": "Backplane link X{1} on an F7133 card sheet: it links the card fuse failure circuit to the adjacent F7133 card. Note 2 (043): 'MOVE LINK X1-X4 (CARD POSITIONS 21-18) TO POSITION 1 IF NO F7133 FITTED'.",
+    "source": "043 note 2, '(NOTE 2) X4 DENOTES BACKPLANE LINK TO ADJACENT F7133 CARD FUSE FAILURE CIRCUIT'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^FASTON(?: CONNECTORS?)?$",
+    "term": "FASTON connector",
+    "kind": "component",
+    "meaning": "Push-on blade connector. On the F7133 card sheets: 'FASTON CONNECTORS ON BACKPLANE' (the XG.10 / XG.1 side) and 'FASTON CONNECTORS AT FRONT OF CARD' (the nL+k / nL-k outputs to the I/O positions).",
+    "source": "043-050",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^([1-6])L([+-])(\\d{1,2})$",
+    "term": "{1}L{2}{3}",
+    "kind": "terminal",
+    "meaning": "24 V dc wire {1}L{2}{3}: branch {3} of fused circuit {1}L{2}. On the L+ side it is the output of one fuse F1-F4 of an F7133 24 V distribution card, taken through a FASTON connector at the front of the card to the L+ pin of one I/O card position; on the L- side the matching return (043: 1L+1 to 1101:d30 and 1L-1 to 1101:d26; 045: 1L+9 to 1109:z12 and 1L-9 to 1109:z2). The loop drawings write the pair at the module supply ('1L+1 / 1L-1' on 075, '1L+10 / 1L-10' on 099). +ve wires are 1.0mmSq red, -ve 1.0mmSq black.",
+    "source": "043 'F7133 24Vdc DISTRIBUTION CARD 1118', '+ve = 1.0mmSq RED / -ve = 1.0mmSq BLACK'; 045; 075; 099",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(1[12]\\d{2}):([zbd])(\\d{1,2})$",
+    "term": "{1}:{2}{3}",
+    "kind": "elco_pin",
+    "meaning": "Pin {2}{3} of the I/O card connector in position {1}. The legend decodes '1112 : z6' as cabinet 1, rack 1, card position 12, pin z6; pins lie in rows z, b and d of the ELCO connector. Supply pins: d30 = L+ and d26 = L- on the F6217 analogue input card (043: 1101:d30 = 1L+1, 1101:d26 = 1L-1), z12 = L+ and z2 = L- on the F3236 digital input card (045: 1109:z12 = 1L+9, 1109:z2 = 1L-9). The ELCO schedules list the b-row pins that leave the cabinet to the annunciator and console (200: '1112:b2').",
+    "source": "018 'DRAWING REFERENCES' (CABINET / RACK / CARD POSITION / PIN REFERENCE); 070 module tables; 043; 045; 200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(1[12]\\d{2})/(\\d{1,2})$",
+    "term": "{1}/{2}",
+    "kind": "wire_number",
+    "meaning": "Wire number {1}/{2} = card position {1}, channel {2}. Loop drawing note 6: 'WIRE No.s ARE DEFINED USING CARD POSITION / CHANNEL NUMBER'. It is written on the wire between the field terminals and the I/O plug of the module.",
+    "source": "075 note 6, '1101/1'; 099 '1110/1'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(1)([12])(\\d{2})$",
+    "term": "{1}{2}{3}",
+    "kind": "card_position",
+    "meaning": "I/O card position {1}{2}{3} = cabinet {1}, rack {2}, card position {3} (legend: '1112 : z6' = CABINET 1, RACK 1, CARD POSITION 12, PIN z6). Positions 1118-1121 (rack 1) and 1218-1221 (rack 2) hold the F7133 24 V distribution cards (sheets 043-050); the loop drawings give the position in the module table ('POSITION 1101 CH 1').",
+    "source": "018 'DRAWING REFERENCES'; 035 '1118-1121', '1218-1221'; 043-050 titles; 075",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(1[12]\\d{2})-(1[12]\\d{2})$",
+    "term": "{1}-{2}",
+    "kind": "card_position",
+    "meaning": "Range of I/O card positions {1} to {2}; on sheet 035 the feed captions '1118-1121' and '1218-1221' name the four F7133 distribution cards fed by 1L+ and 2L+.",
+    "source": "035",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F3236$",
+    "term": "HIMA F3236",
+    "kind": "module",
+    "meaning": "16 channel (16-fold) testable digital input module, 24 V dc. Drawn as 'DIGITAL I/P F3236' in the INPUT column of the FLDs; typical loop DI1; I/O plug Z7116; supply pins z12 (L+) and z2 (L-).",
+    "source": "018 '16-FOLD DIGITAL INPUT MODULE'; 070 '16 CHANNEL TESTABLE DIGITAL INPUT MODULE HIMA F3236'; 045",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F6217$",
+    "term": "HIMA F6217",
+    "kind": "module",
+    "meaning": "8 channel (8-fold) testable analogue input module, 4-20 mA. Drawn as 'ANALOG I/P F6217' in the INPUT column of the FLDs; typical loops AI1, AI2, AI3 and (through a VCON-TC converter) AI4; I/O plug Z7127; supply pins d30 (L+) and d26 (L-).",
+    "source": "018 '8-FOLD ANALOGUE INPUT MODULE'; 070 '8 CHANNEL TESTABLE ANALOGUE INPUT MODULE HIMA F6217'; 043",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F3330$",
+    "term": "HIMA F3330",
+    "kind": "module",
+    "meaning": "8 channel (8-fold) testable 24 V dc output module. On the FLDs it drives the H4135 relay amplifier in the OUTPUT column; typical loops DO1 and DO2; I/O plug Z7138.",
+    "source": "018 '8-FOLD OUTPUT MODULE'; 071 '8 CHANNEL TESTABLE 24Vdc OUTPUT MODULE HIMA F3330'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F3322$",
+    "term": "HIMA F3322",
+    "kind": "module",
+    "meaning": "16 channel 24 V dc output module, non testable (typical loops DO3 and DO4): drives the annunciator windows. Note 2 on the FLDs: 'ALL ANNUNCIATOR OUTPUTS TYPICAL LOOP TYPE DO3'. I/O plug Z7136.",
+    "source": "071 '16 CHANNEL 24Vdc OUTPUT MODULE HIMA F3322'; 051 note 2",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F7133$",
+    "term": "HIMA F7133",
+    "kind": "module",
+    "meaning": "24 V dc distribution card: takes a fused feed nL+ / nL- from sheet 035 and splits it through four 4 A fuses F1-F4 into the wires nL+k / nL-k of four I/O card positions; carries fuse evaluation logic, LEDs L1-L4 and a fuse failure relay. Cards sit in positions 1118-1121 (fed by 1L+) and 1218-1221 (fed by 2L+), sheets 043-050.",
+    "source": "043-050 'F7133 24Vdc DISTRIBUTION CARD 1118'...; 035 'F7133 POWER'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F\\s?7126$",
+    "term": "HIMA F 7126",
+    "kind": "module",
+    "meaning": "Power supply module of the HIMA PES, drawn three times as NG1/PS1, NG2/PS2 and NG3/PS3 on the main power schematic; supplies the -5V, GND and +5V rails that reach the I/O racks through XG.2 / XG.3 and XG.4 / XG.12. Monitored by the F7131 module ('POWER SUPPLY MONITORING').",
+    "source": "040 'NG1/PS1 F 7126', 'POWER SUPPLY MONITORING: NG1/PS1 NG2/PS2 NG3/PS3'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^NG([123])/PS\\1$",
+    "term": "NG{1}/PS{1}",
+    "kind": "module",
+    "meaning": "Power supply unit {1} (HIMA F 7126) of the PES on the main power schematic, sheet 040.",
+    "source": "040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F7131$",
+    "term": "HIMA F7131",
+    "kind": "module",
+    "meaning": "Module K 1412 on the main power schematic carrying 'POWER SUPPLY MONITORING: NG1/PS1, NG2/PS2, NG3/PS3' and the 'CONNECTION FOR EXTERNAL BACKUP BATTERY'.",
+    "source": "040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?F8650X$",
+    "term": "HIMA F8650X",
+    "kind": "module",
+    "meaning": "Central module of the HIMA PES (two: ZB1/CU1 and ZB2/CU2) with the watchdog output 'WD', sheet 040.",
+    "source": "040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^ZB([12])/CU\\1$",
+    "term": "ZB{1}/CU{1}",
+    "kind": "module",
+    "meaning": "Central unit {1} of the HIMA PES (F8650X module with watchdog WD), sheet 040.",
+    "source": "040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^WD$",
+    "term": "WD",
+    "kind": "signal",
+    "meaning": "Watchdog output of an F8650X central module, sheet 040 ('MAIN SCHEMATIC FOR POWER AND WATCHDOG').",
+    "source": "040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:B5233-1 \\()?H51q-HS\\)?$",
+    "term": "H51q-HS",
+    "kind": "equipment",
+    "meaning": "Type of the HIMA PES (safety PLC) in the cabinet: 'B5233-1 (H51q-HS)' on the main power schematic; sheet 041 gives its communication connection details.",
+    "source": "040; 041 'H51q-HS COMMUNICATION CONNECTION DETAILS'; 031 'HIMA PES'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^PES$",
+    "term": "PES",
+    "kind": "equipment",
+    "meaning": "The HIMA programmable electronic system (H51q-HS) that runs the ESD logic. 'Programmable electronic system' is the standard expansion; the drawings write only 'HIMA PES'.",
+    "source": "031 'HIMA PES AND HSD PSU 1U LABEL STRIPS'; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^(?:HIMA\\s+)?H4135$",
+    "term": "HIMA H4135",
+    "kind": "module",
+    "meaning": "Relay amplifier: output relay module driven by an F3330 output channel (relays K1-3 on the typical output loop). Drawn as 'RELAY AMP H4135' in the OUTPUT column of the FLDs; its volt-free contact switches the field load (solenoid valves, 110 V ac loads).",
+    "source": "018 'RELAY AMPLIFIER'; 071 'H4135', 'K1-3'; 052 'RELAY AMP H4135'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^RELAY AMP(?:LIFIER)?$",
+    "term": "relay amplifier",
+    "kind": "module",
+    "meaning": "The H4135 relay amplifier box on the FLD output side (caption line above 'H4135').",
+    "source": "018; 052",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^ISOCON[- ]?6(?:-(\\d{1,2}))?$",
+    "term": "ISOCON-6",
+    "kind": "module",
+    "meaning": "Signal converter (isolator) ISOCON-6: 1-5 V in, 4-20 mA out, powered from 24 V dc. It repeats an analogue input to the DCS and is drawn as the 'V TO I' box on the FLDs (051: 'V TO I ISOCON 6'; 075: 'SIGNAL CONVERTER ISOCON-6-20'). The number after ISOCON-6 is the unit number; the label sheet lists '13 OFF ISOCON-6'.",
+    "source": "051; 075; 032",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^VCON-HL(?:-\\d{1,2})?$",
+    "term": "VCON-HL",
+    "kind": "module",
+    "meaning": "Signal isolator / converter VCON-HL: 1-5 V in, 4-20 mA out ('V TO I' on the FLDs); passive output powered from the DCS system (typical loop AI2, 'TESTABLE ANALOGUE NON I.S. INPUT & V/I REPEAT').",
+    "source": "018 'SIGNAL ISOLATOR V TO I VCON-HL'; 070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^VCON-TC(?:-\\d{1,2})?$",
+    "term": "VCON-TC",
+    "kind": "module",
+    "meaning": "Thermocouple signal converter VCON-TC: type K thermocouple (mV) in, with cold junction compensation, 4-20 mA out to the F6217 input. Used on all loop type AI4 loops (070 note 5).",
+    "source": "070 'TESTABLE ANALOGUE NON I.S. mV/I INPUT AI4', note 5",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^V TO I$",
+    "term": "V to I",
+    "kind": "module",
+    "meaning": "Voltage-to-current converter box on the FLD output side: 1-5 V in, 4-20 mA out to a PROCESS DEVICE TAG (a repeat of an analogue input to the DCS). The device is an ISOCON-6 or a VCON-HL.",
+    "source": "051 '1-5V V TO I 4-20mA'; 018 'SIGNAL ISOLATOR'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^SIGNAL CONVERTER$|^SIGNAL ISOLATOR$",
+    "term": "signal converter / isolator",
+    "kind": "module",
+    "meaning": "Caption of an ISOCON-6 / VCON-HL / VCON-TC converter on the loop drawings and typicals.",
+    "source": "070; 075; 018",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^Z71(16|27|36|38)$",
+    "term": "Z71{1}",
+    "kind": "component",
+    "meaning": "I/O plug type Z71{1}: the connector plugged into the module (Z7116 on the F3236 digital input, Z7127 on the F6217 analogue input, Z7136 on the F3322 output, Z7138 on the F3330 output).",
+    "source": "070; 071; 075; 099",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^Z\\s?60(11|13|18)$",
+    "term": "Z 60{1}",
+    "kind": "component",
+    "meaning": "Power distribution unit Z60{1} at the terminal groups XG.21-XG.26 on the main power schematic (Z6011 at XG.21/22/23 with a 4 A fuse, Z6013 at XG.24/25 with 1.6 A fuses F1/F2, Z6018 at XG.26).",
+    "source": "040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^OMNI ([1-4])$",
+    "term": "OMNI {1}",
+    "kind": "equipment",
+    "meaning": "Annunciator unit {1} of the No.3 plant annunciator (sheet 208): four units with their power supply and pushbutton inputs wired in parallel, F01-F04 linked to form one first-out group of 16, FSYNC linked so the windows flash together, common 0V for windows 01 to 48.",
+    "source": "208 notes 1-5",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^DV([37])_(\\d{1,3})$",
+    "term": "DV{1}_{2}",
+    "kind": "dv",
+    "meaning": "Delta V / Modbus reference point {2} of the No.{1} plant: a tap drawn on an FLD logic wire where that signal is passed to the Delta V system over Modbus (legend: 'REFERENCE TO DELTA V/MODBUS (AS SHOWN ON FLD DRG)'). DV3_n points are on the No.3 plant FLDs (051-056A), DV7_n on the No.7 plant FLD (057).",
+    "source": "018; 051 column 'DELTA V MODBUS'; 057",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^DELTA V$|^MODBUS$|^DELTA V/MODBUS$|^DELTA V LINK$",
+    "term": "Delta V / Modbus",
+    "kind": "system",
+    "meaning": "Delta V: the plant control system that receives ESD signals over a Modbus link. The FLD columns 'DELTA V MODBUS' hold the DVn_m reference taps; the typical loops call the same system 'DCS'.",
+    "source": "018 'REFERENCE TO DELTA V/MODBUS'; 051 headers; 'No.3 PLANT DELTA V LINK'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^DCS(?: SYSTEM)?$",
+    "term": "DCS",
+    "kind": "system",
+    "meaning": "The plant control system (Delta V). Analogue repeat outputs are 'PASSIVE OUTPUT POWERED FROM DCS SYSTEM' (070). 'Distributed control system' is the standard expansion; the drawings do not spell it out.",
+    "source": "070; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^ESD(?: SYSTEM)?$",
+    "term": "ESD",
+    "kind": "system",
+    "meaning": "The 'ICI SYNETIX ESD SYSTEM - No.3 AND No.7 PLANTS' described by this drawing set (title blocks): the HIMA PES cabinet with its field inputs, logic and outputs. 'Emergency shutdown' is the standard expansion; the drawings write only ESD.",
+    "source": "title blocks; 070 'POWERED FROM THE ESD SYSTEM'; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^FLDS?/?$|^FLD DRG$",
+    "term": "FLD",
+    "kind": "document",
+    "meaning": "Functional Logic Diagram: sheets 051-057 ('FLD - No.3 PLANT COPPER DISSOLVING AREA' ...). The document schedule writes the full name 'FUNCTIONAL LOGIC DIAGRAM - No.3 PLANT COPPER DISSOLVING AREA'.",
+    "source": "002 document schedule; 051 title; 018 '(AS SHOWN ON FLD DRG)'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?([A-Z]{1,4})\\s?(0\\d{4})([A-Z])?(?:\\s*-\\s*([A-Z]{2,4}|W\\d{1,2}))?$",
+    "term": "instrument tag",
+    "kind": "tag",
+    "meaning": "Instrument / signal tag: optional plant prefix (03 = No.3 plant, 07 = No.7 plant), function letters {1}, loop number {2}. The first letter is the measured variable or input type (F flow, L level, T temperature, P pressure, PD differential pressure, Q density, H hand-operated, E electrical / pump running, B burner, X unclassified), Z marks a safety / trip function, and the last letter the device or signal: T transmitter, S switch or contact, A alarm (software signal to an annunciator window), O output, V valve, RT repeat output. A suffix letter (A, B, C, D) distinguishes several alarm limits of one measurement; '-OVR' is the override keyswitch input of the tag. On the ELCO schedules the plant prefix is dropped and the annunciator window follows ('FZA 03002 - W01').",
+    "source": "051 FIELD column captions; 075/099; 200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(0[37])[A-Z]{1,4}0\\d{4}[A-Z]?(?:-[A-Z]{2,4})?$",
+    "term": "plant {1}",
+    "kind": "tag_plant",
+    "letter": "{1}",
+    "word": "No.{1} plant",
+    "meaning": "Plant prefix {1}: No.{1} plant (the No.3 plant FLDs 051-056A carry 03 tags, the No.7 plant FLD 057 carries 07 tags).",
+    "source": "051 title 'FLD - No.3 PLANT ...' with 03... tags; 057 'FLD - No.7 PLANT' with 07... tags",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?F[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "F (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "F",
+    "word": "flow",
+    "meaning": "F = flow: FZT tags carry flow captions ('Recirculation Flow' 03FZT03007, 'LOW FLOW' 03FZT03002, 'Low Oxygen Flow').",
+    "source": "051; 075 '03FZT03002 69% NITRIC ACID LOW FLOW'; 055B",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?L[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "L (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "L",
+    "word": "level",
+    "meaning": "L = level: 'LEVEL IN 3F3' (03LZT03691), '3F1 Dissolver Level' (03LZT03110), '3F1 MID LEVEL TRIP'.",
+    "source": "051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?T[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "T (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "T",
+    "word": "temperature",
+    "meaning": "T = temperature: 'Recirculation Temp' (03TZT03052); annunciator labels 'HIGH TEMPERATURE' for TZA tags.",
+    "source": "051; 026",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?PD[A-Z]{1,2}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "PD (first letters)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "PD",
+    "word": "differential pressure",
+    "meaning": "PD = differential pressure: 'Vent Fan D.P.' (03PDZT03078).",
+    "source": "051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?P(?!D)[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "P (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "P",
+    "word": "pressure",
+    "meaning": "P = pressure: '3F1 HIGH PRESSURE TRIP' (03PZT03079); annunciator labels 'PRESSURE TRIP'.",
+    "source": "075; 026",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?Q[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "Q (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "Q",
+    "word": "density",
+    "meaning": "Q = density: 'Flow Density' (03QZT03581), 'MIXED ACID FEED DENSITY TRIP' (03QZT03581-OVR), 'NEW DENSITY METER' (051 revision E).",
+    "source": "051; 099",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?H[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "H (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "H",
+    "word": "hand-operated",
+    "meaning": "H = hand-operated: HZS tags are the control room pushbuttons ('LOW FLOWS RESET' 03HZS03350, 'COPPER DISSOLVING STOP' 03HZS03354) and HZA the keyswitch 'NORMAL OPERATION/OVERRIDE' (03HZA03559), drawn with the P/B and K/S symbols.",
+    "source": "051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?E[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "E (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "E",
+    "word": "electrical",
+    "meaning": "E: drawn on electrical drive signals: '3J4A Pump Running' / '3J4B Pump Running' (03EZS03412 / 03EZS03413, digital inputs) and the 110 V ac outputs 03EZO03403A. ISA 5.1 reads E as voltage.",
+    "source": "051; 054; ISA 5.1 convention",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?B[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "B (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "B",
+    "word": "burner",
+    "meaning": "B = burner: 07BZS07200 sits next to the 'BURNER - NORMAL OVERRIDE' keyswitch and the 'BURNER TRIP' window on the No.7 plant drawings.",
+    "source": "057; 027/029",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?X[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "X (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "X",
+    "word": "valve (XZV)",
+    "meaning": "XZV tags are shut-off and dump valves: 'GAS SHUT-OFF VALVE' (03XZV03853), 'MIXED ACID VALVE' (03XZV03591), 'F61 DUMP VALVE' (03XZV03742). ISA 5.1 leaves X unclassified.",
+    "source": "054; 055B; ISA 5.1 convention",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?Y[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "Y (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "Y",
+    "word": "event / state (ISA 5.1)",
+    "meaning": "Y: no caption on the drawings explains it (03YS03228 / 03YS03229 are digital inputs on sheet 054, windows 'YSA 03228'). ISA 5.1 reads Y as event, state or presence.",
+    "source": "ISA 5.1 convention",
+    "evidence": "ISA 5.1 convention"
+  },
+  {
+    "pattern": "^(?:0[37])?G[A-Z]{1,3}\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "G (first letter)",
+    "kind": "tag_letter",
+    "position": "first",
+    "letter": "G",
+    "word": "gauging (ISA 5.1)",
+    "meaning": "G: no caption on the drawings explains it (03GZS03568 is a digital input on sheet 054). ISA 5.1 reads G as gauging or position.",
+    "source": "ISA 5.1 convention",
+    "evidence": "ISA 5.1 convention"
+  },
+  {
+    "pattern": "^(?:0[37])?(?:[A-Z]{1,2}Z[A-Z]{0,2}|Z[A-Z]{1,3})\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "Z (safety / trip)",
+    "kind": "tag_letter",
+    "position": "middle",
+    "letter": "Z",
+    "word": "trip",
+    "meaning": "Z = safety / trip function: nearly every tag of this ESD system carries a Z, and the captions read 'TRIP' ('3F1 HIGH PRESSURE TRIP', '3F1 MID LEVEL TRIP', 'DENSITY TRIP OVERRIDE'). ISA 5.1 reads Z as a safety instrumented function.",
+    "source": "051; 075; 099; ISA 5.1 convention",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,3}T\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "T (last letter)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "T",
+    "word": "transmitter",
+    "meaning": "T (last letter) = transmitter: the field device of an analogue input loop, drawn 'Tx' on the typical loops and in the FIELD column oval on the FLDs (03FZT03002 'Nitric Acid').",
+    "source": "070 'Tx'; 051; 075",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,2}RT\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "RT (last letters)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "RT",
+    "word": "repeat output",
+    "meaning": "RT = repeat output: the 4-20 mA copy of a measurement sent from a 'V TO I' converter to the PROCESS DEVICE TAG column of the FLD (03FZRT03007 repeats 03FZT03007; typical loop AI2 'INPUT & V/I REPEAT'). ISA 5.1 would read R as record.",
+    "source": "051 OUTPUT / PROCESS DEVICE TAG columns; 070 'V/I REPEAT'; ISA 5.1 convention",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,3}S\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "S (last letter)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "S",
+    "word": "switch / contact",
+    "meaning": "S (last letter) = switch or contact: HZS pushbuttons and keyswitches, EZS pump running contacts, PZS pressure switches; all are digital inputs (F3236).",
+    "source": "051 '03HZS03350 P/B', '03EZS03412 3J4A Pump Running'; 057",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,3}SH\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "SH (last letters)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "SH",
+    "word": "switch high (ISA 5.1)",
+    "meaning": "SH: switch, high limit. Not captioned on the drawings (03PZSH tags); ISA 5.1 convention.",
+    "source": "ISA 5.1 convention",
+    "evidence": "ISA 5.1 convention"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,3}A\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "A (last letter)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "A",
+    "word": "alarm signal",
+    "meaning": "A (last letter) = alarm: the software signal derived from a measurement on the FLD logic side (03FZA03002 from 03FZT03002), carried to an annunciator window (ELCO schedule 'FZA 03002 - W01').",
+    "source": "051 logic wires; 200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,3}O\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "O (last letter)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "O",
+    "word": "output",
+    "meaning": "O (last letter) = output: ZO, EZO and TZO tags sit in the OUTPUT column of the FLDs, driven by an F3330 output module through an H4135 relay amplifier; captions name solenoid valves ('NITRIC ACID S0V', '50V DC') or 110 V ac loads ('BMS'). Read from the drawing position; not an ISA 5.1 letter meaning.",
+    "source": "052; 054; 057",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{1,3}V\\s?0\\d{4}[A-Z]?(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "V (last letter)",
+    "kind": "tag_letter",
+    "position": "last",
+    "letter": "V",
+    "word": "valve",
+    "meaning": "V (last letter) = valve: 'GAS SHUT-OFF VALVE' 03XZV03853, 'F61 DUMP VALVE' 03XZV03742.",
+    "source": "054; 055B",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{2,4}\\s?0\\d{4}([A-D])(?:\\s*-\\s*[A-Z0-9]{2,4})?$",
+    "term": "suffix {1}",
+    "kind": "tag_suffix",
+    "letter": "{1}",
+    "word": "limit {1}",
+    "meaning": "Suffix {1}: one of several alarm limits derived from the same measurement; the limit word is written on the FLD logic wire (051: 03TZA03052A HIGH, 03TZA03052B LOW, 03TZA03052C HIHI, 03TZA03052D LOLO; 03LZA03110A HIGH, 03LZA03110C MID).",
+    "source": "051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:0[37])?[A-Z]{2,4}\\d{4,5}[A-Z]?-OVR$",
+    "term": "-OVR",
+    "kind": "tag_qualifier",
+    "letter": "OVR",
+    "word": "override",
+    "meaning": "-OVR = override: the keyswitch input that overrides the tag's trip, drawn on the loop drawings as a keyswitch '(KS)' into an F3236 digital input ('03FZT03002-OVR 69% NITRIC ACID LOW FLOW OVERRIDE (KS)'). The FLD INPUT column has an 'O/R' sub-column for these.",
+    "source": "099; 051 header",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^[A-Z]{2,4}\\s?0\\d{4}[A-Z]?(?:\\s?A/B)?\\s*-\\s*W(\\d{1,2})$",
+    "term": "tag - W{1}",
+    "kind": "schedule_entry",
+    "meaning": "ELCO schedule entry: the alarm tag written before the dash drives annunciator window {1}; the row gives the cable terminal and pin and the ESD cabinet connector pin it leaves on.",
+    "source": "200 'HZA 03350 - W12' ... ; 206",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^W(\\d{1,2})$|^WINDOW\\s+(\\d{1,2})$",
+    "term": "W{1}{2}",
+    "kind": "window",
+    "meaning": "Annunciator window {1}{2}. The ELCO schedules (200-206) list the alarm tag that drives each window ('FZA 03002 - W01') and its cable terminal; the FLDs draw the window as a status indication lamp in the ANNUN/CONSOLE column; sheets 026/027 give the window label text; sheets 208/209 wire the annunciator units (windows 01-48 in four OMNI units, first-out groups of 16).",
+    "source": "018 'STATUS INDICATION LAMP'; 200; 026 'No.3 PLANT ANNUNCIATOR WINDOW LABEL DETAILS'; 208 note 5",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^SPARE(?: - W\\d{1,2})?$",
+    "term": "spare",
+    "kind": "schedule_entry",
+    "meaning": "Unused window or connector position on the ELCO schedules.",
+    "source": "200 'SPARE - W08'; 206",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(\\d{1,2})/C(\\d{2,4})(?:/(\\d{1,2}))?(?:-(\\d))?$",
+    "term": "{1}/C{2}",
+    "kind": "cable",
+    "meaning": "Field cable C{2} of the No.{1} plant: the prefix is the plant number (3/C655-1 is the 'No.3 PLANT ANNUN SUPPLY', 7/C305-1 the 'No.7 PLANT ANNUN SUPPLY' on sheet 035). A trailing /n is a core number (3/C735/1), -n one cable of a pair (3/C655-1 / -2). On the FLDs the cores used by a loop are written under the cable number in the CABLE & TERMINALS column ('1 & 2'). The ELCO schedules name the multicore cables to the annunciator and console as 'VARELCO BLOCK 3/C652' (18 core x 0.5, black).",
+    "source": "035; 051; 075 '3/C735/1'; 200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(\\d{1,2}) & (\\d{1,2})$",
+    "term": "cores {1} & {2}",
+    "kind": "cable_cores",
+    "meaning": "Cores {1} and {2} of the cable written above (FLD CABLE & TERMINALS column); on the loop drawings the same pair appears as the field terminal numbers of the loop.",
+    "source": "051; 075",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:VAR)?ELCO(?: BLOCK| CONNECTOR)?(?: \\((?:FE)?MALE\\))?$",
+    "term": "ELCO / VARELCO",
+    "kind": "component",
+    "meaning": "Multi-pin rectangular connector block. The I/O modules plug into ELCO connectors (pins in rows z, b, d; legend symbols for the female and male halves); the multicore cables to the annunciator and operator console land on VARELCO blocks named after their cable ('VARELCO BLOCK 3/C652'). Sheet 200 gives the polarising code ('R-G-4-S-3': insulator body type, guide pin / socket, positions 1 through 6).",
+    "source": "018 'ELCO CONNECTOR (FEMALE) / (MALE)'; 200 'POLARISING CODE'; 208 'VARELCO 3/C656'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^VARELCO BLOCK (\\d/C\\d{3})$",
+    "term": "VARELCO block {1}",
+    "kind": "component",
+    "meaning": "The VARELCO connector block on which multicore cable {1} terminates; the ELCO schedule beside it lists TERM, PIN, core colour and the signal on each way.",
+    "source": "200; 206; 212",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^TB([37])(AI|DI|DO|D0)(?:/(\\d{1,2}))?$",
+    "term": "TB{1}{2}",
+    "kind": "tb",
+    "meaning": "Terminal block on the cabinet backplate (sheet 022) for the No.{1} plant: AI = analogue inputs, DI = digital inputs, DO = digital outputs (the I/O type words come from the typical loop headings AI/DI/DO). /n is the terminal number on the block (loop drawings 092-097 'TB3DI/4'). 'TB3D0' with a zero on sheets 119-122 is the same block TB3DO.",
+    "source": "022 'PLC CABINET - BACKPLATE LAYOUT'; 092; 119; 070/071",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?AI1$",
+    "term": "loop type AI1",
+    "kind": "loop_type",
+    "meaning": "Typical loop AI1 'TESTABLE ANALOGUE NON I.S. INPUT' (sheet 070): a 4-20 mA transmitter (Tx) on an F6217 channel, 2 wire with single core screen; passive transmitters are powered from the ESD system.",
+    "source": "070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?AI2$",
+    "term": "loop type AI2",
+    "kind": "loop_type",
+    "meaning": "Typical loop AI2 'TESTABLE ANALOGUE NON I.S. INPUT & V/I REPEAT' (sheet 070): as AI1 plus a VCON-HL converter that repeats the 1-5 V signal as 4-20 mA to the DCS (passive output powered from the DCS system). On the FLDs the repeat appears as a 'V TO I' box feeding a ...RT process device tag.",
+    "source": "070; 051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?AI3$",
+    "term": "loop type AI3",
+    "kind": "loop_type",
+    "meaning": "Typical loop AI3 'TESTABLE ANALOGUE NON I.S. INPUT & V/I REPEAT' for active transmitters powered from the field device (sheet 070, right-hand typical): 2 core cable with overall screen, F6217 channel, VCON-HL repeat.",
+    "source": "070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?AI4$",
+    "term": "loop type AI4",
+    "kind": "loop_type",
+    "meaning": "Typical loop AI4 'TESTABLE ANALOGUE NON I.S. mV/I INPUT' (sheet 070): a type K thermocouple (T/C) through a VCON-TC signal converter with cold junction compensation into an F6217 channel (note 5).",
+    "source": "070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?DI1$",
+    "term": "loop type DI1",
+    "kind": "loop_type",
+    "meaning": "Typical loop DI1 'TESTABLE DIGITAL NON I.S. INPUT - 24Vdc' (sheet 070): a volt-free field contact, L+ out and signal back in 0.5mmSq grey, into an F3236 channel (I/O plug Z7116). Used for pushbuttons, keyswitches and pump running contacts.",
+    "source": "070; 051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?DO1$",
+    "term": "loop type DO1",
+    "kind": "loop_type",
+    "meaning": "Typical loop DO1 'TESTABLE DIGITAL NON I.S. OUTPUT - VFC VIA RELAY' (sheet 071): an F3330 output channel drives an H4135 relay amplifier whose volt-free contact switches the field load (< 4 A).",
+    "source": "071",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?DO2$",
+    "term": "loop type DO2",
+    "kind": "loop_type",
+    "meaning": "Typical loop DO2 'TESTABLE DIGITAL NON I.S. OUTPUT - VFC VIA RELAY' (sheet 071, lower typical): as DO1 with the contact wired to 24 V dc wires 1L+12 / 1L-12. The FLDs use DO2 for the ZO / EZO outputs (solenoid valves, sheet 052 '50V DC'; note 2 on 071: 50 V supply for solenoid valve outputs by others).",
+    "source": "071; 052",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?DO3$",
+    "term": "loop type DO3",
+    "kind": "loop_type",
+    "meaning": "Typical loop DO3 'NON TESTABLE DIGITAL OUTPUT' (sheet 071): an F3322 16 channel 24 V dc output module drives a remote annunciator window (< 12 W; L- from the 24 V dc supply via a 2 core cable). FLD note 2: 'ALL ANNUNCIATOR OUTPUTS TYPICAL LOOP TYPE DO3'.",
+    "source": "071; 051 note 2",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:LOOP TYPE )?DO4$",
+    "term": "loop type DO4",
+    "kind": "loop_type",
+    "meaning": "Typical loop DO4 'NON TESTABLE DIGITAL OUTPUT' (sheet 071): an F3322 output to a front of panel (F.O.P.) annunciator.",
+    "source": "071",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:FOR )?TYPICAL LOOP TYPES SEE DRGS C10265H/070 & 071$",
+    "term": "typical loops note",
+    "kind": "note",
+    "meaning": "FLD note 1: the loop wiring of every input and output is drawn once per loop type on the typical sheets 070 (inputs) and 071 (outputs).",
+    "source": "051 note 1",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^O/R$",
+    "term": "O/R",
+    "kind": "column",
+    "meaning": "Override: the INPUT sub-column of the FLDs that holds override inputs. The override keyswitch loops are drawn on the loop drawings as '<tag>-OVR ... OVERRIDE (KS)' into F3236 digital inputs (sheet 099).",
+    "source": "051 header 'INPUT / O/R / NON-I.S.'; 099",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^NON[- ]?I\\.?S\\.?$",
+    "term": "NON-I.S.",
+    "kind": "column",
+    "meaning": "Non-intrinsically-safe circuit (standard abbreviation; the drawings do not spell 'intrinsically safe' out). The legend's wire colour table separates IS and NON IS wiring: NON IS DIGITAL = GREY 0.5mmSq, NON IS ANALOG = screened cable. All typical loops in this set are 'NON I.S.'; the ELCO schedules are 'NON I.S. - ESD TO ANNUNCIATOR SIGNALS'.",
+    "source": "018; 051 headers; 070; 200; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^I\\.?S\\.?$",
+    "term": "I.S.",
+    "kind": "column",
+    "meaning": "Intrinsically safe (standard abbreviation, not spelled out on the drawings): IS DIGITAL = BLUE 0.5mmSq, IS ANALOG = screened cable, I.S. EARTH = GREEN/BLUE BAND (legend). The FLD OUTPUT column has an I.S. sub-column; it is empty on sheet 051.",
+    "source": "018; 051 header; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^P/B$",
+    "term": "P/B",
+    "kind": "symbol",
+    "meaning": "Pushbutton (legend: 'PUSHBUTTON (AS SHOWN ON FLD DRG)'). On the FLDs the symbol carries a letter (C, F, B) and the caption 'CONTROL ROOM'.",
+    "source": "018; 051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^K/S$|^\\(KS\\)$|^KS$|^KEYSWITCH(?: \\(KS\\))?$",
+    "term": "K/S",
+    "kind": "symbol",
+    "meaning": "Keyswitch (legend: 'KEYSWITCH (AS SHOWN ON FLD DRG)'). '(KS)' after an override caption on the loop drawings marks the override keyswitch.",
+    "source": "018; 099",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^CONTROL ROOM$",
+    "term": "control room",
+    "kind": "caption",
+    "meaning": "Location caption under the pushbutton and keyswitch symbols on the FLDs: the device is in the control room.",
+    "source": "051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(HIGH|HI ?HI|LOW|LO ?LO|MID|EXTRA HIGH)$",
+    "term": "{1}",
+    "kind": "limit",
+    "meaning": "Alarm / trip limit of the software signal on the FLD logic wire it is written on: {1}.",
+    "source": "051 ('03TZA03052A HIGH', '03TZA03052C HIHI', '03FZA03006B LOLO', '03LZA03110C MID')",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^T([12]) (ON|OFF)$",
+    "term": "timer T{1} {2}",
+    "kind": "symbol",
+    "meaning": "Timer T{1}, {2} delay; the time is written below ('2 mins', '3-30 MINS'). Legend: 'TIMER (AS SHOWN ON FLD DRG)'.",
+    "source": "018; 051 'T1 OFF 2 mins'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(AND|OR)$",
+    "term": "{1} gate",
+    "kind": "symbol",
+    "meaning": "Logic gate on the FLD: inputs enter on the left edge, the output leaves on the right (legend: \"'AND' GATE\", \"'OR' GATE\").",
+    "source": "018; 051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(ANALOG|DIGITAL) I/P$",
+    "term": "{1} input module",
+    "kind": "symbol",
+    "meaning": "Module box in the FLD INPUT column: '{1} I/P' over the module type (ANALOG I/P F6217, DIGITAL I/P F3236). Field side on the left, software signal on the right.",
+    "source": "018; 051",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^S/CORE SCN$",
+    "term": "single core screen",
+    "kind": "wiring",
+    "meaning": "Single core screen: the screen of the analogue loop cable, landed at the module side of the loop (loop drawings and typical 070).",
+    "source": "070; 075",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^SCN$",
+    "term": "SCN",
+    "kind": "wiring",
+    "meaning": "Screen connection of the loop cable at the module supply pins (loop drawings).",
+    "source": "070 'L- SCN L+'; 099",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^O/A SCREEN$",
+    "term": "overall screen",
+    "kind": "wiring",
+    "meaning": "Overall screen of a 2 core cable (typical loops AI3 / AI4, sheet 070).",
+    "source": "070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^Tx$",
+    "term": "Tx",
+    "kind": "symbol",
+    "meaning": "Transmitter: the field device of an analogue input loop on the typical sheet 070.",
+    "source": "070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^T/C$",
+    "term": "T/C",
+    "kind": "symbol",
+    "meaning": "Thermocouple (type K) field device of loop type AI4, sheet 070.",
+    "source": "070 note 5",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^I/O$|^I/O PLUG$",
+    "term": "I/O plug",
+    "kind": "component",
+    "meaning": "Input / output plug: the connector (Z7116, Z7127, Z7136, Z7138) that carries the field wiring into the module.",
+    "source": "070; 071; 075",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(PIN|POSITION|CH\\.?|PINS)$",
+    "term": "{1}",
+    "kind": "table_heading",
+    "meaning": "Heading of the module table on the loop drawings: PIN = module pin(s) of the channel, POSITION = card position, CH = channel number, PINS = supply pins of the module (d26 L- / d30 L+ on the F6217, z2 L- / z12 L+ on the F3236).",
+    "source": "070; 075; 099; 043; 045",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(1-5V|4-20mA|24 ?Vdc|50V DC|110V AC|mV/I)$",
+    "term": "{1}",
+    "kind": "signal",
+    "meaning": "Signal or supply level of the connection it is written on: 1-5 V converter input, 4-20 mA loop current, 24 V dc supply, 50 V dc / 110 V ac output load supply.",
+    "source": "051; 070; 052; 054",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(\\d(?:\\.\\d+)?)mmSq(?: (RED|BLACK|GREY|GREEN/YELLOW|BLUE|YELLOW|GREEN))?$",
+    "term": "{1} mm2 {2}",
+    "kind": "wiring",
+    "meaning": "Conductor size {1} mm2 (and colour {2}) of the wire it is written beside. Legend: 24 V +ve red, 24 V -ve black, logic grey 0.5mmSq, IS digital blue, 120 V live brown / neutral blue / earth yellow-green.",
+    "source": "018 wire colours; 035; 070",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^TRI-RATED(?: RED| BLACK)?$",
+    "term": "tri-rated",
+    "kind": "wiring",
+    "meaning": "Tri-rated cable; legend: 'ALL WIRING TO BE TRI-RATED BS6231'.",
+    "source": "018; 035",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(?:RED |BLACK )?WIRED AS RING$|^AS RING$|^(?:RED |BLACK )?WIRED$",
+    "term": "wired as ring",
+    "kind": "wiring",
+    "meaning": "The conductor is run as a closed ring fed from both ends: the 24 V dc L+ bus (6.0mmSq red) and L- bus (6.0mmSq black) on sheet 035; sheet 040: '+5v, GND & L- WIRING TO THE BACK OF THE I/O RACKS IS TO BE WIRED AS RING'.",
+    "source": "035; 040",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^S[0O]V$",
+    "term": "SOV",
+    "kind": "caption",
+    "meaning": "Solenoid operated valve (standard abbreviation): the ZO output captions on sheet 052 read 'NITRIC ACID S0V', 'SCRUB LIQUOR S0V', 'MIXED ACID S0V', 'OXYGEN S0V' with '50V DC'.",
+    "source": "052; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^BMS$",
+    "term": "BMS",
+    "kind": "caption",
+    "meaning": "Burner management system (standard abbreviation): destination of the 110 V ac outputs 07TZO07044 / 07TZO07048 on the No.7 plant FLD.",
+    "source": "057; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^VFC$",
+    "term": "VFC",
+    "kind": "caption",
+    "meaning": "Volt-free contact (standard abbreviation): typical loop headings 'DIGITAL NON I.S. OUTPUT - VFC VIA RELAY'.",
+    "source": "071; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^F\\.O\\.P\\.$",
+    "term": "F.O.P.",
+    "kind": "caption",
+    "meaning": "Front of panel annunciator (071 note 3: 'L- FOR REMOTE AND FRONT OF PANEL ANNUNCIATORS IS DERIVED FROM THE 24Vdc SUPPLY'); loop type DO4.",
+    "source": "071",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^ASK1(?: FUSE TERMINAL)?$",
+    "term": "ASK1",
+    "kind": "component",
+    "meaning": "ASK1 fuse terminal (legend symbol). Loop drawing note 1: the first terminal of a pair is always '+' and is an ASK1 (50 mA) fuse terminal on analogue inputs only.",
+    "source": "018 'ASK1 FUSE TERMINAL'; 075 note 1",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^SAKR(?: LINK TERMINAL)?$",
+    "term": "SAKR",
+    "kind": "component",
+    "meaning": "SAKR link terminal (legend symbol: a terminal with a disconnect link).",
+    "source": "018 'SAKR LINK TERMINAL'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^TERMINAL$",
+    "term": "terminal",
+    "kind": "symbol",
+    "meaning": "The small circle symbol on the FLDs and power sheets is a terminal (legend); a slash through it marks a link or disconnect terminal.",
+    "source": "018",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(LT|LPT)$",
+    "term": "{1}",
+    "kind": "annunciator",
+    "meaning": "Lamp test pushbutton input of the annunciator units (208: VARELCO 3/C656 terminal 17 'LAMP TEST PUSHBUTTON').",
+    "source": "208; 212 'LPT'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^CCT$",
+    "term": "CCT",
+    "kind": "annunciator",
+    "meaning": "Circuit test pushbutton input of the annunciator units (208: VARELCO 3/C656 terminal 16 'CIRCUIT TEST PUSHBUTTON').",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^ACK$",
+    "term": "ACK",
+    "kind": "annunciator",
+    "meaning": "Acknowledge pushbutton input of the annunciator units (208: terminal 14 'ACKNOWLEDGE PUSHBUTTON').",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(RESET|RST)$",
+    "term": "{1}",
+    "kind": "annunciator",
+    "meaning": "Reset pushbutton input of the annunciator units (208: terminal 15 'RESET PUSHBUTTON').",
+    "source": "208; 212",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^SIL$",
+    "term": "SIL",
+    "kind": "annunciator",
+    "meaning": "Silence pushbutton input of the annunciator units (208: terminal 13 'SILENCE PUSHBUTTON').",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^COMMON 0V$",
+    "term": "common 0V",
+    "kind": "annunciator",
+    "meaning": "Common 0 V of the annunciator pushbutton circuit (208: terminal 18) and of the window inputs 01 to 48, wired as a ring (note 5).",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^INH$",
+    "term": "INH",
+    "kind": "annunciator",
+    "meaning": "Annunciator unit terminal 'INH' (sheet 208); the drawing does not expand it (standard reading: inhibit).",
+    "source": "208; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^FSYNC$",
+    "term": "FSYNC",
+    "kind": "annunciator",
+    "meaning": "Flash synchronisation link between the annunciator units: note 4 on 208, 'FSYNC TO BE WIRED TOGETHER TO ENABLE THE ALARM WINDOWS TO FLASH IN SYNCHRONIZATION'.",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^F0([1-4])$|^FO$",
+    "term": "first-out link",
+    "kind": "annunciator",
+    "meaning": "First-out group link of the annunciator units: note 3 on 208, 'F01, F02, F03 & F04 TO BE WIRED TOGETHER TO FORM ONE FIRST OUT GROUP OF 16'.",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^WDOG$",
+    "term": "WDOG",
+    "kind": "annunciator",
+    "meaning": "Watchdog terminal of the annunciator unit (sheet 208, not wired on the drawing).",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^G\\.A\\.$",
+    "term": "G.A.",
+    "kind": "annunciator",
+    "meaning": "Relay contact output of each annunciator unit with terminals N.C., N.O. and C (sheet 208). The drawing does not expand 'G.A.' (standard reading: group alarm).",
+    "source": "208; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^HORN$",
+    "term": "horn",
+    "kind": "annunciator",
+    "meaning": "Horn output of the annunciator unit (+24V, O.C., 0V) driving the sounder on 'TERM BLOCK AUDIABLE' (sheet 208).",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^O\\.C\\.$",
+    "term": "O.C.",
+    "kind": "annunciator",
+    "meaning": "Horn output terminal 'O.C.' of the annunciator unit (sheet 208); not expanded on the drawing (standard reading: open collector).",
+    "source": "208; standard abbreviation",
+    "evidence": "standard abbreviation"
+  },
+  {
+    "pattern": "^WETTING$",
+    "term": "wetting",
+    "kind": "annunciator",
+    "meaning": "Contact wetting supply of the annunciator unit: 'I/P +24V' and 'I/P 0V' terminals (sheet 208).",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^N\\.C\\.(?: CONTACT)?$",
+    "term": "N.C.",
+    "kind": "symbol",
+    "meaning": "Normally closed contact (legend 'N.C. CONTACT').",
+    "source": "018; 208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^N\\.O\\.(?: CONTACT)?$",
+    "term": "N.O.",
+    "kind": "symbol",
+    "meaning": "Normally open contact (legend 'N.O. CONTACT').",
+    "source": "018; 208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^TERM BLOCK$",
+    "term": "terminal block",
+    "kind": "annunciator",
+    "meaning": "Terminal block in the annunciator cabinet: 'TERM BLOCK 3/C655' receives the 24 V dc annunciator supply (+VE, -VE, EARTH), 'TERM BLOCK AUDIABLE' feeds the sounder (sheet 208).",
+    "source": "208",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^(TERM|CONTROLS|ESD)$",
+    "term": "{1}",
+    "kind": "table_heading",
+    "meaning": "Row heading of an ELCO schedule: TERM = terminal number of the VARELCO block, PIN = pin letter, CONTROLS = the alarm tag and window on the annunciator / console side, ESD = the ESD cabinet connector pin (1112:b2).",
+    "source": "200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^NON IS CABLE$|^INTERCONNECTING CABLE$",
+    "term": "interconnecting cable",
+    "kind": "cable",
+    "meaning": "The multicore cable between the ESD cabinet and the annunciator / console VARELCO blocks (200: 'INTERCONNECTING CABLE COLOUR BLACK SIZE 18 Core x 0.5 LENGTH 20/50 METRES').",
+    "source": "200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^POLARISING CODE$|^[RP]-[GS]-[1-6]-[GS]-[1-6]$",
+    "term": "polarising code",
+    "kind": "component",
+    "meaning": "ELCO connector polarising code, e.g. 'R-G-4-S-3': insulator body type (R male, P female), location side large diameter (G guide pin, S guide socket) and position 1-6, location side small diameter and position; the example 'R-G-4-S-3' mates with 'P-S-4-G-3' (sheet 200).",
+    "source": "200",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^HIMA$",
+    "term": "HIMA",
+    "kind": "equipment",
+    "meaning": "Maker of the PES and I/O modules ('HIMA F6217', 'HIMA PES'); the drawings are by HIMA-SELLA LIMITED.",
+    "source": "070; 031; title blocks",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^L- BUS$",
+    "term": "L- bus",
+    "kind": "supply",
+    "meaning": "The 24 V dc 0 V bus of sheet 035 ('24Vdc DISTRIBUTION FOR L- SAFECLIP LINKS'), referenced from the rack wiring on sheet 040.",
+    "source": "040 'L- BUS 035'",
+    "evidence": "drawing"
+  },
+  {
+    "pattern": "^CONTINUATION REFERENCE$",
+    "term": "continuation reference",
+    "kind": "continuation",
+    "meaning": "A lettered box ('AA') on an FLD logic wire with the destination written beside it as drawing serial number . grid reference ('03.212'); the destination sheet carries the same letter box with a pointer back. The FLD signal letters (3A, 3P ...) are these boxes.",
+    "source": "018 'CONTINUATION REFERENCE (AS SHOWN ON FLD DRG)', 'DRAWING REFERENCES'; 051 '3A 052.225'",
+    "evidence": "drawing"
+  }
+]
