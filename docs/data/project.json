@@ -1,6 +1,6 @@
 {
  "name": "data",
- "created": "2026-10-30 15:02:49",
+ "created": "2026-10-30 16:00:16",
  "volume": "P3",
  "sheets": [
   {
@@ -4598,7 +4598,8 @@
   "texts": 30001,
   "links": 326,
   "identifiers": 4743,
-  "issues": 15
+  "issues": 15,
+  "dossier": 0
  },
  "pdf": {
   "file": "Compined.pdf",
@@ -4608,5 +4609,5 @@
   "pages_with_text": 1,
   "aligned_backdrops": 134
  },
- "import_seconds": 199.2
+ "import_seconds": 111.8
 }
